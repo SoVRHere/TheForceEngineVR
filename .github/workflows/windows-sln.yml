@@ -37,9 +37,9 @@ jobs:
         run: |
           mkdir ${{github.workspace}}/BuildArtifacts/TheForceEngine/
           copy ${{github.workspace}}/Build/TheForceEngine.exe ${{github.workspace}}/BuildArtifacts/TheForceEngine/
-          copy ${{github.workspace}}/SDL2.dll ${{github.workspace}}/BuildArtifacts/TheForceEngine/
-          copy ${{github.workspace}}/SDL2_image.dll ${{github.workspace}}/BuildArtifacts/TheForceEngine/
-          copy ${{github.workspace}}/Shaders ${{github.workspace}}/BuildArtifacts/TheForceEngine/
+          copy ${{github.workspace}}/TheForceEngine/SDL2.dll ${{github.workspace}}/BuildArtifacts/TheForceEngine/
+          copy ${{github.workspace}}/TheForceEngine/SDL2_image.dll ${{github.workspace}}/BuildArtifacts/TheForceEngine/
+          copy ${{github.workspace}}/TheForceEngine/Shaders/ ${{github.workspace}}/BuildArtifacts/TheForceEngine/
             
       - name: Upload artifact
         uses: actions/upload-artifact@v3
