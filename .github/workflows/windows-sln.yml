@@ -23,10 +23,10 @@ jobs:
 
         steps:
             - name: Checkout code        
-                uses: actions/checkout@v3
+            uses: actions/checkout@v3
             
             - name: Add msbuild to PATH
-                uses: microsoft/setup-msbuild@v2
+            uses: microsoft/setup-msbuild@v2
                 with:
                     msbuild-architecture: x64  
 
@@ -41,7 +41,7 @@ jobs:
                     copy ${{github.workspace}}/Shaders ${{github.workspace}}/BuildArtifacts/TheForceEngine/
                   
             - name: Upload artifact
-                uses: actions/upload-artifact@v3
+            uses: actions/upload-artifact@v3
                 with:
                     name: my-artifact
                     path: ${{github.workspace}}/BuildArtifacts/TheForceEngine/
@@ -52,10 +52,10 @@ jobs:
 
         steps:
             - name: Checkout code
-                uses: actions/checkout@v2
+            uses: actions/checkout@v2
 
             - name: Download artifact
-                uses: actions/download-artifact@v3
+            uses: actions/download-artifact@v3
                 with:
                     name: my-artifact
                     path: ${{github.workspace}}/BuildArtifacts/
@@ -75,7 +75,7 @@ jobs:
                     prerelease: false
 
             - name: Upload Release asset
-                uses: actions/upload-release-asset@v1
+            uses: actions/upload-release-asset@v1
                 env:
                     GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
                 with:
