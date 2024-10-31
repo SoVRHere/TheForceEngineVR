@@ -49,7 +49,7 @@ jobs:
     
   release:
     needs: build
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
@@ -62,7 +62,7 @@ jobs:
           path: ${{github.workspace}}/BuildArtifacts/TheForceEngine/
               
       - name: Compress artifact directory
-        run: zip -r TheForceEngine.zip ${{github.workspace}}/BuildArtifacts/TheForceEngine/       
+        run: zip -r TheForceEngine.zip ${{github.workspace}}/BuildArtifacts/TheForceEngine/
 
       - name: Create GitHub release
         id: create_release
@@ -84,4 +84,4 @@ jobs:
           asset_path: ./TheForceEngine.zip  # Path to your artifact file(s)
           asset_name: TheForceEngine.zip  # Custom name for the artifact file
           asset_content_type: application/zip  # Adjust based on file type
-              
+          
