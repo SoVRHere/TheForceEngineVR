@@ -6,9 +6,9 @@ on:
   push:
     #tags:
     #  - 'v*'  # This triggers the workflow only on version tags like v1.0, v2.1, etc.  
-      branches: [ "feature/build_test" ]
-    pull_request:
-      branches: [ "feature/build_test" ]
+    branches: [ "feature/build_test" ]
+  pull_request:
+     branches: [ "feature/build_test" ]
 
 env:
   # Customize the build type here (Release, Debug, RelWithDebInfo, etc.)
