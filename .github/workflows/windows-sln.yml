@@ -31,10 +31,11 @@ jobs:
           msbuild-architecture: x64  
 
       - name: Build binaries
-        run: MSBuild.exe /p:Configuration=${{env.BUILD_TYPE}} /p:OutDir=${{github.workspace}}/Build TheForceEngine.sln
+        run: MSBuild.exe /p:Configuration=${{env.BUILD_TYPE}} /p:OutDir=${{github.workspace}}/Build/ TheForceEngine.sln
         
       - name: Build artifacts
         run: |
+          mkdir ${{github.workspace}}/BuildArtifacts/TheForceEngine/
           copy ${{github.workspace}}/Build/TheForceEngine.exe ${{github.workspace}}/BuildArtifacts/TheForceEngine/
           copy ${{github.workspace}}/SDL2.dll ${{github.workspace}}/BuildArtifacts/TheForceEngine/
           copy ${{github.workspace}}/SDL2_image.dll ${{github.workspace}}/BuildArtifacts/TheForceEngine/
