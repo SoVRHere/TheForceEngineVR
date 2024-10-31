@@ -58,7 +58,7 @@ jobs:
         uses: actions/download-artifact@v3
         with:
         name: my-artifact
-          path: ${{github.workspace}}/BuildArtifacts/
+          path: ${{github.workspace}}/BuildArtifacts/TheForceEngine/
               
       - name: Compress artifact directory
         run: zip -r TheForceEngine.zip ${{github.workspace}}/BuildArtifacts/TheForceEngine/       
