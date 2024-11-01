@@ -46,7 +46,7 @@ jobs:
           robocopy ${{github.workspace}}/TheForceEngine/Mods/ ${{env.ARTIFACTS_PATH}}/Mods/ /E
           robocopy ${{github.workspace}}/TheForceEngine/Shaders/ ${{env.ARTIFACTS_PATH}}/Shaders/ /E
           robocopy ${{github.workspace}}/TheForceEngine/SoundFonts/ ${{env.ARTIFACTS_PATH}}/SoundFonts/ /E
-          ERRORLEVEL = 0
+          exit 0
           
           #robocopy ${{github.workspace}}/Build/ ${{env.ARTIFACTS_PATH}}/ "TheForceEngine.exe"          
             
