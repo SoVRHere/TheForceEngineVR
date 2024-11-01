@@ -14,7 +14,7 @@ env:
   # Customize the build type here (Release, Debug, RelWithDebInfo, etc.)
   BUILD_TYPE: Release
   
-  ARTIFACTS_PATH: ${{github.workspace}}/BuildArtifacts/TheForceEngine/
+  ARTIFACTS_PATH: ${{github.workspace}}/BuildArtifacts/TheForceEngine
 
 jobs:
   build:
@@ -41,12 +41,12 @@ jobs:
           robocopy ${{github.workspace}}/Build/TheForceEngine.exe ${{github.workspace}}/BuildArtifacts/TheForceEngine/ /E
           robocopy ${{github.workspace}}/TheForceEngine/SDL2.dll ${{github.workspace}}/BuildArtifacts/TheForceEngine/ /E
           robocopy ${{github.workspace}}/TheForceEngine/SDL2_image.dll ${{github.workspace}}/BuildArtifacts/TheForceEngine/ /E
-          robocopy ${{github.workspace}}/TheForceEngine/Captions/ ${{github.workspace}}/BuildArtifacts/TheForceEngine/ /E
-          robocopy ${{github.workspace}}/TheForceEngine/Documentation/ ${{github.workspace}}/BuildArtifacts/TheForceEngine/ /E
-          robocopy ${{github.workspace}}/TheForceEngine/Fonts/ ${{github.workspace}}/BuildArtifacts/TheForceEngine/ /E
-          robocopy ${{github.workspace}}/TheForceEngine/Mods/ ${{github.workspace}}/BuildArtifacts/TheForceEngine/ /E
-          robocopy ${{github.workspace}}/TheForceEngine/Shaders/ ${{env.ARTIFACTS_PATH}} /E
-          robocopy ${{github.workspace}}/TheForceEngine/SoundFonts/ ${{env.ARTIFACTS_PATH}} /E
+          robocopy ${{github.workspace}}/TheForceEngine/Captions/ ${{github.workspace}}/BuildArtifacts/TheForceEngine/Captions/ /E
+          robocopy ${{github.workspace}}/TheForceEngine/Documentation/ ${{github.workspace}}/BuildArtifacts/TheForceEngine/Documentation/ /E
+          robocopy ${{github.workspace}}/TheForceEngine/Fonts/ ${{github.workspace}}/BuildArtifacts/TheForceEngine/Fonts/ /E
+          robocopy ${{github.workspace}}/TheForceEngine/Mods/ ${{github.workspace}}/BuildArtifacts/TheForceEngine/Mods/ /E
+          robocopy ${{github.workspace}}/TheForceEngine/Shaders/ ${{env.ARTIFACTS_PATH}}/Shaders/ /E
+          robocopy ${{github.workspace}}/TheForceEngine/SoundFonts/ ${{env.ARTIFACTS_PATH}}/SoundFonts/ /E
             
       - name: Upload artifact
         uses: actions/upload-artifact@v3
