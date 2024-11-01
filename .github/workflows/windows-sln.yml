@@ -38,9 +38,9 @@ jobs:
       - name: Build artifacts
         run: |
           mkdir ${{github.workspace}}/BuildArtifacts/TheForceEngine/
-          robocopy ${{github.workspace}}/Build/TheForceEngine.exe ${{github.workspace}}/BuildArtifacts/TheForceEngine/
-          robocopy ${{github.workspace}}/TheForceEngine/SDL2.dll ${{github.workspace}}/BuildArtifacts/TheForceEngine/
-          robocopy ${{github.workspace}}/TheForceEngine/SDL2_image.dll ${{github.workspace}}/BuildArtifacts/TheForceEngine/
+          copy ${{github.workspace}}/Build/TheForceEngine.exe ${{github.workspace}}/BuildArtifacts/TheForceEngine/
+          copy ${{github.workspace}}/TheForceEngine/SDL2.dll ${{github.workspace}}/BuildArtifacts/TheForceEngine/
+          copy ${{github.workspace}}/TheForceEngine/SDL2_image.dll ${{github.workspace}}/BuildArtifacts/TheForceEngine/
           robocopy ${{github.workspace}}/TheForceEngine/Captions/ ${{github.workspace}}/BuildArtifacts/TheForceEngine/Captions/ /E
           robocopy ${{github.workspace}}/TheForceEngine/Documentation/ ${{github.workspace}}/BuildArtifacts/TheForceEngine/Documentation/ /E
           robocopy ${{github.workspace}}/TheForceEngine/Fonts/ ${{github.workspace}}/BuildArtifacts/TheForceEngine/Fonts/ /E
