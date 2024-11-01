@@ -13,6 +13,8 @@ on:
 env:
   # Customize the build type here (Release, Debug, RelWithDebInfo, etc.)
   BUILD_TYPE: Release
+  
+  ARTIFACTS_PATH: ${{github.workspace}}/BuildArtifacts/TheForceEngine/
 
 jobs:
   build:
@@ -23,7 +25,7 @@ jobs:
 
     steps:
       - name: Checkout code        
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         
       - name: Add msbuild to PATH
         uses: microsoft/setup-msbuild@v2
@@ -36,10 +38,15 @@ jobs:
       - name: Build artifacts
         run: |
           mkdir ${{github.workspace}}/BuildArtifacts/TheForceEngine/
-          copy ${{github.workspace}}/Build/TheForceEngine.exe ${{github.workspace}}/BuildArtifacts/TheForceEngine/
-          copy ${{github.workspace}}/TheForceEngine/SDL2.dll ${{github.workspace}}/BuildArtifacts/TheForceEngine/
-          copy ${{github.workspace}}/TheForceEngine/SDL2_image.dll ${{github.workspace}}/BuildArtifacts/TheForceEngine/
-          copy ${{github.workspace}}/TheForceEngine/Shaders/ ${{github.workspace}}/BuildArtifacts/TheForceEngine/
+          robocopy ${{github.workspace}}/Build/TheForceEngine.exe ${{github.workspace}}/BuildArtifacts/TheForceEngine/ /E
+          robocopy ${{github.workspace}}/TheForceEngine/SDL2.dll ${{github.workspace}}/BuildArtifacts/TheForceEngine/ /E
+          robocopy ${{github.workspace}}/TheForceEngine/SDL2_image.dll ${{github.workspace}}/BuildArtifacts/TheForceEngine/ /E
+          robocopy ${{github.workspace}}/TheForceEngine/Captions/ ${{github.workspace}}/BuildArtifacts/TheForceEngine/ /E
+          robocopy ${{github.workspace}}/TheForceEngine/Documentation/ ${{github.workspace}}/BuildArtifacts/TheForceEngine/ /E
+          robocopy ${{github.workspace}}/TheForceEngine/Fonts/ ${{github.workspace}}/BuildArtifacts/TheForceEngine/ /E
+          robocopy ${{github.workspace}}/TheForceEngine/Mods/ ${{github.workspace}}/BuildArtifacts/TheForceEngine/ /E
+          robocopy ${{github.workspace}}/TheForceEngine/Shaders/ ${{env.ARTIFACTS_PATH}} /E
+          robocopy ${{github.workspace}}/TheForceEngine/SoundFonts/ ${{env.ARTIFACTS_PATH}} /E
             
       - name: Upload artifact
         uses: actions/upload-artifact@v3
@@ -53,7 +60,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Download artifact
         uses: actions/download-artifact@v3
