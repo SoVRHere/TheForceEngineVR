@@ -48,28 +48,28 @@ jobs:
           robocopy ${{github.workspace}}/TheForceEngine/Shaders/ ${{env.ARTIFACTS_PATH}}/Shaders/ /E
           robocopy ${{github.workspace}}/TheForceEngine/SoundFonts/ ${{env.ARTIFACTS_PATH}}/SoundFonts/ /E
             
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: my-artifact
-          path: ${{env.ARTIFACTS_PATH}}
+      # - name: Upload artifact
+        # uses: actions/upload-artifact@v4
+        # with:
+          # name: my-artifact
+          # path: ${{env.ARTIFACTS_PATH}}
     
-  release:
-    needs: build
-    runs-on: ubuntu-latest
+  # release:
+    # needs: build
+    # runs-on: ubuntu-latest
 
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+    # steps:
+      # - name: Checkout code
+        # uses: actions/checkout@v4
 
-      - name: Download artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: my-artifact
-          path: ${{github.workspace}}/BuildArtifacts/TheForceEngine/
+      # - name: Download artifact
+        # uses: actions/download-artifact@v4
+        # with:
+          # name: my-artifact
+          # path: ${{github.workspace}}/BuildArtifacts/TheForceEngine/
               
       - name: Compress artifact directory
-        run: zip -r TheForceEngine.zip ${{github.workspace}}/BuildArtifacts/TheForceEngine/
+        run: zip -r TheForceEngine.zip ${{env.ARTIFACTS_PATH}}/
 
       - name: Create GitHub release
         id: create_release
