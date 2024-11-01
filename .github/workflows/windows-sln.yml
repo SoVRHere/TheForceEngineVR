@@ -38,19 +38,17 @@ jobs:
       - name: Build artifacts
         run: |
           mkdir ${{env.ARTIFACTS_PATH}}
-          copy ${{github.workspace}}/TheForceEngine/Captions/ ${{env.ARTIFACTS_PATH}}/Captions/ /E
+          robocopy ${{github.workspace}}/TheForceEngine/ ${{env.ARTIFACTS_PATH}}/ "SDL2.dll"
+          robocopy ${{github.workspace}}/TheForceEngine/ ${{env.ARTIFACTS_PATH}}/ "SDL2_image.dll"
+          robocopy ${{github.workspace}}/TheForceEngine/Captions/ ${{env.ARTIFACTS_PATH}}/Captions/ /E
+          robocopy ${{github.workspace}}/TheForceEngine/Documentation/ ${{env.ARTIFACTS_PATH}}/Documentation/ /E
+          robocopy ${{github.workspace}}/TheForceEngine/Fonts/ ${{env.ARTIFACTS_PATH}}/Fonts/ /E
+          robocopy ${{github.workspace}}/TheForceEngine/Mods/ ${{env.ARTIFACTS_PATH}}/Mods/ /E
+          robocopy ${{github.workspace}}/TheForceEngine/Shaders/ ${{env.ARTIFACTS_PATH}}/Shaders/ /E
+          robocopy ${{github.workspace}}/TheForceEngine/SoundFonts/ ${{env.ARTIFACTS_PATH}}/SoundFonts/ /E
+          ERRORLEVEL = 0
           
-          # copy ${{github.workspace}}/Build/TheForceEngine.exe ${{env.ARTIFACTS_PATH}}/
-          # copy ${{github.workspace}}/TheForceEngine/SDL2.dll ${{env.ARTIFACTS_PATH}}/
-          # robocopy ${{github.workspace}}/Build/ ${{env.ARTIFACTS_PATH}}/ "TheForceEngine.exe"
-          # robocopy ${{github.workspace}}/TheForceEngine/ ${{env.ARTIFACTS_PATH}}/ "SDL2.dll"
-          # robocopy ${{github.workspace}}/TheForceEngine/ ${{env.ARTIFACTS_PATH}}/ "SDL2_image.dll"
-          # xcopy ${{github.workspace}}/TheForceEngine/Captions/ ${{env.ARTIFACTS_PATH}}/Captions/ /E
-          # robocopy ${{github.workspace}}/TheForceEngine/Documentation/ ${{env.ARTIFACTS_PATH}}/Documentation/ /E
-          # robocopy ${{github.workspace}}/TheForceEngine/Fonts/ ${{env.ARTIFACTS_PATH}}/Fonts/ /E
-          # robocopy ${{github.workspace}}/TheForceEngine/Mods/ ${{env.ARTIFACTS_PATH}}/Mods/ /E
-          # robocopy ${{github.workspace}}/TheForceEngine/Shaders/ ${{env.ARTIFACTS_PATH}}/Shaders/ /E
-          # robocopy ${{github.workspace}}/TheForceEngine/SoundFonts/ ${{env.ARTIFACTS_PATH}}/SoundFonts/ /E
+          #robocopy ${{github.workspace}}/Build/ ${{env.ARTIFACTS_PATH}}/ "TheForceEngine.exe"          
             
       # - name: Upload artifact
         # uses: actions/upload-artifact@v4
