@@ -71,7 +71,7 @@ jobs:
           # path: ${{github.workspace}}/BuildArtifacts/TheForceEngine/
               
       - name: Compress artifact directory
-        run: Compress-Archive -Path ${{env.ARTIFACTS_PATH}}/* -TheForceEngine.zip
+        run: Compress-Archive -Path ${{env.ARTIFACTS_PATH}}/* -Destination TheForceEngine.zip
         #run: zip -r TheForceEngine.zip ${{env.ARTIFACTS_PATH}}/
 
       - name: Create GitHub release
