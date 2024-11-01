@@ -43,7 +43,7 @@ jobs:
           # robocopy ${{github.workspace}}/Build/ ${{env.ARTIFACTS_PATH}}/ "TheForceEngine.exe"
           # robocopy ${{github.workspace}}/TheForceEngine/ ${{env.ARTIFACTS_PATH}}/ "SDL2.dll"
           # robocopy ${{github.workspace}}/TheForceEngine/ ${{env.ARTIFACTS_PATH}}/ "SDL2_image.dll"
-          # robocopy ${{github.workspace}}/TheForceEngine/Captions/ ${{env.ARTIFACTS_PATH}}/Captions/ /E
+          xcopy ${{github.workspace}}/TheForceEngine/Captions/ ${{env.ARTIFACTS_PATH}}/Captions/ /E
           # robocopy ${{github.workspace}}/TheForceEngine/Documentation/ ${{env.ARTIFACTS_PATH}}/Documentation/ /E
           # robocopy ${{github.workspace}}/TheForceEngine/Fonts/ ${{env.ARTIFACTS_PATH}}/Fonts/ /E
           # robocopy ${{github.workspace}}/TheForceEngine/Mods/ ${{env.ARTIFACTS_PATH}}/Mods/ /E
