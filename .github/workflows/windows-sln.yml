@@ -38,6 +38,8 @@ jobs:
       - name: Build artifacts
         run: |
           mkdir ${{env.ARTIFACTS_PATH}}
+          # copy ${{github.workspace}}/Build/TheForceEngine.exe ${{env.ARTIFACTS_PATH}}/
+          copy ${{github.workspace}}/TheForceEngine/SDL2.dll ${{env.ARTIFACTS_PATH}}/
           # robocopy ${{github.workspace}}/Build/ ${{env.ARTIFACTS_PATH}}/ "TheForceEngine.exe"
           # robocopy ${{github.workspace}}/TheForceEngine/ ${{env.ARTIFACTS_PATH}}/ "SDL2.dll"
           # robocopy ${{github.workspace}}/TheForceEngine/ ${{env.ARTIFACTS_PATH}}/ "SDL2_image.dll"
