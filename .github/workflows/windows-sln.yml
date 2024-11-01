@@ -47,7 +47,7 @@ jobs:
           # robocopy ${{github.workspace}}/TheForceEngine/Documentation/ ${{env.ARTIFACTS_PATH}}/Documentation/ /E
           # robocopy ${{github.workspace}}/TheForceEngine/Fonts/ ${{env.ARTIFACTS_PATH}}/Fonts/ /E
           # robocopy ${{github.workspace}}/TheForceEngine/Mods/ ${{env.ARTIFACTS_PATH}}/Mods/ /E
-          # robocopy ${{github.workspace}}/TheForceEngine/Shaders/ ${{env.ARTIFACTS_PATH}}/Shaders/ /E
+          robocopy ${{github.workspace}}/TheForceEngine/Shaders/ ${{env.ARTIFACTS_PATH}}/Shaders/ /E
           # robocopy ${{github.workspace}}/TheForceEngine/SoundFonts/ ${{env.ARTIFACTS_PATH}}/SoundFonts/ /E
             
       # - name: Upload artifact
