@@ -27,10 +27,10 @@ jobs:
       - name: Checkout code        
         uses: actions/checkout@v4
         
-      - name: Add msbuild to PATH
-        uses: microsoft/setup-msbuild@v2
-        with:
-          msbuild-architecture: x64  
+      # - name: Add msbuild to PATH
+        # uses: microsoft/setup-msbuild@v2
+        # with:
+          # msbuild-architecture: x64  
 
       # - name: Build binaries
         # run: MSBuild.exe /p:Configuration=${{env.BUILD_TYPE}} /p:OutDir=${{github.workspace}}/Build/ TheForceEngine.sln
@@ -46,7 +46,7 @@ jobs:
           # robocopy ${{github.workspace}}/TheForceEngine/Fonts/ ${{env.ARTIFACTS_PATH}}/Fonts/ /E
           # robocopy ${{github.workspace}}/TheForceEngine/Mods/ ${{env.ARTIFACTS_PATH}}/Mods/ /E
           # robocopy ${{github.workspace}}/TheForceEngine/Shaders/ ${{env.ARTIFACTS_PATH}}/Shaders/ /E
-          robocopy ${{github.workspace}}/TheForceEngine/SoundFonts/ ${{env.ARTIFACTS_PATH}}/SoundFonts/ /E
+          # robocopy ${{github.workspace}}/TheForceEngine/SoundFonts/ ${{env.ARTIFACTS_PATH}}/SoundFonts/ /E
             
       # - name: Upload artifact
         # uses: actions/upload-artifact@v4
