@@ -46,7 +46,7 @@ jobs:
           robocopy ${{github.workspace}}/TheForceEngine/Mods/ ${{env.ARTIFACTS_PATH}}/Mods/ /E
           robocopy ${{github.workspace}}/TheForceEngine/Shaders/ ${{env.ARTIFACTS_PATH}}/Shaders/ /E
           robocopy ${{github.workspace}}/TheForceEngine/SoundFonts/ ${{env.ARTIFACTS_PATH}}/SoundFonts/ /E
-          exit 0
+          exit 0 # robocopy returns non zero on success
           
           #robocopy ${{github.workspace}}/Build/ ${{env.ARTIFACTS_PATH}}/ "TheForceEngine.exe"          
             
@@ -58,7 +58,7 @@ jobs:
     
   # release:
     # needs: build
-    # runs-on: ubuntu-latest
+    # runs-on: windows-latest
 
     # steps:
       # - name: Checkout code
@@ -80,8 +80,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
         with:
-          tag_name: ${{github.ref_name}}
-          release_name: "Release ${{github.ref_name}}"
+          tag_name: ${{github.event.head_commit}}
+          release_name: "Release ${{github.event.head_commit}}"
           draft: false
           prerelease: false
 
