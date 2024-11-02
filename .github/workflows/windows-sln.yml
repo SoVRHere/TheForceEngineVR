@@ -80,8 +80,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
         with:
-          tag_name: ${{github.event.head_commit.message}}
-          release_name: "Release ${{github.event.head_commit.message}}"
+          # tag_name: ${{github.event.head_commit.message}}
+          # release_name: "Release ${{github.event.head_commit.message}}"
+          tag_name: ${{github.ref_name}}
+          release_name: "Release ${{github.ref_name}}"
           draft: false
           prerelease: false
 
