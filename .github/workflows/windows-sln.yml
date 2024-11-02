@@ -34,12 +34,13 @@ jobs:
         with:
           msbuild-architecture: x64  
 
-      # - name: Build binaries
-        # run: MSBuild.exe /p:Configuration=${{env.BUILD_TYPE}} /p:OutDir=${{github.workspace}}/Build/ TheForceEngine.sln
+       - name: Build binaries
+         run: MSBuild.exe /p:Configuration=${{env.BUILD_TYPE}} /p:OutDir=${{github.workspace}}/Build/ TheForceEngine.sln
         
       - name: Build artifacts
         run: |
           mkdir ${{env.ARTIFACTS_PATH}}
+          robocopy ${{github.workspace}}/Build/ ${{env.ARTIFACTS_PATH}}/ "TheForceEngine.exe"
           robocopy ${{github.workspace}}/TheForceEngine/ ${{env.ARTIFACTS_PATH}}/ "SDL2.dll"
           robocopy ${{github.workspace}}/TheForceEngine/ ${{env.ARTIFACTS_PATH}}/ "SDL2_image.dll"
           robocopy ${{github.workspace}}/TheForceEngine/Captions/ ${{env.ARTIFACTS_PATH}}/Captions/ /E
@@ -50,27 +51,25 @@ jobs:
           robocopy ${{github.workspace}}/TheForceEngine/SoundFonts/ ${{env.ARTIFACTS_PATH}}/SoundFonts/ /E
           exit 0 # robocopy returns non zero on success
           
-          #robocopy ${{github.workspace}}/Build/ ${{env.ARTIFACTS_PATH}}/ "TheForceEngine.exe"          
-            
-      # - name: Upload artifact
-        # uses: actions/upload-artifact@v4
-        # with:
-          # name: my-artifact
-          # path: ${{env.ARTIFACTS_PATH}}
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: my-artifact
+          path: ${{env.ARTIFACTS_PATH}}
     
-  # release:
-    # needs: build
-    # runs-on: windows-latest
+  release:
+    needs: build
+    runs-on: windows-latest
 
-    # steps:
-      # - name: Checkout code
-        # uses: actions/checkout@v4
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      # - name: Download artifact
-        # uses: actions/download-artifact@v4
-        # with:
-          # name: my-artifact
-          # path: ${{github.workspace}}/BuildArtifacts/TheForceEngine/
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: my-artifact
+          path: ${{github.workspace}}/BuildArtifacts/TheForceEngine/
               
       - name: Compress artifact directory
         run: Compress-Archive -Path ${{env.ARTIFACTS_PATH}}/ -Destination TheForceEngine.zip
