@@ -15,6 +15,9 @@ env:
   BUILD_TYPE: Release
   
   ARTIFACTS_PATH: ${{github.workspace}}/BuildArtifacts/TheForceEngine
+  
+  COMMIT: ${{github.event.head_commit}}
+  COMMIT2: ${{github.head_commit}}
 
 jobs:
   build:
