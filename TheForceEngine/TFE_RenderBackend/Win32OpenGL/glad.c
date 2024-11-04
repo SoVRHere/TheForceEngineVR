@@ -42,6 +42,8 @@ int GLAD_GL_VERSION_4_3 = 0;
 int GLAD_GL_VERSION_4_4 = 0;
 int GLAD_GL_VERSION_4_5 = 0;
 int GLAD_GL_VERSION_4_6 = 0;
+int GLAD_GL_OVR_multiview = 0;
+int GLAD_GL_OVR_multiview2 = 0;
 
 
 
@@ -297,6 +299,7 @@ PFNGLFRAMEBUFFERTEXTURE1DPROC glad_glFramebufferTexture1D = NULL;
 PFNGLFRAMEBUFFERTEXTURE2DPROC glad_glFramebufferTexture2D = NULL;
 PFNGLFRAMEBUFFERTEXTURE3DPROC glad_glFramebufferTexture3D = NULL;
 PFNGLFRAMEBUFFERTEXTURELAYERPROC glad_glFramebufferTextureLayer = NULL;
+PFNGLFRAMEBUFFERTEXTUREMULTIVIEWOVRPROC glad_glFramebufferTextureMultiviewOVR = NULL;
 PFNGLFRONTFACEPROC glad_glFrontFace = NULL;
 PFNGLFRUSTUMPROC glad_glFrustum = NULL;
 PFNGLGENBUFFERSPROC glad_glGenBuffers = NULL;
@@ -606,6 +609,7 @@ PFNGLNAMEDFRAMEBUFFERREADBUFFERPROC glad_glNamedFramebufferReadBuffer = NULL;
 PFNGLNAMEDFRAMEBUFFERRENDERBUFFERPROC glad_glNamedFramebufferRenderbuffer = NULL;
 PFNGLNAMEDFRAMEBUFFERTEXTUREPROC glad_glNamedFramebufferTexture = NULL;
 PFNGLNAMEDFRAMEBUFFERTEXTURELAYERPROC glad_glNamedFramebufferTextureLayer = NULL;
+PFNGLNAMEDFRAMEBUFFERTEXTUREMULTIVIEWOVRPROC glad_glNamedFramebufferTextureMultiviewOVR = NULL;
 PFNGLNAMEDRENDERBUFFERSTORAGEPROC glad_glNamedRenderbufferStorage = NULL;
 PFNGLNAMEDRENDERBUFFERSTORAGEMULTISAMPLEPROC glad_glNamedRenderbufferStorageMultisample = NULL;
 PFNGLNEWLISTPROC glad_glNewList = NULL;
@@ -2204,6 +2208,11 @@ static void glad_gl_load_GL_VERSION_4_6( GLADuserptrloadfunc load, void* userptr
     glad_glPolygonOffsetClamp = (PFNGLPOLYGONOFFSETCLAMPPROC) load(userptr, "glPolygonOffsetClamp");
     glad_glSpecializeShader = (PFNGLSPECIALIZESHADERPROC) load(userptr, "glSpecializeShader");
 }
+static void glad_gl_load_GL_OVR_multiview( GLADuserptrloadfunc load, void* userptr) {
+    if(!GLAD_GL_OVR_multiview) return;
+    glad_glFramebufferTextureMultiviewOVR = (PFNGLFRAMEBUFFERTEXTUREMULTIVIEWOVRPROC) load(userptr, "glFramebufferTextureMultiviewOVR");
+    glad_glNamedFramebufferTextureMultiviewOVR = (PFNGLNAMEDFRAMEBUFFERTEXTUREMULTIVIEWOVRPROC) load(userptr, "glNamedFramebufferTextureMultiviewOVR");
+}
 
 
 
@@ -2299,7 +2308,8 @@ static int glad_gl_find_extensions_gl(void) {
     char **exts_i = NULL;
     if (!glad_gl_get_extensions(&exts, &exts_i)) return 0;
 
-    GLAD_UNUSED(glad_gl_has_extension);
+    GLAD_GL_OVR_multiview = glad_gl_has_extension(exts, exts_i, "GL_OVR_multiview");
+    GLAD_GL_OVR_multiview2 = glad_gl_has_extension(exts, exts_i, "GL_OVR_multiview2");
 
     glad_gl_free_extensions(exts_i);
 
@@ -2381,6 +2391,7 @@ int gladLoadGLUserPtr( GLADuserptrloadfunc load, void *userptr) {
     glad_gl_load_GL_VERSION_4_6(load, userptr);
 
     if (!glad_gl_find_extensions_gl()) return 0;
+    glad_gl_load_GL_OVR_multiview(load, userptr);
 
 
 

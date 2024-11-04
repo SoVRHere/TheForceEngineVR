@@ -40,6 +40,13 @@ struct TFE_Settings_Temp
 {
 	bool skipLoadDelay = false;
 	bool forceFullscreen = false;
+#if defined(START_VR)
+	bool vr = true;
+#else
+	bool vr = false;
+#endif
+	bool vrMultiview = false;
+	bool vrResetSettings = false;
 };
 
 struct TFE_Settings_Window
@@ -295,6 +302,54 @@ struct TFE_ModSettings
 	std::vector<ModHdIgnoreList> ignoreList;
 };
 
+struct TFE_Settings_Vr
+{
+	TFE_Settings_Vr()
+	{
+		resetToDefaults();
+	}
+
+	struct ScreenToVr
+	{
+		f32 distance;
+		Vec3f shift;
+		bool lockToCamera;
+	};
+
+	ScreenToVr menuToVr;
+	ScreenToVr pdaToVr;
+	ScreenToVr hudToVr;
+	ScreenToVr messagesToVr;
+	ScreenToVr weaponToVr;
+	ScreenToVr configToVr;
+	f32 configDotSize;
+	RGBA configDotColor;
+	ScreenToVr automapToVr;
+	f32 automapWidthMultiplier;
+	ScreenToVr overlayToVr;
+	float playerScale;
+
+	void resetToDefaults()
+	{
+		menuToVr = { 2.0f, { 0.0f, 0.0f, -4.0f }, false };
+		pdaToVr = { 2.0f, { 0.0f, 0.0f, -4.0f }, false };
+		hudToVr = { 1.0f, { 0.0f, -2.0f, -4.0f }, true };
+		messagesToVr = { 2.0f, { 0.0f, 0.0f, -4.0f }, true };
+		weaponToVr = { 2.0f, { -0.90f, -0.56f, -2.0f }, false };
+
+		configToVr = { 2.0f, { 0.0f, 0.0f, -4.0f }, true };
+		configDotSize = 25.0f;
+		configDotColor = RGBA::fromFloats(1.0f, 0.0f, 0.0f, 0.5f);
+
+		automapToVr = { 2.0f, { 0.0f, 0.0f, -4.0f }, true };
+		automapWidthMultiplier = 2.0f;
+
+		overlayToVr = { 10.0f, { 0.0f, 2.15f, 0.0f }, false };
+
+		playerScale = 1.0f;
+	}
+};
+
 namespace TFE_Settings
 {
 	bool init(bool& firstRun);
@@ -315,6 +370,7 @@ namespace TFE_Settings
 	TFE_Settings_Game* getGameSettings();
 	TFE_Settings_A11y* getA11ySettings();
 	TFE_ModSettings* getModSettings();
+	TFE_Settings_Vr* getVrSettings();
 
 	// Helper functions.
 	void setLevelName(const char* levelName);

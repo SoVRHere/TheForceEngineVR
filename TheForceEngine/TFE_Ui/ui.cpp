@@ -1,10 +1,20 @@
 #include <TFE_Ui/ui.h>
 #include <TFE_FileSystem/paths.h>
 #include <TFE_FileSystem/fileutil.h>
+#include <TFE_Settings/settings.h>
+
+#include <TFE_Input/inputMapping.h>
+#include <TFE_Vr/vr.h>
+
+//#define USE_INTERNAL_IMGUI_RENDERER
 
 #include "imGUI/imgui.h"
 #include "imGUI/imgui_impl_sdl2.h"
+#if defined(USE_INTERNAL_IMGUI_RENDERER)
 #include "imGUI/imgui_impl_opengl3.h"
+#else
+#include <TFE_RenderShared/ImGuiDraw.h>
+#endif
 #include "portable-file-dialogs.h"
 #include "markdown.h"
 #include <SDL.h>
@@ -29,8 +39,12 @@ bool init(void* window, void* context, s32 uiScale)
 	ImGui::StyleColorsDark();
 
 	// Setup Platform/Renderer bindings
-	ImGui_ImplSDL2_InitForOpenGL((SDL_Window *)window, context);
+	ImGui_ImplSDL2_InitForOpenGL((SDL_Window*)window, context);
+#if defined(USE_INTERNAL_IMGUI_RENDERER)
 	ImGui_ImplOpenGL3_Init(glsl_version);
+#else
+	TFE_RenderShared::imGuiDraw_init();
+#endif
 
 	// Set the default font (13 px)
 	// TODO: Allow scaled UI, so loading a different font for larger scales.
@@ -62,7 +76,11 @@ void shutdown()
 {
 	TFE_Markdown::shutdown();
 
+#if defined(USE_INTERNAL_IMGUI_RENDERER)
 	ImGui_ImplOpenGL3_Shutdown();
+#else
+	TFE_RenderShared::imGuiDraw_destroy();
+#endif
 	ImGui_ImplSDL2_Shutdown();
 	ImGui::DestroyContext();
 }
@@ -85,20 +103,46 @@ void setUiInput(const void* inputEvent)
 
 void begin()
 {
+#if defined(USE_INTERNAL_IMGUI_RENDERER)
 	ImGui_ImplOpenGL3_NewFrame();
+#else
+	TFE_RenderShared::imGuiDraw_createFontTexture();
+#endif
 	ImGui_ImplSDL2_NewFrame();
+
+	// override some ImGui SDL2 stuff for VR
+	if (TFE_Settings::getTempSettings()->vr)
+	{
+		ImGuiIO& io = ImGui::GetIO();
+		const Vec2ui& size = vr::GetRenderTargetSize();
+		io.DisplaySize = ImVec2((float)size.x, (float)size.y);
+		io.DisplayFramebufferScale = ImVec2(1.0f, 1.0f);
+
+		s32 mouseX, mouseY;
+		TFE_Input::getMousePos(&mouseX, &mouseY);
+		io.AddMousePosEvent((f32)mouseX, (f32)mouseY);
+	}
+
 	ImGui::NewFrame();
 }
 
 void render()
 {
 	ImGui::Render();
+#if defined(USE_INTERNAL_IMGUI_RENDERER)
 	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+#else
+	TFE_RenderShared::imGuiDraw_render();
+#endif
 }
 
 void invalidateFontAtlas()
 {
+#if defined(USE_INTERNAL_IMGUI_RENDERER)
 	ImGui_ImplOpenGL3_DestroyFontsTexture();
+#else
+	TFE_RenderShared::imGuiDraw_destroyFontTexture();
+#endif
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////

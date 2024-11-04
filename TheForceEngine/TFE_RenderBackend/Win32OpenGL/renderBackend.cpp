@@ -1,7 +1,9 @@
+#include <TFE_System/math.h>
 #include <TFE_RenderBackend/renderBackend.h>
 #include <TFE_RenderBackend/dynamicTexture.h>
 #include <TFE_RenderBackend/textureGpu.h>
 #include <TFE_RenderBackend/Win32OpenGL/openGL_Caps.h>
+#include <TFE_RenderBackend/Win32OpenGL/openGL_Debug.h>
 #include <TFE_Settings/settings.h>
 #include <TFE_Ui/ui.h>
 #include <TFE_Asset/imageAsset.h>	// For image saving, this should be refactored...
@@ -11,6 +13,7 @@
 #include <TFE_PostProcess/bloomDownsample.h>
 #include <TFE_PostProcess/bloomMerge.h>
 #include <TFE_PostProcess/postprocess.h>
+#include <TFE_Vr/vr.h>
 #include "renderTarget.h"
 #include "screenCapture.h"
 #include <SDL.h>
@@ -29,6 +32,13 @@
 #pragma comment(lib, "sdl2.lib")
 #endif
 
+namespace TFE_Jedi
+{
+	extern Mat3  s_cameraMtx;
+	extern Mat4  s_cameraProj;
+	extern Vec3f s_cameraPos;
+}
+
 namespace TFE_RenderBackend
 {
 	static const f32 c_tallScreenThreshold = 1.32f;	// 4:3 + epsilon.
@@ -43,6 +53,7 @@ namespace TFE_RenderBackend
 	static DynamicTexture* s_palette = nullptr;
 	static u32 s_paletteCpu[256];
 	static TextureGpu* s_virtualRenderTexture = nullptr;
+	static TextureGpu* s_virtualRenderDepthTexture = nullptr;
 	static TextureGpu* s_materialRenderTexture = nullptr;
 	static RenderTarget* s_virtualRenderTarget = nullptr;
 	static ScreenCapture*  s_screenCapture = nullptr;
@@ -68,8 +79,17 @@ namespace TFE_RenderBackend
 	static BloomMerge* s_bloomMerge;
 	static std::vector<SDL_Rect> s_displayBounds;
 
+	vr::UpdateStatus s_VRUpdateStatus = vr::UpdateStatus::ShouldNotRender;
+	Mat4  s_cameraProjVR[2];
+	Mat4  s_cameraProjVR_YDown[2];
+	Mat3  s_cameraMtxVR[2];
+	Mat3  s_cameraMtxVR_YDown[2];
+	Vec3f s_cameraPosVR[2];
+	Vec3f s_cameraPosVR_YDown[2];
+
 	void drawVirtualDisplay();
 	void setupPostEffectChain(bool useDynamicTexture, bool useBloom);
+	bool initVR();
 
 	static void printGLInfo(void)
 	{
@@ -110,6 +130,9 @@ namespace TFE_RenderBackend
 			windowFlags |= SDL_WINDOW_BORDERLESS;
 		}
 
+#ifdef _DEBUG
+		SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_DEBUG_FLAG);
+#endif
 		SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, true);
 
 		TFE_System::logWrite(LOG_MSG, "RenderBackend", "SDL Videodriver: %s", SDL_GetCurrentVideoDriver());
@@ -149,6 +172,8 @@ namespace TFE_RenderBackend
 			return nullptr;
 		}
 
+		OpenGL_Debug::Initialize();
+		const bool inVr = initVR();
 		//swap buffer at the monitors rate
 		SDL_GL_SetSwapInterval((state.flags & WINFLAG_VSYNC) ? 1 : 0);
 
@@ -171,6 +196,41 @@ namespace TFE_RenderBackend
 
 		TFE_Ui::init(window, context, uiScale);
 		return window;
+	}
+
+	bool initVR()
+	{
+		bool& inVr = TFE_Settings::getTempSettings()->vr;
+		if (inVr)
+		{
+			if (!vr::IsInitialized())
+			{
+				bool& useMultiview = TFE_Settings::getTempSettings()->vrMultiview;
+				useMultiview = true; // force multiview for now
+				// NOTE: looks like we cannot use GL_OVR_multiview as we need multiview uniforms in fragment shaders e.g. blit.frag, gpu_render_modelSolid.frag
+				if (!SDL_GL_ExtensionSupported("GL_OVR_multiview2"))
+				{
+					useMultiview = false;
+					inVr = false;
+					TFE_WARN("VR", "\"GL_OVR_multiview2\" extension is required but not supported.");
+					//if (useMultiview)
+					//{
+					//	TFE_WARN("VR", "Multiview rendering requested but \"GL_OVR_multiview2\" extension is not supported, using dual pass rendering.");
+					//}
+				}
+
+				if (inVr && vr::Initialize(useMultiview))
+				{
+				}
+				else
+				{
+					inVr = false;
+					TFE_WARN("VR", "Failed to initialize VR, fallback to non VR mode.");
+				}
+			}
+		}
+
+		return inVr;
 	}
 		
 	bool init(const WindowState& state)
@@ -206,7 +266,14 @@ namespace TFE_RenderBackend
 		s_palette->create(256, 1, 2);
 
 		s_screenCapture = new ScreenCapture();
-		s_screenCapture->create(m_windowState.width, m_windowState.height, 4);
+		if (TFE_Settings::getTempSettings()->vr)
+		{
+			s_screenCapture->create(vr::GetRenderTargetSize().x, vr::GetRenderTargetSize().y, 4);
+		}
+		else
+		{
+			s_screenCapture->create(m_windowState.width, m_windowState.height, 4);
+		}
 
 		TFE_RenderState::clear();
 
@@ -241,12 +308,14 @@ namespace TFE_RenderBackend
 		delete s_virtualDisplay;
 		delete s_virtualRenderTarget;
 		delete s_virtualRenderTexture;
+		delete s_virtualRenderDepthTexture;
 		delete s_materialRenderTexture;
 		SDL_DestroyWindow((SDL_Window*)m_window);
 
 		s_virtualDisplay = nullptr;
 		s_virtualRenderTarget = nullptr;
 		s_virtualRenderTexture = nullptr;
+		s_virtualRenderDepthTexture = nullptr;
 		s_materialRenderTexture = nullptr;
 		m_window = nullptr;
 	}
@@ -259,6 +328,16 @@ namespace TFE_RenderBackend
 	void enableVsync(bool enable)
 	{
 		SDL_GL_SetSwapInterval(enable ? 1 : 0);
+	}
+
+	void pushGroup(const char* label)
+	{
+		OpenGL_Debug::PushGroup(label);
+	}
+
+	void popGroup()
+	{
+		OpenGL_Debug::PopGroup();
 	}
 
 	void setClearColor(const f32* color)
@@ -276,23 +355,53 @@ namespace TFE_RenderBackend
 		else { glClear(GL_COLOR_BUFFER_BIT); }
 
 		TFE_ZONE_BEGIN(systemUi, "System UI");
+		pushGroup("System UI");
 		// Handle the UI.
 		TFE_Ui::render();
 		// Reset the state due to UI changes.
 		TFE_RenderState::clear();
+		popGroup();
 		TFE_ZONE_END(systemUi);
+
+		if (TFE_Settings::getTempSettings()->vr && s_VRUpdateStatus == vr::UpdateStatus::Ok)
+		{
+			// in VR we have to make screenshot before vr::SubmitFrame to avoid getting glReadPixels error:
+			// 'GL_INVALID_FRAMEBUFFER_OPERATION error generated. Operation is not valid because a bound framebuffer is not framebuffer complete.',
+			// looks like vr::SubmitFrame is changing some texture and/or framebuffer state
+			if (s_screenshotQueued)
+			{
+				s_screenshotQueued = false;
+				s_screenCapture->captureFrame(s_screenshotPath);
+			}
+			s_screenCapture->update();
+		}
 
 		TFE_ZONE_BEGIN(swapGpu, "GPU Swap Buffers");
 		// Update the window.
-		SDL_GL_SwapWindow((SDL_Window*)m_window);
+		if (TFE_Settings::getTempSettings()->vr)
+		{
+			if (s_VRUpdateStatus == vr::UpdateStatus::Ok)
+			{
+				vr::Commit(vr::Side::Left);
+				vr::SubmitFrame();
+				TFE_RenderBackend::s_VRUpdateStatus = vr::UpdateStatus::ShouldNotRender;
+			}
+		}
+		else // to be able to capture frame in NVIDIA Nsight we have to swap buffers or change Frame Delimiter in Nsight settings
+		{
+			SDL_GL_SwapWindow((SDL_Window*)m_window);
+		}
 		TFE_ZONE_END(swapGpu);
 
-		if (s_screenshotQueued)
+		if (!TFE_Settings::getTempSettings()->vr)
 		{
-			s_screenshotQueued = false;
-			s_screenCapture->captureFrame(s_screenshotPath);
+			if (s_screenshotQueued)
+			{
+				s_screenshotQueued = false;
+				s_screenCapture->captureFrame(s_screenshotPath);
+			}
+			s_screenCapture->update();
 		}
-		s_screenCapture->update();
 	}
 
 	void captureScreenToMemory(u32* mem)
@@ -386,6 +495,12 @@ namespace TFE_RenderBackend
 		
 	bool getDisplayMonitorInfo(s32 displayIndex, MonitorInfo* monitorInfo)
 	{
+		if (TFE_Settings::getTempSettings()->vr)
+		{
+			*monitorInfo = { 0, 0, (s32)vr::GetRenderTargetSize().x, (s32)vr::GetRenderTargetSize().y };
+			return true;
+		}
+
 		enumerateDisplays();
 		if (displayIndex >= (s32)s_displayBounds.size())
 		{
@@ -422,6 +537,11 @@ namespace TFE_RenderBackend
 		assert(displayIndex >= 0);
 
 		getDisplayMonitorInfo(displayIndex, monitorInfo);
+	}
+
+	const WindowState& getWindowState()
+	{
+		return m_windowState;
 	}
 
 	void enableFullscreen(bool enable)
@@ -491,13 +611,24 @@ namespace TFE_RenderBackend
 	{
 		assert(displayInfo);
 
-		displayInfo->width = m_windowState.width;
-		displayInfo->height = m_windowState.height;
-		displayInfo->refreshRate = (m_windowState.flags & WINFLAG_VSYNC) != 0 ? m_windowState.refreshRate : 0.0f;
+		if (TFE_Settings::getTempSettings()->vr)
+		{
+			displayInfo->width = vr::GetRenderTargetSize().x;
+			displayInfo->height = vr::GetRenderTargetSize().y;
+			displayInfo->refreshRate = 70.0f;
+		}
+		else
+		{
+			displayInfo->width = m_windowState.width;
+			displayInfo->height = m_windowState.height;
+			displayInfo->refreshRate = (m_windowState.flags & WINFLAG_VSYNC) != 0 ? m_windowState.refreshRate : 0.0f;
+		}
 	}
 
 	bool recreateDisplay(bool setupPostFx)
 	{
+		const bool inVr = TFE_Settings::getTempSettings()->vr;
+
 		if (s_virtualDisplay)
 		{
 			delete s_virtualDisplay;
@@ -511,6 +642,10 @@ namespace TFE_RenderBackend
 		{
 			delete s_virtualRenderTexture;
 		}
+		if (s_virtualRenderDepthTexture)
+		{
+			delete s_virtualRenderDepthTexture;
+		}
 		if (s_materialRenderTexture)
 		{
 			delete s_materialRenderTexture;
@@ -518,26 +653,73 @@ namespace TFE_RenderBackend
 		s_virtualDisplay = nullptr;
 		s_virtualRenderTarget = nullptr;
 		s_virtualRenderTexture = nullptr;
+		s_virtualRenderDepthTexture = nullptr;
 		s_materialRenderTexture = nullptr;
 
 		bool result = false;
 		if (s_useRenderTarget)
 		{
-			s_virtualRenderTarget = new RenderTarget();
-			s_virtualRenderTexture = new TextureGpu();
-			result = s_virtualRenderTexture->create(s_virtualWidth, s_virtualHeight);
-
-			if (s_bloomEnable) // Output to two textures.
+			if (inVr)
 			{
-				s_materialRenderTexture = new TextureGpu();
-				result &= s_materialRenderTexture->create(s_virtualWidth, s_virtualHeight);
+				const bool useMultiview = TFE_Settings::getTempSettings()->vrMultiview;
+				const Vec2ui& renderTargetSize = vr::GetRenderTargetSize();
+				s_virtualWidth = renderTargetSize.x;
+				s_virtualHeight = renderTargetSize.y;
 
-				TextureGpu* textures[] = { s_virtualRenderTexture, s_materialRenderTexture };
-				result &= s_virtualRenderTarget->create(2, textures, true);
+				s_virtualRenderTarget = new RenderTarget();
+				s_virtualRenderTexture = new TextureGpu();
+				s_virtualRenderDepthTexture = new TextureGpu();
+
+				s_materialRenderTexture = s_bloomEnable ? new TextureGpu{} : nullptr;
+				// TODO: match VR buffers formats
+				if (useMultiview)
+				{
+					s_virtualRenderTexture->createArray(s_virtualWidth, s_virtualHeight, 2, TEX_RGBA8);
+					s_virtualRenderDepthTexture->createArray(s_virtualWidth, s_virtualHeight, 2, TEX_DEPTH24_STENCIL8);
+					if (s_materialRenderTexture)
+					{
+						s_materialRenderTexture->createArray(s_virtualWidth, s_virtualHeight, 2, TEX_RGBA8);
+					}
+				}
+				else
+				{
+					s_virtualRenderTexture->create(s_virtualWidth, s_virtualHeight, TEX_RGBA8);
+					s_virtualRenderDepthTexture->create(s_virtualWidth, s_virtualHeight, TEX_DEPTH24_STENCIL8);
+					if (s_materialRenderTexture)
+					{
+						s_materialRenderTexture->create(s_virtualWidth, s_virtualHeight, TEX_RGBA8);
+					}
+				}
+
+				if (s_bloomEnable) // Output to two textures.
+				{
+					TextureGpu* textures[] = { s_virtualRenderTexture, s_materialRenderTexture };
+					s_virtualRenderTarget->create(2, textures, s_virtualRenderDepthTexture, useMultiview);
+				}
+				else
+				{
+					s_virtualRenderTarget->create(1, &s_virtualRenderTexture, s_virtualRenderDepthTexture, useMultiview);
+				}
+				result = true;
 			}
 			else
 			{
-				result &= s_virtualRenderTarget->create(1, &s_virtualRenderTexture, true);
+				s_virtualRenderTarget = new RenderTarget();
+				s_virtualRenderTexture = new TextureGpu();
+				result = s_virtualRenderTexture->create(s_virtualWidth, s_virtualHeight);
+
+				if (s_bloomEnable) // Output to two textures.
+				{
+					s_materialRenderTexture = new TextureGpu();
+					result &= s_materialRenderTexture->create(s_virtualWidth, s_virtualHeight);
+
+					TextureGpu* textures[] = { s_virtualRenderTexture, s_materialRenderTexture };
+					result &= s_virtualRenderTarget->create(2, textures, true);
+				}
+				else
+				{
+					result &= s_virtualRenderTarget->create(1, &s_virtualRenderTexture, true);
+				}
 			}
 
 			// The renderer will handle this instead.
@@ -725,7 +907,9 @@ namespace TFE_RenderBackend
 		// Only clear if (1) s_virtualDisplay == null or (2) s_displayMode != DMODE_STRETCH
 		if (s_displayMode != DMODE_STRETCH)
 		{
+			//glClearColor(1.0f, 0.0f, 0.0f, 1.0f);
 			glClear(GL_COLOR_BUFFER_BIT);
+			TFE_ASSERT_GL;
 		}
 		TFE_PostProcess::execute();
 	}
@@ -737,8 +921,16 @@ namespace TFE_RenderBackend
 	{
 		RenderTarget* newTarget = new RenderTarget();
 		TextureGpu* texture = new TextureGpu();
-		texture->create(width, height);
-		newTarget->create(1, &texture, hasDepthBuffer);
+		if (TFE_Settings::getTempSettings()->vr && TFE_Settings::getTempSettings()->vrMultiview)
+		{
+			texture->createArray(width, height, 2, TexFormat::TEX_RGBA8/*TODO: from vr*/);
+			newTarget->create(1, &texture, nullptr, true);
+		}
+		else
+		{
+			texture->create(width, height);
+			newTarget->create(1, &texture, hasDepthBuffer);
+		}
 
 		return RenderTargetHandle(newTarget);
 	}
@@ -783,19 +975,35 @@ namespace TFE_RenderBackend
 
 	void unbindRenderTarget()
 	{
-		RenderTarget::unbind();
-		glViewport(0, 0, m_windowState.width, m_windowState.height);
-
-		if (s_copyTarget)
+		if (!TFE_Settings::getTempSettings()->vr)
 		{
-			RenderTarget::copyBackbufferToTarget(s_copyTarget);
-			s_copyTarget = nullptr;
+			RenderTarget::unbind();
+			glViewport(0, 0, m_windowState.width, m_windowState.height);
+			TFE_ASSERT_GL;
+
+			if (s_copyTarget)
+			{
+				RenderTarget::copyBackbufferToTarget(s_copyTarget);
+				s_copyTarget = nullptr;
+			}
+		}
+		else
+		{
+			RenderTarget& renderTarget = vr::GetRenderTarget(vr::Side::Left);
+			renderTarget.bind();
+
+			if (s_copyTarget)
+			{
+				RenderTarget::copy(s_copyTarget, &renderTarget);
+				s_copyTarget = nullptr;
+			}
 		}
 	}
 
 	void setViewport(s32 x, s32 y, s32 w, s32 h)
 	{
 		glViewport(x, y, w, h);
+		TFE_ASSERT_GL;
 	}
 
 	void setScissorRect(bool enable, s32 x, s32 y, s32 w, s32 h)
@@ -809,6 +1017,7 @@ namespace TFE_RenderBackend
 		{
 			glDisable(GL_SCISSOR_TEST);
 		}
+		TFE_ASSERT_GL;
 	}
 
 	const TextureGpu* getRenderTargetTexture(RenderTargetHandle rtHandle)
@@ -864,14 +1073,30 @@ namespace TFE_RenderBackend
 		return (void*)(iptr)texture->getHandle();
 	}
 
+	void bindNativeTexture(void* texture)
+	{
+		glBindTexture(GL_TEXTURE_2D, (GLuint)(intptr_t)texture);
+		TFE_ASSERT_GL;
+	}
+
 	void drawIndexedTriangles(u32 triCount, u32 indexStride, u32 indexStart)
 	{
+		GLint buffer;
+		glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &buffer);
+		TFE_ASSERT_GL;
+		if (buffer == 0)
+		{
+			std::ignore = 5;
+		}
+
 		glDrawElements(GL_TRIANGLES, triCount * 3, indexStride == 4 ? GL_UNSIGNED_INT : GL_UNSIGNED_SHORT, (void*)(iptr)(indexStart * indexStride));
+		TFE_ASSERT_GL;
 	}
 
 	void drawLines(u32 lineCount)
 	{
 		glDrawArrays(GL_LINES, 0, lineCount * 2);
+		TFE_ASSERT_GL;
 	}
 
 	static u32 s_bloomBufferCount = 0;
@@ -899,10 +1124,20 @@ namespace TFE_RenderBackend
 		s32 index = s_bloomBufferCount;
 		s_bloomBufferCount++;
 
-		s_bloomTextures[index] = new TextureGpu();
-		s_bloomTextures[index]->create(width, height, TexFormat::TEX_RGBAF16, false, MAG_FILTER_LINEAR);
-		s_bloomTargets[index] = new RenderTarget();
-		s_bloomTargets[index]->create(1, &s_bloomTextures[index], false);
+		if (TFE_Settings::getTempSettings()->vrMultiview)
+		{
+			s_bloomTextures[index] = new TextureGpu();
+			s_bloomTextures[index]->createArray(width, height, 2, TexFormat::TEX_RGBAF16, false, MAG_FILTER_LINEAR);
+			s_bloomTargets[index] = new RenderTarget();
+			s_bloomTargets[index]->create(1, &s_bloomTextures[index], nullptr, true);
+		}
+		else
+		{
+			s_bloomTextures[index] = new TextureGpu();
+			s_bloomTextures[index]->create(width, height, TexFormat::TEX_RGBAF16, false, MAG_FILTER_LINEAR);
+			s_bloomTargets[index] = new RenderTarget();
+			s_bloomTargets[index]->create(1, &s_bloomTextures[index], false);
+		}
 
 		const PostEffectInput bloomTresholdInputs[] =
 		{
@@ -919,10 +1154,20 @@ namespace TFE_RenderBackend
 
 			width  >>= 1;
 			height >>= 1;
-			s_bloomTextures[index] = new TextureGpu();
-			s_bloomTextures[index]->create(width, height, TexFormat::TEX_RGBAF16, false, MAG_FILTER_LINEAR);
-			s_bloomTargets[index] = new RenderTarget();
-			s_bloomTargets[index]->create(1, &s_bloomTextures[index], false);
+			if (TFE_Settings::getTempSettings()->vrMultiview)
+			{
+				s_bloomTextures[index] = new TextureGpu();
+				s_bloomTextures[index]->createArray(width, height, 2, TexFormat::TEX_RGBAF16, false, MAG_FILTER_LINEAR);
+				s_bloomTargets[index] = new RenderTarget();
+				s_bloomTargets[index]->create(1, &s_bloomTextures[index], nullptr, true);
+			}
+			else
+			{
+				s_bloomTextures[index] = new TextureGpu();
+				s_bloomTextures[index]->create(width, height, TexFormat::TEX_RGBAF16, false, MAG_FILTER_LINEAR);
+				s_bloomTargets[index] = new RenderTarget();
+				s_bloomTargets[index]->create(1, &s_bloomTextures[index], false);
+			}
 
 			const PostEffectInput bloomDownsampleInputs[] =
 			{
@@ -941,10 +1186,20 @@ namespace TFE_RenderBackend
 			s32 index = s_bloomBufferCount;
 			s_bloomBufferCount++;
 
-			s_bloomTextures[index] = new TextureGpu();
-			s_bloomTextures[index]->create(width, height, TexFormat::TEX_RGBAF16, false, MAG_FILTER_LINEAR);
-			s_bloomTargets[index] = new RenderTarget();
-			s_bloomTargets[index]->create(1, &s_bloomTextures[index], false);
+			if (TFE_Settings::getTempSettings()->vrMultiview)
+			{
+				s_bloomTextures[index] = new TextureGpu();
+				s_bloomTextures[index]->createArray(width, height, 2, TexFormat::TEX_RGBAF16, false, MAG_FILTER_LINEAR);
+				s_bloomTargets[index] = new RenderTarget();
+				s_bloomTargets[index]->create(1, &s_bloomTextures[index], nullptr, true);
+			}
+			else
+			{
+				s_bloomTextures[index] = new TextureGpu();
+				s_bloomTextures[index]->create(width, height, TexFormat::TEX_RGBAF16, false, MAG_FILTER_LINEAR);
+				s_bloomTargets[index] = new RenderTarget();
+				s_bloomTargets[index]->create(1, &s_bloomTextures[index], false);
+			}
 
 			const PostEffectInput bloomMergeInputs[] =
 			{
@@ -974,6 +1229,16 @@ namespace TFE_RenderBackend
 		s32 h = m_windowState.height;
 		f32 aspect = f32(w) / f32(h);
 
+		if (TFE_Settings::getTempSettings()->vr)
+		{
+			w = vr::GetRenderTargetSize().x;
+			h = vr::GetRenderTargetSize().y;
+
+			// Disable widescreen.
+			s_widescreen = false;
+			TFE_Settings::getGraphicsSettings()->widescreen = false;
+		}
+		else 
 		if (s_displayMode == DMODE_ASPECT_CORRECT && aspect > c_tallScreenThreshold && !s_widescreen)
 		{
 			// Calculate width based on height.
@@ -1028,5 +1293,55 @@ namespace TFE_RenderBackend
 			};
 			TFE_PostProcess::appendEffect(s_postEffectBlit, TFE_ARRAYSIZE(blitInputs), blitInputs, nullptr, x, y, w, h);
 		}
+	}
+
+	void updateVRCamera()
+	{
+		if (!TFE_Settings::getTempSettings()->vr)
+		{
+			return;
+		}
+
+		auto UpdateCameraProj = [](Mat4 cameraProj[], bool yUp) {
+			cameraProj[0] = vr::GetEyeProj(vr::Side::Left, yUp);
+			cameraProj[1] = vr::GetEyeProj(vr::Side::Right, yUp);
+		};
+
+		auto UpdateCameraMtx = [](Mat3 cameraMtx[], Vec3f cameraPos[], bool yUp) {
+			Mat4 transformation[2] = {
+				yUp ? vr::GetEyePose(vr::Side::Left).mTransformation : vr::GetEyePose(vr::Side::Left).mTransformationYDown,
+				yUp ? vr::GetEyePose(vr::Side::Right).mTransformation : vr::GetEyePose(vr::Side::Right).mTransformationYDown };
+			transformation[0].m3 = { 0.0f, 0.0f, 0.0f, 1.0f };
+			transformation[1].m3 = { 0.0f, 0.0f, 0.0f, 1.0f };
+
+			//Vec3f pos[2] = { TFE_Math::getVec3(transformation[0].m3), TFE_Math::getVec3(transformation[1].m3) };
+			//const float eyeDist = TFE_Math::distance(&pos[0], &pos[1]);
+			const float eyeDist = vr::GetEyesDistance() * TFE_Settings::getVrSettings()->playerScale;
+
+			Mat4 view4 = TFE_Math::buildMatrix4(TFE_Jedi::s_cameraMtx, TFE_Jedi::s_cameraPos);
+
+			Mat4 cameraMtx4[2] = {
+				TFE_Math::mulMatrix4(TFE_Math::transpose4(transformation[0]), view4),
+				TFE_Math::mulMatrix4(TFE_Math::transpose4(transformation[1]), view4)
+			};
+			cameraMtx[0] = TFE_Math::getMatrix3(cameraMtx4[0]);
+			cameraMtx[1] = TFE_Math::getMatrix3(cameraMtx4[1]);
+			Vec3f right0_ = TFE_Math::getVec3(cameraMtx4[0].m0);
+			Vec3f right1_ = TFE_Math::getVec3(cameraMtx4[1].m0);
+			Vec3f right0 = TFE_Math::scale(TFE_Math::normalize(&right0_), 0.5f * eyeDist);
+			Vec3f left0 = TFE_Math::scale(right0, -1.0f);
+			Vec3f right1 = TFE_Math::scale(TFE_Math::normalize(&right0_), 0.5f * eyeDist);
+			Vec3f left1 = TFE_Math::scale(right1, -1.0f);
+			//Vec3f s_cameraPos_[2] = { TFE_Math::add(TFE_Math::getTranslation(s_cameraMtxVr[0]), pos[0]), TFE_Math::add(TFE_Math::getTranslation(s_cameraMtxVr[1]), pos[1]) };
+			//Vec3f s_cameraPos_[2] = { TFE_Math::add(TFE_Math::getTranslation(s_cameraMtxVr[0]), s_cameraPos), TFE_Math::add(TFE_Math::getTranslation(s_cameraMtxVr[1]), s_cameraPos) };
+			cameraPos[0] = TFE_Math::add(TFE_Math::getTranslation(cameraMtx4[0]), left0);
+			cameraPos[1] = TFE_Math::add(TFE_Math::getTranslation(cameraMtx4[1]), right0);
+		};
+
+		UpdateCameraProj(s_cameraProjVR, true);
+		UpdateCameraProj(s_cameraProjVR_YDown, false);
+
+		UpdateCameraMtx(s_cameraMtxVR, s_cameraPosVR, true);
+		UpdateCameraMtx(s_cameraMtxVR_YDown, s_cameraPosVR_YDown, false);
 	}
 }  // namespace

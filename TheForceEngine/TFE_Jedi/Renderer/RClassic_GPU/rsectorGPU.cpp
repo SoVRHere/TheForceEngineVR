@@ -27,6 +27,8 @@
 
 #include <TFE_FrontEndUI/console.h>
 
+#include <TFE_Vr/vr.h>
+
 #include "rclassicGPU.h"
 #include "rsectorGPU.h"
 #include "modelGPU.h"
@@ -47,6 +49,16 @@
 
 #define PTR_OFFSET(ptr, base) size_t((u8*)ptr - (u8*)base)
 using namespace TFE_RenderBackend;
+
+namespace TFE_RenderBackend
+{
+	extern Mat4  s_cameraProjVR[2];
+	extern Mat4  s_cameraProjVR_YDown[2];
+	extern Mat3  s_cameraMtxVR[2];
+	extern Mat3  s_cameraMtxVR_YDown[2];
+	extern Vec3f s_cameraPosVR[2];
+	extern Vec3f s_cameraPosVR_YDown[2];
+}
 
 namespace TFE_Jedi
 {
@@ -82,8 +94,11 @@ namespace TFE_Jedi
 	struct ShaderInputsGPU
 	{
 		s32 cameraPosId;
+		const ShaderUniform* cameraPos{ nullptr };
 		s32 cameraViewId;
+		const ShaderUniform* cameraView{ nullptr };
 		s32 cameraProjId;
+		const ShaderUniform* cameraProj{ nullptr };
 		s32 cameraDirId;
 		s32 lightDataId;
 		s32 globalLightingId;
@@ -139,6 +154,8 @@ namespace TFE_Jedi
 		bool ditheredBilinear = false;
 		bool bloom = false;
 		bool trueColor = false;
+		bool vr = false;
+		bool vrMultiview = false;
 	};
 
 	static ShaderSettingsSGPU s_shaderSettings = {};
@@ -165,9 +182,9 @@ namespace TFE_Jedi
 		}
 		s_spriteShader.enableClipPlanes(MAX_PORTAL_PLANES);
 
-		s_shaderInputs[SPRITE_PASS].cameraPosId  = s_spriteShader.getVariableId("CameraPos");
-		s_shaderInputs[SPRITE_PASS].cameraViewId = s_spriteShader.getVariableId("CameraView");
-		s_shaderInputs[SPRITE_PASS].cameraProjId = s_spriteShader.getVariableId("CameraProj");
+		s_shaderInputs[SPRITE_PASS].cameraPosId  = s_spriteShader.getVariableId("CameraPos", &s_shaderInputs[SPRITE_PASS].cameraPos);
+		s_shaderInputs[SPRITE_PASS].cameraViewId = s_spriteShader.getVariableId("CameraView", &s_shaderInputs[SPRITE_PASS].cameraView);
+		s_shaderInputs[SPRITE_PASS].cameraProjId = s_spriteShader.getVariableId("CameraProj", &s_shaderInputs[SPRITE_PASS].cameraProj);
 		s_shaderInputs[SPRITE_PASS].cameraDirId  = s_spriteShader.getVariableId("CameraDir");
 		s_shaderInputs[SPRITE_PASS].lightDataId  = s_spriteShader.getVariableId("LightData");
 		s_shaderInputs[SPRITE_PASS].globalLightingId = s_spriteShader.getVariableId("GlobalLightData");
@@ -201,9 +218,9 @@ namespace TFE_Jedi
 		}
 		s_wallShader[index].enableClipPlanes(MAX_PORTAL_PLANES);
 
-		s_shaderInputs[index].cameraPosId  = s_wallShader[index].getVariableId("CameraPos");
-		s_shaderInputs[index].cameraViewId = s_wallShader[index].getVariableId("CameraView");
-		s_shaderInputs[index].cameraProjId = s_wallShader[index].getVariableId("CameraProj");
+		s_shaderInputs[index].cameraPosId  = s_wallShader[index].getVariableId("CameraPos", &s_shaderInputs[index].cameraPos);
+		s_shaderInputs[index].cameraViewId = s_wallShader[index].getVariableId("CameraView", &s_shaderInputs[index].cameraView);
+		s_shaderInputs[index].cameraProjId = s_wallShader[index].getVariableId("CameraProj", &s_shaderInputs[index].cameraProj);
 		s_shaderInputs[index].cameraDirId  = s_wallShader[index].getVariableId("CameraDir");
 		s_shaderInputs[index].lightDataId  = s_wallShader[index].getVariableId("LightData");
 		s_shaderInputs[index].globalLightingId = s_wallShader[index].getVariableId("GlobalLightData");
@@ -787,7 +804,9 @@ namespace TFE_Jedi
 			s_shaderSettings.ditheredBilinear != graphics->ditheredBilinear ||
 			s_shaderSettings.bloom != graphics->bloomEnabled ||
 			s_shaderSettings.colormapInterp != (graphics->colorMode == COLORMODE_8BIT_INTERP) ||
-			s_shaderSettings.trueColor != (graphics->colorMode == COLORMODE_TRUE_COLOR);
+			s_shaderSettings.trueColor != (graphics->colorMode == COLORMODE_TRUE_COLOR) ||
+			s_shaderSettings.vr != TFE_Settings::getTempSettings()->vr ||
+			s_shaderSettings.vrMultiview != TFE_Settings::getTempSettings()->vrMultiview;
 		if (!needsUpdate) { return true; }
 
 		// Then update the settings.
@@ -796,6 +815,8 @@ namespace TFE_Jedi
 		s_shaderSettings.bloom = graphics->bloomEnabled;
 		s_shaderSettings.colormapInterp = (graphics->colorMode == COLORMODE_8BIT_INTERP);
 		s_shaderSettings.trueColor = (graphics->colorMode == COLORMODE_TRUE_COLOR);
+		s_shaderSettings.vr = TFE_Settings::getTempSettings()->vr;
+		s_shaderSettings.vrMultiview = TFE_Settings::getTempSettings()->vrMultiview;
 
 		// Update the color map based on interpolation or true color settings.
 		updateColorMap();
@@ -1514,8 +1535,16 @@ namespace TFE_Jedi
 		if (!frame) { return; }
 		s_clipSector = curSector;
 		s_clipObjPos = posWS;
-		
+
 		if (s_fullBright) { fullbright = true; } // TFE fullbright cheat (LABRIGHT)
+
+		Vec3f cameraRight = s_cameraRight;
+		Vec3f cameraDir = s_cameraDir;
+		if (TFE_Settings::getTempSettings()->vr)
+		{
+			cameraRight = s_cameraMtxVR_YDown[0].m0;
+			cameraDir = TFE_Math::scale(s_cameraMtxVR_YDown[0].m2, -1.0f);
+		}
 
 		// Compute the (x,z) extents of the frame.
 		const f32 widthWS  = fixed16ToFloat(frame->widthWS);
@@ -1523,8 +1552,8 @@ namespace TFE_Jedi
 		const f32 fOffsetX = fixed16ToFloat(frame->offsetX);
 		const f32 fOffsetY = fixed16ToFloat(frame->offsetY);
 
-		Vec3f corner0 = { posWS.x - s_cameraRight.x*fOffsetX,  posWS.y + fOffsetY,   posWS.z - s_cameraRight.z*fOffsetX };
-		Vec3f corner1 = { corner0.x + s_cameraRight.x*widthWS, corner0.y - heightWS, corner0.z + s_cameraRight.z*widthWS };
+		Vec3f corner0 = { posWS.x - cameraRight.x * fOffsetX,  posWS.y + fOffsetY,   posWS.z - cameraRight.z * fOffsetX};
+		Vec3f corner1 = { corner0.x + cameraRight.x*widthWS, corner0.y - heightWS, corner0.z + cameraRight.z*widthWS };
 		Vec2f points[] =
 		{
 			{ corner0.x, corner0.z },
@@ -1538,15 +1567,15 @@ namespace TFE_Jedi
 		if (s_cameraDirXZ.x != 0.0f || s_cameraDirXZ.z != 0.0f)
 		{
 			const Vec2f relPos = { posWS.x - s_cameraPos.x, posWS.z - s_cameraPos.z };
-			const f32 z = relPos.x*s_cameraDirXZ.x + relPos.z*s_cameraDirXZ.z;
-			if (z < 1.0f) { return; }
+			const f32 z = relPos.x* s_cameraDirXZ.x + relPos.z* s_cameraDirXZ.z;
+			if (z < 1.0f) { return;	}
 		}
 		// Fallback to 3D culling if necessary.
 		else
 		{
 			const Vec3f relPos = { posWS.x - s_cameraPos.x, posWS.y - s_cameraPos.y, posWS.z - s_cameraPos.z };
-			const f32 z = relPos.x*s_cameraDir.x + relPos.y*s_cameraDir.y + relPos.z*s_cameraDir.z;
-			if (z < 1.0f) { return; }
+			const f32 z = relPos.x*cameraDir.x + relPos.y*cameraDir.y + relPos.z*cameraDir.z;
+			if (z < 1.0f) { return;	}
 		}
 
 		// Clip against the current wall segments and the portal XZ extents.
@@ -1748,7 +1777,8 @@ namespace TFE_Jedi
 		Vec2f startView[] = { {0,0}, {0,0} };
 
 		// Compute an XZ direction for sprite culling.
-		const f32 cameraDirMag = s_cameraDir.x*s_cameraDir.x + s_cameraDir.z*s_cameraDir.z;
+		const Vec3f& cameraDir = TFE_Settings::getTempSettings()->vr ? TFE_Math::scale(s_cameraMtxVR_YDown[0].m2, -1.0f) : s_cameraDir;
+		const f32 cameraDirMag = cameraDir.x*cameraDir.x + cameraDir.z*s_cameraDir.z;
 		if (cameraDirMag > FLT_EPSILON)
 		{
 			const f32 scale = 1.0f / sqrtf(cameraDirMag);
@@ -1870,10 +1900,19 @@ namespace TFE_Jedi
 
 		// Camera and lighting.
 		const Vec4f lightData = { f32(s_worldAmbient), s_cameraLightSource ? 1.0f : 0.0f, 0.0f, s_showWireframe ? 1.0f : 0.0f };
-		shader->setVariable(inputs->cameraPosId,  SVT_VEC3,   s_cameraPos.m);
-		shader->setVariable(inputs->cameraViewId, SVT_MAT3x3, s_cameraMtx.data);
-		shader->setVariable(inputs->cameraProjId, SVT_MAT4x4, s_cameraProj.data);
-		shader->setVariable(inputs->cameraDirId,  SVT_VEC3,   s_cameraDir.m);
+
+		const bool inVr = TFE_Settings::getTempSettings()->vr;
+
+		(inputs->cameraPos && inputs->cameraPos->size > 1) ?
+			shader->setVariableArray(inputs->cameraPosId, SVT_VEC3, s_cameraPosVR_YDown[0].m, 2) :
+			shader->setVariable(inputs->cameraPosId, SVT_VEC3, s_cameraPos.m);
+		(inputs->cameraView && inputs->cameraView->size > 1) ?
+			shader->setVariableArray(inputs->cameraViewId, SVT_MAT3x3, s_cameraMtxVR_YDown[0].data, 2) :
+			shader->setVariable(inputs->cameraViewId, SVT_MAT3x3, s_cameraMtx.data);
+		(inputs->cameraProj && inputs->cameraProj->size > 1) ?
+			shader->setVariableArray(inputs->cameraProjId, SVT_MAT4x4, s_cameraProjVR_YDown[0].data, 2) :
+			shader->setVariable(inputs->cameraProjId, SVT_MAT4x4, s_cameraProj.data);
+		shader->setVariable(inputs->cameraDirId,  SVT_VEC3, inVr ? TFE_Math::scale(s_cameraMtxVR_YDown[0].m2, -1.0f).m : s_cameraDir.m);
 		shader->setVariable(inputs->lightDataId,  SVT_VEC4,   lightData.m);
 
 		// Calculte the sky parallax.
@@ -1951,7 +1990,7 @@ namespace TFE_Jedi
 		if (!sprdisplayList_getSize()) { return; }
 		const TFE_Settings_Graphics* settings = TFE_Settings::getGraphicsSettings();
 		// For some reason depth test is required to write, so set the comparison function to always instead.
-		TFE_RenderState::setStateEnable(true,  STATE_DEPTH_WRITE | STATE_DEPTH_TEST);
+		TFE_RenderState::setStateEnable(true, STATE_DEPTH_WRITE | STATE_DEPTH_TEST);
 		TFE_RenderState::setDepthFunction(CMP_ALWAYS);
 
 		s_spriteShader.bind();
@@ -1980,13 +2019,23 @@ namespace TFE_Jedi
 		ShaderBuffer* textureTable = &texturePacker->textureTableGPU;
 		textureTable->bind(6);
 
+		const bool inVr = TFE_Settings::getTempSettings()->vr;
+
 		// Camera and lighting.
 		Vec4f lightData = { f32(s_worldAmbient), s_cameraLightSource ? 1.0f : 0.0f, 0.0f, s_showWireframe ? 1.0f : 0.0f };
 		s_spriteShader.setVariable(s_cameraRightId, SVT_VEC3, s_cameraRight.m);
-		s_spriteShader.setVariable(s_shaderInputs[SPRITE_PASS].cameraPosId,  SVT_VEC3,   s_cameraPos.m);
-		s_spriteShader.setVariable(s_shaderInputs[SPRITE_PASS].cameraViewId, SVT_MAT3x3, s_cameraMtx.data);
-		s_spriteShader.setVariable(s_shaderInputs[SPRITE_PASS].cameraProjId, SVT_MAT4x4, s_cameraProj.data);
-		s_spriteShader.setVariable(s_shaderInputs[SPRITE_PASS].cameraDirId,  SVT_VEC3,   s_cameraDir.m);
+
+		(s_shaderInputs[SPRITE_PASS].cameraPos && s_shaderInputs[SPRITE_PASS].cameraPos->size > 1) ?
+			s_spriteShader.setVariableArray(s_shaderInputs[SPRITE_PASS].cameraPosId, SVT_VEC3, s_cameraPosVR_YDown[0].m, 2) :
+			s_spriteShader.setVariable(s_shaderInputs[SPRITE_PASS].cameraPosId, SVT_VEC3, s_cameraPos.m);
+		(s_shaderInputs[SPRITE_PASS].cameraView && s_shaderInputs[SPRITE_PASS].cameraView->size > 1) ?
+			s_spriteShader.setVariableArray(s_shaderInputs[SPRITE_PASS].cameraViewId, SVT_MAT3x3, s_cameraMtxVR_YDown[0].data, 2) :
+			s_spriteShader.setVariable(s_shaderInputs[SPRITE_PASS].cameraViewId, SVT_MAT3x3, s_cameraMtx.data);
+		(s_shaderInputs[SPRITE_PASS].cameraProj && s_shaderInputs[SPRITE_PASS].cameraProj->size > 1) ?
+			s_spriteShader.setVariableArray(s_shaderInputs[SPRITE_PASS].cameraProjId, SVT_MAT4x4, s_cameraProjVR_YDown[0].data, 2) :
+			s_spriteShader.setVariable(s_shaderInputs[SPRITE_PASS].cameraProjId, SVT_MAT4x4, s_cameraProj.data);
+
+		s_spriteShader.setVariable(s_shaderInputs[SPRITE_PASS].cameraDirId,  SVT_VEC3, inVr ? TFE_Math::scale(s_cameraMtxVR_YDown[0].m2, -1.0f).m : s_cameraDir.m);
 		s_spriteShader.setVariable(s_shaderInputs[SPRITE_PASS].lightDataId,  SVT_VEC4,   lightData.m);
 
 		if (s_shaderInputs[SPRITE_PASS].globalLightingId >= 0)
@@ -2168,6 +2217,14 @@ namespace TFE_Jedi
 			defines[defineCount].value = "1";
 			defineCount++;
 		}
+		if (s_shaderSettings.vr)
+		{
+			defines[defineCount++] = { "OPT_VR", "1" };
+			if (s_shaderSettings.vrMultiview)
+			{
+				defines[defineCount++] = { "OPT_VR_MULTIVIEW", "1" };
+			}
+		}
 		bool success = loadShaderVariant(0, defineCount, defines);
 
 		// Load the transparent version of the shader.
@@ -2202,6 +2259,14 @@ namespace TFE_Jedi
 			defines[defineCount].value = "1";
 			defineCount++;
 		}
+		if (s_shaderSettings.vr)
+		{
+			defines[defineCount++] = { "OPT_VR", "1" };
+			if (s_shaderSettings.vrMultiview)
+			{
+				defines[defineCount++] = { "OPT_VR_MULTIVIEW", "1" };
+			}
+		}
 		success |= loadShaderVariant(1, defineCount, defines);
 
 		defineCount = 0;
@@ -2232,6 +2297,14 @@ namespace TFE_Jedi
 			defines[defineCount].name = "OPT_TRUE_COLOR";
 			defines[defineCount].value = "1";
 			defineCount++;
+		}
+		if (s_shaderSettings.vr)
+		{
+			defines[defineCount++] = { "OPT_VR", "1" };
+			if (s_shaderSettings.vrMultiview)
+			{
+				defines[defineCount++] = { "OPT_VR_MULTIVIEW", "1" };
+			}
 		}
 		success |= loadSpriteShader(defineCount, defines);
 

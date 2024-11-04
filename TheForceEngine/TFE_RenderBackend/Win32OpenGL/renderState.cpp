@@ -1,7 +1,7 @@
 #include <TFE_RenderBackend/renderState.h>
 #include <TFE_System/system.h>
 #include <TFE_RenderBackend/renderBackend.h>
-#include "gl.h"
+#include <TFE_RenderBackend/Win32OpenGL/openGL_Debug.h>
 #include <vector>
 
 namespace TFE_RenderState
@@ -116,6 +116,10 @@ namespace TFE_RenderState
 			{
 				glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 			}
+			if (stateToChange)
+			{
+				TFE_ASSERT_GL;
+			}
 			s_currentState |= stateFlags;
 		}
 		else
@@ -149,6 +153,10 @@ namespace TFE_RenderState
 			{
 				glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 			}
+			if (stateToChange)
+			{
+				TFE_ASSERT_GL;
+			}
 			s_currentState &= ~stateFlags;
 		}
 	}
@@ -157,6 +165,7 @@ namespace TFE_RenderState
 	{
 		glBlendEquation(c_blendFuncGL[func]);
 		glBlendFunc(c_blendFactor[srcFactor], c_blendFactor[dstFactor]);
+		TFE_ASSERT_GL;
 	}
 
 	void setDepthFunction(ComparisonFunction func)
@@ -164,6 +173,7 @@ namespace TFE_RenderState
 		if (func != s_depthFunc)
 		{
 			glDepthFunc(c_comparisionFunc[func]);
+			TFE_ASSERT_GL;
 			s_depthFunc = func;
 		}
 	}
@@ -176,6 +186,7 @@ namespace TFE_RenderState
 			s_stencilFunc.ref = ref;
 			s_stencilFunc.mask = mask;
 			glStencilFunc(c_comparisionFunc[func], ref, mask);
+			TFE_ASSERT_GL;
 		}
 	}
 
@@ -187,6 +198,7 @@ namespace TFE_RenderState
 			s_stencilOp.depthFail = depthFail;
 			s_stencilOp.depthStencilPass = depthStencilPass;
 			glStencilOp(c_stencilOp[stencilFail], c_stencilOp[depthFail], c_stencilOp[depthStencilPass]);
+			TFE_ASSERT_GL;
 		}
 	}
 
@@ -196,6 +208,7 @@ namespace TFE_RenderState
 		{
 			glColorMask((colorMask&CMASK_RED)!=0 ? GL_TRUE : GL_FALSE,  (colorMask&CMASK_GREEN)!=0 ? GL_TRUE : GL_FALSE,
 				        (colorMask&CMASK_BLUE)!=0 ? GL_TRUE : GL_FALSE, (colorMask&CMASK_ALPHA)!=0 ? GL_TRUE : GL_FALSE);
+			TFE_ASSERT_GL;
 			s_colorMask = colorMask;
 		}
 	}
@@ -212,6 +225,7 @@ namespace TFE_RenderState
 			glDisable(GL_POLYGON_OFFSET_FILL);
 			glPolygonOffset(0.0f, 0.0f);
 		}
+		TFE_ASSERT_GL;
 	}
 	
 	void enableClipPlanes(s32 count)
@@ -223,11 +237,14 @@ namespace TFE_RenderState
 			{
 				glDisable(GL_CLIP_DISTANCE0 + p);
 			}
+			TFE_ASSERT_GL;
+
 			// Enable new planes.
 			for (s32 p = 0; p < count; p++)
 			{
 				glEnable(GL_CLIP_DISTANCE0 + p);
 			}
+			TFE_ASSERT_GL;
 
 			s_clipPlaneCount = count;
 		}

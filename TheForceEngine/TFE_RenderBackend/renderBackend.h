@@ -95,6 +95,9 @@ namespace TFE_RenderBackend
 	bool getVsyncEnabled();
 	void enableVsync(bool enable);
 
+	void pushGroup(const char* label);
+	void popGroup();
+
 	void setClearColor(const f32* color);
 	void swap(bool blitVirtualDisplay);
 	void queueScreenshot(const char* screenshotPath);
@@ -108,6 +111,7 @@ namespace TFE_RenderBackend
 	bool getDisplayMonitorInfo(s32 displayIndex, MonitorInfo* monitorInfo);
 	f32  getDisplayRefreshRate();
 	void getCurrentMonitorInfo(MonitorInfo* monitorInfo);
+	const WindowState& getWindowState();
 	void enableFullscreen(bool enable);
 	void clearWindow();
 
@@ -157,6 +161,7 @@ namespace TFE_RenderBackend
 	void freeTexture(TextureGpu* texture);
 	void getTextureDim(TextureGpu* texture, u32* width, u32* height);
 	void* getGpuPtr(const TextureGpu* texture);
+	void bindNativeTexture(void* texture);
 
 	// Toggle bloom - but only the final post process.
 	void bloomPostEnable(bool enable = true);
@@ -169,4 +174,6 @@ namespace TFE_RenderBackend
 
 	// Generic line draw.
 	void drawLines(u32 lineCount);
+
+	void updateVRCamera();
 };

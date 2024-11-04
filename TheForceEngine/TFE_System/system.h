@@ -12,7 +12,9 @@
 #define TFE_BUILD_VERSION 0
 
 #if defined(_WIN32) || defined(BUILD_EDITOR)
+#if !defined(ENABLE_EDITOR)
 #define ENABLE_EDITOR 1
+#endif
 #endif
 
 #if defined(_WIN32) || defined(BUILD_FORCE_SCRIPT)
@@ -94,5 +96,65 @@ static inline void __strupr(char *c)
 	while (*c) {
 		*c = toupper(*c);
 		c++;
+	}
+}
+
+#define FMT_HEADER_ONLY
+#include "fmt/format.h"
+
+#define TFE_CRITICAL(tag, ...) TFE_System::logWrite(LOG_CRITICAL, tag, fmt::format(__VA_ARGS__).c_str())
+#define TFE_ERROR(tag, ...) TFE_System::logWrite(LOG_ERROR, tag, fmt::format(__VA_ARGS__).c_str())
+#define TFE_WARN(tag, ...) TFE_System::logWrite(LOG_WARNING, tag, fmt::format(__VA_ARGS__).c_str())
+#define TFE_INFO(tag, ...) TFE_System::logWrite(LOG_MSG, tag, fmt::format(__VA_ARGS__).c_str())
+
+#define TFE_ASSERT assert
+
+template<typename T>
+class ScopeFunction final
+{
+public:
+	explicit ScopeFunction(T outCallable)
+		: mOutCallable{ std::move(outCallable) }
+	{}
+
+	ScopeFunction(ScopeFunction&&) = delete;
+
+	~ScopeFunction()
+	{
+		mOutCallable();
+	}
+
+private:
+	T mOutCallable;
+};
+
+template<typename U, typename T>
+class ScopeFunctions final
+{
+public:
+	ScopeFunctions(U inCallable, T outCallable)
+		: mOutCallable{ std::move(outCallable) }
+	{
+		inCallable();
+	}
+
+	ScopeFunctions(ScopeFunctions&&) = delete;
+
+	~ScopeFunctions()
+	{
+		mOutCallable();
+	}
+
+private:
+	T mOutCallable;
+};
+
+template<typename T>
+void SafeDelete(T*& p)
+{
+	if (p != nullptr)
+	{
+		delete p;
+		p = nullptr;
 	}
 }

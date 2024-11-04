@@ -9,7 +9,7 @@ IndexBuffer::~IndexBuffer()
 
 bool IndexBuffer::create(u32 count, u32 stride, bool dynamic, void* initData)
 {
-	if (!count || !stride) { return false; }
+	if (/*!count || */!stride) { return false; }
 
 	// Track index buffer attributes.
 	m_size = count * stride;

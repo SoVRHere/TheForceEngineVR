@@ -33,7 +33,6 @@
 #include <TFE_Jedi/Serialization/serialization.h>
 #include <TFE_FrontEndUI/frontEndUi.h>
 #include <TFE_FrontEndUI/console.h>
-#include <TFE_Settings/settings.h>
 #include <TFE_System/system.h>
 #include <TFE_System/tfeMessage.h>
 #include <TFE_Input/inputMapping.h>
@@ -528,7 +527,7 @@ namespace TFE_DarkForces
 			vfb_swap();
 		}
 	}
-		
+
 	void mission_mainTaskFunc(MessageType msg)
 	{
 		task_begin;
@@ -543,13 +542,15 @@ namespace TFE_DarkForces
 			}
 
 			// Grab the current framebuffer in case in changed.
+			TFE_RenderBackend::pushGroup("beginRender");
 			s_framebuffer = vfb_getCpuBuffer();
 			TFE_Jedi::beginRender();
+			TFE_RenderBackend::popGroup();
 
 			// Handle delta time.
 			s_deltaTime = div16(intToFixed16(s_curTick - s_prevTick), FIXED(TICKS_PER_SECOND));
 			s_deltaTime = min(s_deltaTime, MAX_DELTA_TIME);
-			s_prevTick  = s_curTick;
+			s_prevTick = s_curTick;
 			s_playerTick = s_curTick;
 
 			if (!escapeMenu_isOpen() && !pda_isOpen())
@@ -562,13 +563,18 @@ namespace TFE_DarkForces
 				}
 				else if (s_missionMode == MISSION_MODE_MAIN)
 				{
+					TFE_RenderBackend::pushGroup("drawWorld");
 					updateScreensize();
 					if (s_playerEye)
 					{
 						drawWorld(s_framebuffer, s_playerEye->sector, s_levelColorMap, s_lightSourceRamp);
 					}
 					weapon_draw(s_framebuffer, (DrawRect*)vfb_getScreenRect(VFB_RECT_UI));
+					TFE_RenderBackend::popGroup();
+
+					TFE_RenderBackend::pushGroup("handleVisionFx");
 					handleVisionFx();
+					TFE_RenderBackend::popGroup();
 				}
 			}
 
@@ -577,11 +583,15 @@ namespace TFE_DarkForces
 				handleGeneralInput();
 				if (s_drawAutomap)
 				{
+					TFE_RenderBackend::pushGroup("automap_draw");
 					automap_draw(s_framebuffer);
+					TFE_RenderBackend::popGroup();
 				}
+				TFE_RenderBackend::pushGroup("hud_draw");
 				hud_drawAndUpdate(s_framebuffer);
 				hud_drawMessage(s_framebuffer);
 				handlePaletteFx();
+				TFE_RenderBackend::popGroup();
 			}
 			else
 			{
@@ -590,7 +600,7 @@ namespace TFE_DarkForces
 				Vec3f palFxGpu = { 0 };
 				TFE_Jedi::renderer_setPalFx(&lumMaskGpu, &palFxGpu);
 			}
-			
+
 			// Move this out of handleGeneralInput so that the HUD is properly copied.
 			if (escapeMenu_isOpen())
 			{
@@ -648,7 +658,9 @@ namespace TFE_DarkForces
 			}
 
 			// vgaSwapBuffers() in the DOS code.
+			TFE_RenderBackend::pushGroup("endRender");
 			TFE_Jedi::endRender();
+			TFE_RenderBackend::popGroup();
 			vfb_swap();
 
 			// Pump tasks and look for any with a different ID.

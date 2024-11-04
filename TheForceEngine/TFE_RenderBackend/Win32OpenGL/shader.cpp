@@ -1,14 +1,15 @@
 #include "glslParser.h"
 #include <TFE_RenderBackend/shader.h>
 #include <TFE_RenderBackend/vertexBuffer.h>
+#include <TFE_RenderBackend/Win32OpenGL/openGL_Debug.h>
 #include <TFE_System/system.h>
 #include <TFE_FileSystem/filestream.h>
 #include <TFE_FileSystem/paths.h>
 #include <TFE_RenderBackend/renderBackend.h>
 #include "gl.h"
 #include <assert.h>
-#include <vector>
 #include <string>
+#include <array>
 
 namespace ShaderGL
 {
@@ -77,15 +78,15 @@ bool Shader::create(const char* vertexShaderGLSL, const char* fragmentShaderGLSL
 {
 	// Create shaders
 	m_shaderVersion = version;
-	const GLchar* vertex_shader_with_version[3] = { ShaderGL::c_glslVersionString[m_shaderVersion], defineString ? defineString : "", vertexShaderGLSL };
+	const GLchar* vertex_shader_with_version[4] = { ShaderGL::c_glslVersionString[m_shaderVersion], "#define VERTEX_SHADER\r\n", defineString ? defineString : "", vertexShaderGLSL};
 	u32 vertHandle = glCreateShader(GL_VERTEX_SHADER);
-	glShaderSource(vertHandle, 3, vertex_shader_with_version, NULL);
+	glShaderSource(vertHandle, 4, vertex_shader_with_version, NULL);
 	glCompileShader(vertHandle);
 	if (!ShaderGL::CheckShader(vertHandle, ShaderGL::s_vertexFile.c_str())) { return false; }
 
-	const GLchar* fragment_shader_with_version[3] = { ShaderGL::c_glslVersionString[m_shaderVersion], defineString ? defineString : "", fragmentShaderGLSL };
+	const GLchar* fragment_shader_with_version[4] = { ShaderGL::c_glslVersionString[m_shaderVersion], "#define FRAGMENT_SHADER\r\n", defineString ? defineString : "", fragmentShaderGLSL };
 	u32 fragHandle = glCreateShader(GL_FRAGMENT_SHADER);
-	glShaderSource(fragHandle, 3, fragment_shader_with_version, NULL);
+	glShaderSource(fragHandle, 4, fragment_shader_with_version, NULL);
 	glCompileShader(fragHandle);
 	if (!ShaderGL::CheckShader(fragHandle, ShaderGL::s_fragmentFile.c_str()))
 	{
@@ -102,6 +103,26 @@ bool Shader::create(const char* vertexShaderGLSL, const char* fragmentShaderGLSL
 	}
 	glLinkProgram(m_gpuHandle);
 	if (!ShaderGL::CheckProgram(m_gpuHandle, "shader program", m_shaderVersion)) { return false; }
+
+	{
+		GLint numUniforms;
+		glGetProgramiv(m_gpuHandle, GL_ACTIVE_UNIFORMS, &numUniforms);
+		TFE_ASSERT_GL;
+
+		std::array<GLchar, 512> nameBuffer;
+		for (GLint i = 0; i < numUniforms; i++)
+		{
+			GLint size;
+			GLenum typeGL;
+			glGetActiveUniform(m_gpuHandle, i, (GLsizei)nameBuffer.size(), nullptr, &size, &typeGL, nameBuffer.data());
+			TFE_ASSERT_GL;
+
+			const GLint location = glGetUniformLocation(m_gpuHandle, nameBuffer.data());
+			TFE_ASSERT_GL;
+
+			m_uniforms.push_back({ nameBuffer.data(), location, size, typeGL });
+		}
+	}
 
 	return m_gpuHandle != 0;
 }
@@ -123,6 +144,11 @@ bool Shader::load(const char* vertexShaderFile, const char* fragmentShaderFile, 
 
 	// Build a string of defines.
 	ShaderGL::s_defineString.clear();
+
+	// first add shader files so we can see it in NSight/RenderDoc
+	ShaderGL::s_defineString += fmt::format("// vs: \"{}\"\r\n", vertexShaderFile);
+	ShaderGL::s_defineString += fmt::format("// fs: \"{}\"\r\n", fragmentShaderFile);
+
 	if (defineCount)
 	{
 		ShaderGL::s_defineString += "\r\n";
@@ -137,7 +163,12 @@ bool Shader::load(const char* vertexShaderFile, const char* fragmentShaderFile, 
 		ShaderGL::s_defineString += "\r\n";
 	}
 
-	return create(ShaderGL::s_buffers[0].data(), ShaderGL::s_buffers[1].data(), ShaderGL::s_defineString.c_str(), m_shaderVersion);
+	const bool b = create(ShaderGL::s_buffers[0].data(), ShaderGL::s_buffers[1].data(), ShaderGL::s_defineString.c_str(), m_shaderVersion);
+	if (!b)
+	{
+		TFE_ERROR("GL", "compiling shader vs={}, fs={}", vertexShaderFile, fragmentShaderFile);
+	}
+	return b;
 }
 
 void Shader::enableClipPlanes(s32 count)
@@ -157,17 +188,46 @@ void Shader::destroy()
 void Shader::bind()
 {
 	glUseProgram(m_gpuHandle);
+	TFE_ASSERT_GL;
 	TFE_RenderState::enableClipPlanes(m_clipPlaneCount);
 }
 
 void Shader::unbind()
 {
 	glUseProgram(0);
+	TFE_ASSERT_GL;
 }
 
-s32 Shader::getVariableId(const char* name)
+s32 Shader::getVariableId(const char* name, const ShaderUniform** uniform)
 {
-	return glGetUniformLocation(m_gpuHandle, name);
+	s32 location = glGetUniformLocation(m_gpuHandle, name);
+	if (location < 0)
+	{
+		const std::string name_ = fmt::format("{}_", name);
+		location = glGetUniformLocation(m_gpuHandle, name_.data());
+		if (location >= 0)
+		{
+			std::ignore = 5;
+		}
+	}
+	if (location >= 0 && uniform)
+	{
+		if (const auto& it = std::find_if(m_uniforms.begin(), m_uniforms.end(), [location](const ShaderUniform& v) { return v.location == location; }); it != m_uniforms.end())
+		{
+			const ShaderUniform* addr = &(*it);
+			if (addr->size > 1)
+			{
+				std::ignore = 5;
+			}
+			*uniform = addr;
+		}
+		else
+		{
+			*uniform = nullptr;
+			TFE_ERROR("Shader", "Uniform not found: {}", name);
+		}
+	}
+	return location;
 }
 
 // For debugging.
@@ -197,6 +257,7 @@ s32 Shader::getVariables()
 		glGetActiveAttrib(m_gpuHandle, (GLuint)i, 256, &length, &size, &type, name);
 		printf("Attribute #%d Type: %u Name: %s\n", i, type, name);
 	}
+	TFE_ASSERT_GL;
 
 	return count;
 }
@@ -208,6 +269,7 @@ void Shader::bindTextureNameToSlot(const char* texName, s32 slot)
 
 	bind();
 	glUniform1i(curSlot, slot);
+	TFE_ASSERT_GL;
 	unbind();
 }
 
@@ -242,6 +304,8 @@ void Shader::setVariable(s32 id, ShaderVariableType type, const f32* data)
 		TFE_System::logWrite(LOG_ERROR, "Shader", "Mismatched parameter type.");
 		assert(0);
 	}
+
+	TFE_ASSERT_GL;
 }
 
 void Shader::setVariableArray(s32 id, ShaderVariableType type, const f32* data, u32 count)
@@ -275,6 +339,8 @@ void Shader::setVariableArray(s32 id, ShaderVariableType type, const f32* data, 
 		TFE_System::logWrite(LOG_ERROR, "Shader", "Mismatched parameter type.");
 		assert(0);
 	}
+
+	TFE_ASSERT_GL;
 }
 
 void Shader::setVariable(s32 id, ShaderVariableType type, const s32* data)
@@ -299,6 +365,8 @@ void Shader::setVariable(s32 id, ShaderVariableType type, const s32* data)
 		TFE_System::logWrite(LOG_ERROR, "Shader", "Mismatched parameter type.");
 		assert(0);
 	}
+
+	TFE_ASSERT_GL;
 }
 
 void Shader::setVariable(s32 id, ShaderVariableType type, const u32* data)
@@ -323,4 +391,6 @@ void Shader::setVariable(s32 id, ShaderVariableType type, const u32* data)
 		TFE_System::logWrite(LOG_ERROR, "Shader", "Mismatched parameter type.");
 		assert(0);
 	}
+
+	TFE_ASSERT_GL;
 }

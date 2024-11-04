@@ -38,6 +38,7 @@ namespace TFE_Settings
 	static TFE_Game s_game = {};
 	static TFE_Settings_Game s_gameSettings = {};
 	static TFE_ModSettings s_modSettings = {};
+	static TFE_Settings_Vr s_vrSettings = {};
 	static std::vector<char> s_iniBuffer;
 
 	enum SectionID
@@ -46,6 +47,7 @@ namespace TFE_Settings
 		SECTION_GRAPHICS,
 		SECTION_ENHANCEMENTS,
 		SECTION_HUD,
+		SECTION_VR,
 		SECTION_SOUND,
 		SECTION_SYSTEM,
 		SECTION_A11Y, //accessibility
@@ -64,6 +66,7 @@ namespace TFE_Settings
 		"Graphics",
 		"Enhancements",
 		"Hud",
+		"Vr",
 		"Sound",
 		"System",
 		"A11y",
@@ -83,6 +86,7 @@ namespace TFE_Settings
 	void writeGraphicsSettings(FileStream& settings);
 	void writeEnhancementsSettings(FileStream& settings);
 	void writeHudSettings(FileStream& settings);
+	void writeVrSettings(FileStream& settings);
 	void writeSoundSettings(FileStream& settings);
 	void writeSystemSettings(FileStream& settings);
 	void writeA11ySettings(FileStream& settings);
@@ -97,6 +101,7 @@ namespace TFE_Settings
 	void parseGraphicsSettings(const char* key, const char* value);
 	void parseEnhancementsSettings(const char* key, const char* value);
 	void parseHudSettings(const char* key, const char* value);
+	void parseVrSettings(const char* key, const char* value);
 	void parseSoundSettings(const char* key, const char* value);
 	void parseSystemSettings(const char* key, const char* value);
 	void parseA11ySettings(const char* key, const char* value);
@@ -286,6 +291,7 @@ namespace TFE_Settings
 			writeGraphicsSettings(settings);
 			writeEnhancementsSettings(settings);
 			writeHudSettings(settings);
+			writeVrSettings(settings);
 			writeSoundSettings(settings);
 			writeSystemSettings(settings);
 			writeA11ySettings(settings);
@@ -351,6 +357,11 @@ namespace TFE_Settings
 	void clearModSettings()
 	{
 		s_modSettings = {};
+	}
+
+	TFE_Settings_Vr* getVrSettings()
+	{
+		return &s_vrSettings;
 	}
 
 	TFE_Game* getGame()
@@ -451,6 +462,32 @@ namespace TFE_Settings
 		writeKeyValue_Int(settings, "pixelOffsetLeft", s_hudSettings.pixelOffset[0]);
 		writeKeyValue_Int(settings, "pixelOffsetRight", s_hudSettings.pixelOffset[1]);
 		writeKeyValue_Int(settings, "pixelOffsetY", s_hudSettings.pixelOffset[2]);
+	}
+
+	void writeVrSettings(FileStream& settings)
+	{
+		writeHeader(settings, c_sectionNames[SECTION_VR]);
+
+		auto writeScreenToVr = [&settings](const char* name, const TFE_Settings_Vr::ScreenToVr& screenToVr) {
+			writeKeyValue_Float(settings, fmt::format("{}Distance", name).c_str(), screenToVr.distance);
+			writeKeyValue_Float(settings, fmt::format("{}ShiftX", name).c_str(), screenToVr.shift.x);
+			writeKeyValue_Float(settings, fmt::format("{}ShiftY", name).c_str(), screenToVr.shift.y);
+			writeKeyValue_Float(settings, fmt::format("{}ShiftZ", name).c_str(), screenToVr.shift.z);
+			writeKeyValue_Bool(settings, fmt::format("{}LockToCamera", name).c_str(), screenToVr.lockToCamera);
+		};
+
+		writeScreenToVr("menuToVr", s_vrSettings.menuToVr);
+		writeScreenToVr("pdaToVr", s_vrSettings.pdaToVr);
+		writeScreenToVr("hudToVr", s_vrSettings.hudToVr);
+		writeScreenToVr("messagesToVr", s_vrSettings.messagesToVr);
+		writeScreenToVr("weaponToVr", s_vrSettings.weaponToVr);
+		writeScreenToVr("configToVr", s_vrSettings.configToVr);
+		writeKeyValue_Float(settings, "configDotSize", s_vrSettings.configDotSize);
+		writeKeyValue_RGBA(settings, "configDotColor", s_vrSettings.configDotColor);
+		writeScreenToVr("automapToVr", s_vrSettings.automapToVr);
+		writeKeyValue_Float(settings, "automapWidthMultiplier", s_vrSettings.automapWidthMultiplier);
+		writeScreenToVr("overlayToVr", s_vrSettings.overlayToVr);
+		writeKeyValue_Float(settings, "playerScale", s_vrSettings.playerScale);
 	}
 
 	void writeSoundSettings(FileStream& settings)
@@ -630,6 +667,9 @@ namespace TFE_Settings
 					break;
 				case SECTION_HUD:
 					parseHudSettings(tokens[0].c_str(), tokens[1].c_str());
+					break;
+				case SECTION_VR:
+					parseVrSettings(tokens[0].c_str(), tokens[1].c_str());
 					break;
 				case SECTION_SOUND:
 					parseSoundSettings(tokens[0].c_str(), tokens[1].c_str());
@@ -895,6 +935,55 @@ namespace TFE_Settings
 		{
 			s_hudSettings.pixelOffset[2] = parseInt(value);
 		}
+	}
+
+	void parseVrSettings(const char* key, const char* value)
+	{
+		auto parseScreenToVr = [&key, &value](const char* name, TFE_Settings_Vr::ScreenToVr& screenToVr) {
+			bool found = true;
+			if (strcasecmp(fmt::format("{}Distance", name).c_str(), key) == 0)
+			{
+				screenToVr.distance = parseFloat(value);
+			}
+			else if (strcasecmp(fmt::format("{}ShiftX", name).c_str(), key) == 0)
+			{
+				screenToVr.shift.x = parseFloat(value);
+			}
+			else if (strcasecmp(fmt::format("{}ShiftY", name).c_str(), key) == 0)
+			{
+				screenToVr.shift.y = parseFloat(value);
+			}
+			else if (strcasecmp(fmt::format("{}ShiftZ", name).c_str(), key) == 0)
+			{
+				screenToVr.shift.z = parseFloat(value);
+			}
+			else if (strcasecmp(fmt::format("{}LockToCamera", name).c_str(), key) == 0)
+			{
+				screenToVr.lockToCamera = parseBool(value);
+			}
+			else
+			{
+				found = false;
+			}
+			return found;
+		};
+
+		if (parseScreenToVr("menuToVr", s_vrSettings.menuToVr)) {}
+		else if (parseScreenToVr("pdaToVr", s_vrSettings.pdaToVr)) {}
+		else if (parseScreenToVr("hudToVr", s_vrSettings.hudToVr)) {}
+		else if (parseScreenToVr("messagesToVr", s_vrSettings.messagesToVr)) {}
+		else if (parseScreenToVr("weaponToVr", s_vrSettings.weaponToVr)) {}
+		else if (parseScreenToVr("configToVr", s_vrSettings.configToVr)) {}
+		else if (strcasecmp("configDotSize", key) == 0)
+			s_vrSettings.configDotSize = parseFloat(value);
+		else if (strcasecmp("configDotColor", key) == 0)
+			s_vrSettings.configDotColor = parseColor(value);
+		else if (parseScreenToVr("automapToVr", s_vrSettings.automapToVr)) {}
+		else if (strcasecmp("automapWidthMultiplier", key) == 0)
+			s_vrSettings.automapWidthMultiplier = parseFloat(value);
+		else if (parseScreenToVr("overlayToVr", s_vrSettings.overlayToVr)) {}
+		else if (strcasecmp("playerScale", key) == 0)
+			s_vrSettings.playerScale = parseFloat(value);
 	}
 
 	void parseSoundSettings(const char* key, const char* value)

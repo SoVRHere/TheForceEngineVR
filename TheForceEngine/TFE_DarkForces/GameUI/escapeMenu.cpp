@@ -246,7 +246,11 @@ namespace TFE_DarkForces
 		pauseLevelSound();
 		s_emState.escMenuOpen = JTRUE;
 
-		escapeMenu_copyBackground(framebuffer, palette);
+		// TODO: VR
+		if (!TFE_Settings::getTempSettings()->vr)
+		{
+			escapeMenu_copyBackground(framebuffer, palette);
+		}
 
 		escMenu_resetCursor();
 		s_emState.buttonPressed = -1;
@@ -311,25 +315,48 @@ namespace TFE_DarkForces
 		// Draw the background.
 		if (drawBackground)
 		{
-			if (xOffset)
+			if (s_emState.renderTarget)
 			{
-				screenGPU_addImageQuad(0, 0, dispWidth, dispHeight, (TextureGpu*)TFE_RenderBackend::getRenderTargetTexture(s_emState.renderTarget));
+				if (xOffset)
+				{
+					screenGPU_addImageQuad(0, 0, dispWidth, dispHeight, (TextureGpu*)TFE_RenderBackend::getRenderTargetTexture(s_emState.renderTarget));
+				}
+				else
+				{
+					// Adjust the UV coordinates to stretch 4:3 to the full size.
+					DisplayInfo displayInfo;
+					TFE_RenderBackend::getDisplayInfo(&displayInfo);
+
+					s32 offsetWidth = displayInfo.height * 4 / 3;
+					s32 imgOffset = (displayInfo.width - offsetWidth) / 2;
+
+					f32 offset = f32(imgOffset) / f32(displayInfo.width);
+					f32 u0 = offset;
+					f32 u1 = 1.0f - offset;
+					screenGPU_addImageQuad(0, 0, dispWidth, dispHeight, u0, u1, (TextureGpu*)TFE_RenderBackend::getRenderTargetTexture(s_emState.renderTarget));
+				}
 			}
 			else
 			{
-				// Adjust the UV coordinates to stretch 4:3 to the full size.
-				DisplayInfo displayInfo;
-				TFE_RenderBackend::getDisplayInfo(&displayInfo);
-
-				s32 offsetWidth = displayInfo.height * 4 / 3;
-				s32 imgOffset = (displayInfo.width - offsetWidth) / 2;
-
-				f32 offset = f32(imgOffset) / f32(displayInfo.width);
-				f32 u0 = offset;
-				f32 u1 = 1.0f - offset;
-				screenGPU_addImageQuad(0, 0, dispWidth, dispHeight, u0, u1, (TextureGpu*)TFE_RenderBackend::getRenderTargetTexture(s_emState.renderTarget));
+				TFE_RenderBackend::clearWindow();
 			}
 		}
+
+		ScopeFunctions scopeFuncs{
+			[]() {
+				if (TFE_Settings::getTempSettings()->vr)
+				{
+					const TFE_Settings_Vr::ScreenToVr& toVr = TFE_Settings::getVrSettings()->menuToVr;
+					static Vec4f shift;
+					shift = { toVr.shift.x, toVr.shift.y, toVr.shift.z, toVr.distance };
+					TFE_Jedi::ShiftVR = &shift;
+					TFE_Jedi::LockToCameraVR = toVr.lockToCamera;
+				}
+			},
+			[]() {
+				TFE_Jedi::ShiftVR = nullptr;
+			},
+		};
 
 		// Draw the menu.
 		if (s_emState.confirmState == CONFIRM_STATE_NONE)
@@ -769,6 +796,27 @@ namespace TFE_DarkForces
 		s32 mx, my;
 		TFE_Input::getMousePos(&mx, &my);
 		s_emState.cursorPosAccum = { mx, my };
+
+		if (TFE_Settings::getTempSettings()->vr)
+		{
+			const WindowState& win = TFE_RenderBackend::getWindowState();
+			// scale already scaled mouse pos, see TFE_Input::setMousePos in maim.cpp
+			f32 origWidth = 640.0f;
+			f32 origHeight = 480.0f;
+			// TODO: this is just my intuition
+			if (win.width < 640 || win.height < 480)
+			{
+				origWidth = 320.0f;
+				origHeight = 240.0f;
+			}
+			mx = (s32)((f32)mx * (f32)win.width / origWidth);
+			my = (s32)((f32)my * (f32)win.height / origHeight);
+
+			s_emState.cursorPosAccum = { mx, my };
+			s_emState.cursorPos.x = s_emState.cursorPosAccum.x;
+			s_emState.cursorPos.z = s_emState.cursorPosAccum.z;
+			return;
+		}
 
 		if (displayInfo.width >= displayInfo.height)
 		{

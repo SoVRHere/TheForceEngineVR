@@ -58,6 +58,7 @@ private:
 
 	Capture* m_captures;
 	u32* m_stagingBuffers;
+	u32 m_fbo{ 0 };
 
 private:
 	void freeBuffers();

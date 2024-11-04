@@ -9,6 +9,8 @@
 #include "gl.h"
 #include <assert.h>
 #include <TFE_Settings/settings.h>
+#include <TFE_RenderBackend/Win32OpenGL/openGL_Debug.h>
+#include <TFE_Vr/vr.h>
 
 #ifdef _DEBUG
 	#define CHECK_GL_ERROR checkGlError();
@@ -77,6 +79,9 @@ bool ScreenCapture::changeBufferCount(u32 newBufferCount, bool forceRealloc/* = 
 		CHECK_GL_ERROR
 	}
 
+	glGenFramebuffers(1, &m_fbo);
+	TFE_ASSERT_GL;
+
 	delete[] m_captures;
 	m_captures = new Capture[m_bufferCount];
 	m_captureHead = 0;
@@ -114,8 +119,35 @@ static void flipVert32bpp(void* mem, u32 w, u32 h)
 
 void ScreenCapture::captureFrontBufferToMemory(u32* mem)
 {
-	glReadBuffer(GL_FRONT);
-	glReadPixels(0, 0, m_width, m_height, GL_RGBA, GL_UNSIGNED_BYTE, mem);
+	if (!TFE_Settings::getTempSettings()->vr)
+	{
+		glReadBuffer(GL_FRONT);
+		glReadPixels(0, 0, m_width, m_height, GL_RGBA, GL_UNSIGNED_BYTE, mem);
+		TFE_ASSERT_GL;
+	}
+	else
+	{
+		glBindFramebuffer(GL_FRAMEBUFFER, m_fbo);
+		TFE_ASSERT_GL;
+
+		const RenderTarget& rt = vr::GetRenderTarget(vr::Side::Left);
+		const GLuint textureID = rt.getTexture()->getHandle();
+
+		// Attach the specific layer of the texture array to the FBO
+		glFramebufferTextureLayer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, textureID, 0, 0);
+		TFE_ASSERT_GL;
+
+		// Set the read buffer to the color attachment
+		glReadBuffer(GL_COLOR_ATTACHMENT0);
+		TFE_ASSERT_GL;
+
+		glReadPixels(0, 0, m_width, m_height, GL_RGBA, GL_UNSIGNED_BYTE, mem);
+		TFE_ASSERT_GL;
+
+		glFramebufferTextureLayer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, 0, 0, 0);
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+		TFE_ASSERT_GL;
+	}
 
 	// Need to flip image upside-down. OpenGL has (0|0) at lower left
 	// corner, while the rest of the world places it in the upper left.
@@ -160,8 +192,36 @@ void ScreenCapture::update(bool flush)
 	bool popHead = false;
 	if (!OpenGL_Caps::supportsPbo())
 	{
-		glReadBuffer(GL_BACK);
-		glReadPixels(0, 0, m_width, m_height, GL_RGBA, GL_UNSIGNED_BYTE, m_captures[m_captureHead].imageData.data());
+		if (!TFE_Settings::getTempSettings()->vr)
+		{
+			glReadBuffer(GL_BACK);
+			glReadPixels(0, 0, m_width, m_height, GL_RGBA, GL_UNSIGNED_BYTE, m_captures[m_captureHead].imageData.data());
+			TFE_ASSERT_GL;
+		}
+		else
+		{
+			glBindFramebuffer(GL_FRAMEBUFFER, m_fbo);
+			TFE_ASSERT_GL;
+
+			const RenderTarget& rt = vr::GetRenderTarget(vr::Side::Left);
+			const GLuint textureID = rt.getTexture()->getHandle();
+
+			// Attach the specific layer of the texture array to the FBO
+			glFramebufferTextureLayer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, textureID, 0, 0);
+			TFE_ASSERT_GL;
+
+			// Set the read buffer to the color attachment
+			glReadBuffer(GL_COLOR_ATTACHMENT0);
+			TFE_ASSERT_GL;
+
+			glReadPixels(0, 0, m_width, m_height, GL_RGBA, GL_UNSIGNED_BYTE, m_captures[m_captureHead].imageData.data());
+			TFE_ASSERT_GL;
+
+			glFramebufferTextureLayer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, 0, 0, 0);
+			glBindFramebuffer(GL_FRAMEBUFFER, 0);
+			TFE_ASSERT_GL;
+		}
+
 		popHead = true;
 	}
 	else if (flush || m_frame > (m_captures[m_captureHead].frame + CAPTURE_FRAME_DELAY))
@@ -204,8 +264,38 @@ void ScreenCapture::captureFrame(const char* outputPath)
 	{
 		// Async copy from GPU data to staging buffer [writeBuffer].
 		glBindBuffer(GL_PIXEL_PACK_BUFFER, m_stagingBuffers[m_writeBuffer]);
-		glReadPixels(0, 0, m_width, m_height, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
-		glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+		if (!TFE_Settings::getTempSettings()->vr)
+		{
+			glReadPixels(0, 0, m_width, m_height, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+			glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+			TFE_ASSERT_GL;
+		}
+		else
+		{
+			glBindFramebuffer(GL_FRAMEBUFFER, m_fbo);
+			TFE_ASSERT_GL;
+
+			const RenderTarget& rt = vr::GetRenderTarget(vr::Side::Left);
+			const GLuint textureID = rt.getTexture()->getHandle();
+
+			// Attach the specific layer of the texture array to the FBO
+			glFramebufferTextureLayer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, textureID, 0, 0);
+			TFE_ASSERT_GL;
+
+			// Set the read buffer to the color attachment
+			glReadBuffer(GL_COLOR_ATTACHMENT0);
+			TFE_ASSERT_GL;
+
+			glReadPixels(0, 0, m_width, m_height, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+			TFE_ASSERT_GL;
+
+			glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+			TFE_ASSERT_GL;
+
+			glFramebufferTextureLayer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, 0, 0, 0);
+			glBindFramebuffer(GL_FRAMEBUFFER, 0);
+			TFE_ASSERT_GL;
+		}
 	}
 	const u32 index = (m_captureHead + m_captureCount) % m_bufferCount;
 	m_captures[index].bufferIndex = m_writeBuffer;
@@ -275,4 +365,11 @@ void ScreenCapture::freeBuffers()
 	m_readIndex = nullptr;
 
 	m_bufferCount = 0;
+
+	if (m_fbo)
+	{
+		glDeleteFramebuffers(1, &m_fbo);
+		TFE_ASSERT_GL;
+		m_fbo = 0;
+	}
 }

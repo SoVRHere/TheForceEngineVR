@@ -4,12 +4,24 @@
 #include <TFE_RenderBackend/vertexBuffer.h>
 #include <TFE_RenderBackend/indexBuffer.h>
 #include <TFE_Settings/settings.h>
+#include <TFE_System/math.h>
 #include <TFE_System/system.h>
 #include <vector>
 #include <algorithm>
+#include <TFE_Vr/vr.h>
 
 #define MAX_LINES 65536
 #define MAX_CURVES 4096
+
+namespace TFE_RenderBackend
+{
+	extern Mat4  s_cameraProjVR[2];
+	extern Mat4  s_cameraProjVR_YDown[2];
+	extern Mat3  s_cameraMtxVR[2];
+	extern Mat3  s_cameraMtxVR_YDown[2];
+	extern Vec3f s_cameraPosVR[2];
+	extern Vec3f s_cameraPosVR_YDown[2];
+}
 
 namespace TFE_RenderShared
 {
@@ -33,6 +45,16 @@ namespace TFE_RenderShared
 		{ATTR_COLOR, ATYPE_UINT8, 4, 0, true}
 	};
 	static const u32 c_lineAttrCount = TFE_ARRAYSIZE(c_lineAttrMapping);
+
+	static s32 s_svScaleOffset = -1;
+	static s32 s_cameraProjId = -1;
+	static s32 s_screenSizePosId = -1;
+	static s32 s_frustumId = -1;
+	static s32 s_HmdViewId = -1;
+	static s32 s_ShiftId = -1;
+	static s32 s_LockToCameraId = -1;
+	static s32 s_WidthMultiplierId = -1;
+	//static const ShaderUniform* s_cameraProjUniforms{ nullptr };
 
 	struct Line2dShaderParam
 	{
@@ -59,13 +81,22 @@ namespace TFE_RenderShared
 	   
 	bool loadShaders()
 	{
-		ShaderDefine defines[3] = {};
+		ShaderDefine defines[3 + 2/*VR*/] = {};
 		u32 defineCount = 0;
 		if (s_shaderSettings.bloom)
 		{
 			defines[0].name = "OPT_BLOOM";
 			defines[0].value = "1";
 			defineCount++;
+		}
+
+		if (TFE_Settings::getTempSettings()->vr)
+		{
+			defines[defineCount++] = { "OPT_VR", "1" };
+			if (TFE_Settings::getTempSettings()->vrMultiview)
+			{
+				defines[defineCount++] = { "OPT_VR_MULTIVIEW", "1" };
+			}
 		}
 		
 		if (!s_shaderParam[LINE_DRAW_SOLID].shader.load("Shaders/line2d.vert", "Shaders/line2d.frag", defineCount, defines, SHADER_VER_STD))
@@ -75,7 +106,18 @@ namespace TFE_RenderShared
 		s_shaderParam[LINE_DRAW_SOLID].scaleOffset = s_shaderParam[LINE_DRAW_SOLID].shader.getVariableId("ScaleOffset");
 		if (s_shaderParam[LINE_DRAW_SOLID].scaleOffset < 0)
 		{
-			return false;
+			//return false;
+		}
+
+		if (TFE_Settings::getTempSettings()->vr)
+		{
+			s_cameraProjId = s_shaderParam[LINE_DRAW_SOLID].shader.getVariableId("CameraProj"/*, &s_cameraProjUniforms*/);
+			s_screenSizePosId = s_shaderParam[LINE_DRAW_SOLID].shader.getVariableId("ScreenSize");
+			s_frustumId = s_shaderParam[LINE_DRAW_SOLID].shader.getVariableId("Frustum");
+			s_HmdViewId = s_shaderParam[LINE_DRAW_SOLID].shader.getVariableId("HmdView");
+			s_ShiftId = s_shaderParam[LINE_DRAW_SOLID].shader.getVariableId("Shift");
+			s_LockToCameraId = s_shaderParam[LINE_DRAW_SOLID].shader.getVariableId("LockToCamera");
+			s_WidthMultiplierId = s_shaderParam[LINE_DRAW_SOLID].shader.getVariableId("WidthMultiplier");
 		}
 
 		// Dashed lines.
@@ -89,7 +131,7 @@ namespace TFE_RenderShared
 		s_shaderParam[LINE_DRAW_DASHED].scaleOffset = s_shaderParam[LINE_DRAW_DASHED].shader.getVariableId("ScaleOffset");
 		if (s_shaderParam[LINE_DRAW_DASHED].scaleOffset < 0)
 		{
-			return false;
+			//return false;
 		}
 
 		// Curve + Dashed Lines
@@ -103,7 +145,7 @@ namespace TFE_RenderShared
 		s_shaderParam[LINE_DRAW_CURVE_DASHED].scaleOffset = s_shaderParam[LINE_DRAW_CURVE_DASHED].shader.getVariableId("ScaleOffset");
 		if (s_shaderParam[LINE_DRAW_CURVE_DASHED].scaleOffset < 0)
 		{
-			return false;
+			//return false;
 		}
 
 		return true;
@@ -192,7 +234,7 @@ namespace TFE_RenderShared
 		s_curveCount2d++;
 		// bounding box.
 		f32 maxOffset = 0.0f;
-		for (s32 i = 0; i < offsetCount; i++)
+		for (u32 i = 0; i < offsetCount; i++)
 		{
 			maxOffset = std::max(maxOffset, fabsf(offsets[i]));
 		}
@@ -216,7 +258,7 @@ namespace TFE_RenderShared
 
 		// Offsets
 		Vec4f offsetVec = { 0 };
-		for (s32 i = 0; i < offsetCount && i < 4; i++)
+		for (u32 i = 0; i < offsetCount && i < 4; i++)
 		{
 			offsetVec.m[i] = offsets[i];
 		}
@@ -370,14 +412,40 @@ namespace TFE_RenderShared
 		{
 			s_vertexBuffer.bind();
 
-			LineDraw* draw = s_lineDraw;
-			for (s32 i = 0; i < s_lineDrawCount; i++, draw++)
+			if (TFE_Settings::getTempSettings()->vr)
 			{
-				Line2dShaderParam& shaderParam = s_shaderParam[draw->mode];
+				const std::array<Vec3f, 8>& frustum = vr::GetUnitedFrustum();
+				const Vec2ui& targetSize = vr::GetRenderTargetSize();
+				Mat3 hmdMtx = TFE_Math::getMatrix3(vr::GetEyePose(vr::Side::Left).mTransformationYDown);
+				const TFE_Settings_Vr* vrSettings = TFE_Settings::getVrSettings();
+
+				// TODO: in VR only solid for now
+				Line2dShaderParam& shaderParam = s_shaderParam[LINE_DRAW_SOLID];
 				shaderParam.shader.bind();
-				shaderParam.shader.setVariable(shaderParam.scaleOffset, SVT_VEC4, scaleOffset);
+
+				shaderParam.shader.setVariableArray(s_cameraProjId, SVT_MAT4x4, TFE_RenderBackend::s_cameraProjVR_YDown[0].data, 2);
+				shaderParam.shader.setVariable(s_screenSizePosId, SVT_VEC2, Vec2f{ f32(targetSize.x), f32(targetSize.y) }.m);
+				shaderParam.shader.setVariableArray(s_frustumId, SVT_VEC3, frustum.data()->m, (u32)frustum.size());
+				shaderParam.shader.setVariable(s_HmdViewId, SVT_MAT3x3, hmdMtx.data);
+				const Vec3f& shift = vrSettings->automapToVr.shift;
+				shaderParam.shader.setVariable(s_ShiftId, SVT_VEC4, Vec4f{ shift.x, shift.y, shift.z, vrSettings->automapToVr.distance }.m);
+				s32 lock = vrSettings->automapToVr.lockToCamera ? 1 : 0;
+				shaderParam.shader.setVariable(s_LockToCameraId, SVT_ISCALAR, &lock);
+				shaderParam.shader.setVariable(s_WidthMultiplierId, SVT_SCALAR, &vrSettings->automapWidthMultiplier);
 				// Draw.
-				TFE_RenderBackend::drawIndexedTriangles(draw->count * 2, sizeof(u32), draw->offset * 6);
+				TFE_RenderBackend::drawIndexedTriangles(s_lineCount2d * 2, sizeof(u32));
+			}
+			else
+			{
+				LineDraw* draw = s_lineDraw;
+				for (s32 i = 0; i < s_lineDrawCount; i++, draw++)
+				{
+					Line2dShaderParam& shaderParam = s_shaderParam[draw->mode];
+					shaderParam.shader.bind();
+					shaderParam.shader.setVariable(shaderParam.scaleOffset, SVT_VEC4, scaleOffset);
+					// Draw.
+					TFE_RenderBackend::drawIndexedTriangles(draw->count * 2, sizeof(u32), draw->offset * 6);
+				}
 			}
 			s_vertexBuffer.unbind();
 		}

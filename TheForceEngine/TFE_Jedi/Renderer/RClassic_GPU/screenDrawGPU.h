@@ -43,4 +43,7 @@ namespace TFE_Jedi
 	void screenGPU_blitTextureLitScaled(ScreenImage* texture, DrawRect* rect, s32 x0, s32 y0, fixed16_16 xScale, fixed16_16 yScale, u8 lightLevel);
 
 	void screenGPU_blitTextureIScale(TextureData* texture, DrawRect* rect, s32 x0, s32 y0, s32 scale);
+
+	extern const Vec4f* ShiftVR;
+	extern bool LockToCameraVR;
 }

@@ -18,15 +18,15 @@
 struct RGBA
 {
 	u32 color;
-	u8 getAlpha() { return (color >> 24) & 0xff; }
-	u8 getRed() { return (color >> 16) & 0xff; }
-	u8 getGreen() { return (color >> 8) & 0xff; }
-	u8 getBlue() { return color & 0xff; }
+	u8 getAlpha() const { return (color >> 24) & 0xff; }
+	u8 getRed() const { return (color >> 16) & 0xff; }
+	u8 getGreen() const { return (color >> 8) & 0xff; }
+	u8 getBlue() const { return color & 0xff; }
 
-	f32 getAlphaF() { return getAlpha() / 255.0f; }
-	f32 getRedF() { return getRed() / 255.0f; }
-	f32 getGreenF() { return getGreen() / 255.0f; }
-	f32 getBlueF() { return getBlue() / 255.0f; }
+	f32 getAlphaF() const { return getAlpha() / 255.0f; }
+	f32 getRedF() const { return getRed() / 255.0f; }
+	f32 getGreenF() const { return getGreen() / 255.0f; }
+	f32 getBlueF() const { return getBlue() / 255.0f; }
 
 	RGBA()
 	{

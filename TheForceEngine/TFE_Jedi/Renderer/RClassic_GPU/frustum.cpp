@@ -20,6 +20,19 @@
 #include "frustum.h"
 #include "../rcommon.h"
 
+#include <TFE_Settings/settings.h>
+#include <TFE_Vr/vr.h>
+
+namespace TFE_FrontEndUI
+{
+	//extern bool preciseFrustum;
+}
+
+namespace TFE_RenderBackend
+{
+	extern vr::UpdateStatus s_VRUpdateStatus;
+}
+
 namespace TFE_Jedi
 {
 	// A small epsilon value to make point vs. plane side determinations more robust to numerical error.
@@ -285,6 +298,18 @@ namespace TFE_Jedi
 		// Scale the projection slightly, so the frustum is slightly bigger than needed (i.e. something like a guard band).
 		// This is done because exact frustum clipping isn't actually necessary for rendering, clipping is only used for portal testing.
 		Mat4 proj = s_cameraProj;
+
+		if (TFE_Settings::getTempSettings()->vr && TFE_RenderBackend::s_VRUpdateStatus == vr::UpdateStatus::Ok)
+		{
+			Mat4 viewHmd = vr::GetEyePose(vr::Side::Left).mTransformationYDown;
+			viewHmd.m3 = { 0.0f, 0.0f, 0.0f, 1.0f };
+			Mat4 viewCam = TFE_Math::buildMatrix4(s_cameraMtx, Vec3f{ 0.0f, 0.0f, 0.0f });
+			view4 = TFE_Math::mulMatrix4(TFE_Math::transpose4(viewHmd), viewCam);
+			proj = vr::GetUnitedProj(false);
+
+			//TFE_FrontEndUI::preciseFrustum = true;
+		}
+
 		proj.m0.x *= c_superSidePlaneNormalScale;
 		proj.m1.y *= c_superSidePlaneNormalScale;
 

@@ -2,6 +2,7 @@
 #include "postprocess.h"
 #include <TFE_RenderBackend/renderBackend.h>
 #include <TFE_System/profiler.h>
+#include <TFE_Settings/settings.h>
 
 bool Overlay::init()
 {
@@ -15,12 +16,35 @@ void Overlay::destroy()
 
 bool Overlay::buildShaders()
 {
+	ShaderDefine defines[2] = {};
+	u32 defineCount = 0;
+
+	if (TFE_Settings::getTempSettings()->vr)
+	{
+		defines[defineCount++] = { "OPT_VR", "1" };
+		if (TFE_Settings::getTempSettings()->vrMultiview)
+		{
+			defines[defineCount++] = { "OPT_VR_MULTIVIEW", "1" };
+		}
+	}
+
 	// Base shader.
-	m_overlayShader.load("Shaders/overlay.vert", "Shaders/overlay.frag");
+	m_overlayShader.load("Shaders/overlay.vert", "Shaders/overlay.frag", defineCount, defines, SHADER_VER_STD);
 	m_overlayShader.bindTextureNameToSlot("Image", 0);
 	m_scaleOffsetId = m_overlayShader.getVariableId("ScaleOffset");
 	m_tintId = m_overlayShader.getVariableId("Tint");
 	m_uvOffsetSizeId = m_overlayShader.getVariableId("UvOffsetSize");
+
+	if (TFE_Settings::getTempSettings()->vr)
+	{
+		m_cameraProjId = m_overlayShader.getVariableId("CameraProj");
+		m_screenSizeId = m_overlayShader.getVariableId("ScreenSize");
+		m_frustumId = m_overlayShader.getVariableId("Frustum");
+		m_HmdViewId = m_overlayShader.getVariableId("HmdView");
+		m_ShiftId = m_overlayShader.getVariableId("Shift");
+		m_FovId = m_overlayShader.getVariableId("Fov");
+		m_scaleId = m_overlayShader.getVariableId("Scale");
+	}
 
 	m_shader = &m_overlayShader;
 	return true;

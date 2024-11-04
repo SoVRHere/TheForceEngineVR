@@ -42,6 +42,13 @@ private:
 	Vec4f m_colorCorrectParam;
 	s32   m_colorCorrectVarId;
 
+	s32 m_cameraProjId = -1;
+	s32 m_screenSizeId = -1;
+	s32 m_frustumId = -1;
+	s32 m_HmdViewId = -1;
+	s32 m_ShiftId = -1;
+	s32 m_LockToCameraId = -1;
+
 	void setupShader();
 	bool buildShaders();
 };

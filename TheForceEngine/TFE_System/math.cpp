@@ -109,6 +109,54 @@ namespace TFE_Math
 		return mtxOut;
 	}
 
+	Mat4 buildMatrix4(const Mat3& mtx, const Vec3f& pos)
+	{
+		Mat4 r;
+		r.m0 = { mtx.m0.x, mtx.m0.y, mtx.m0.z, 0.0f };
+		r.m1 = { mtx.m1.x, mtx.m1.y, mtx.m1.z, 0.0f };
+		r.m2 = { mtx.m2.x, mtx.m2.y, mtx.m2.z, 0.0f };
+		r.m3 = { pos.x, pos.y, pos.z, 1.0f };
+		return r;
+	}
+
+	Mat3 getMatrix3(const Mat4& mtx)
+	{
+		Mat3 r;
+		r.m0 = { mtx.m0.x, mtx.m0.y, mtx.m0.z };
+		r.m1 = { mtx.m1.x, mtx.m1.y, mtx.m1.z };
+		r.m2 = { mtx.m2.x, mtx.m2.y, mtx.m2.z };
+		return r;
+	}
+
+	Vec3f getVec3(const Vec4f& v)
+	{
+		return { v.x, v.y, v.z };
+	}
+
+	Vec3f getTranslation(const Mat4& mtx)
+	{
+		return { mtx.m3.x, mtx.m3.y, mtx.m3.z };
+	}
+
+	const Mat4& getIdentityMatrix4()
+	{
+		static const Mat4 identity = { 
+			1.0f, 0.0f, 0.0f, 0.0f,
+			0.0f, 1.0f, 0.0f, 0.0f,
+			0.0f, 0.0f, 1.0f, 0.0f,
+			0.0f, 0.0f, 0.0f, 1.0f };
+		return identity;
+	}
+
+	const Mat3& getIdentityMatrix3()
+	{
+		static const Mat3 identity = {
+			1.0f, 0.0f, 0.0f,
+			0.0f, 1.0f, 0.0f,
+			0.0f, 0.0f, 1.0f };
+		return identity;
+	}
+
 	void buildRotationMatrix(Vec3f angles, Vec3f* mat)
 	{
 		if (angles.x == 0.0f && angles.y == 0.0f && angles.z == 0.0f)

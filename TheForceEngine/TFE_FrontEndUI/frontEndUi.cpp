@@ -27,6 +27,7 @@
 #include <TFE_Ui/ui.h>
 #include <TFE_Ui/markdown.h>
 #include <TFE_System/utf8.h>
+#include <TFE_Vr/vr.h>
 // Game
 #include <TFE_DarkForces/mission.h>
 #include <TFE_DarkForces/gameMusic.h>
@@ -43,6 +44,8 @@ using namespace TFE_Audio;
 
 namespace TFE_FrontEndUI
 {
+	//bool preciseFrustum = true;
+
 	struct UiImage
 	{
 		void* image;
@@ -69,6 +72,7 @@ namespace TFE_FrontEndUI
 		CONFIG_INPUT,
 		CONFIG_GRAPHICS,
 		CONFIG_HUD,
+		CONFIG_VR,
 		CONFIG_ENHANCEMENTS,
 		CONFIG_SOUND,
 		CONFIG_SYSTEM,
@@ -97,6 +101,7 @@ namespace TFE_FrontEndUI
 		"Input",
 		"Graphics",
 		"Hud",
+		"Vr",
 		"Enhancements",
 		"Sound",
 		"System",
@@ -254,6 +259,7 @@ namespace TFE_FrontEndUI
 	void configInput();
 	void configGraphics();
 	void configHud();
+	void configVr();
 	void configSound();
 	void configSystem();
 	void DrawLabelledIntSlider(float labelWidth, float valueWidth, const char* label, const char* tag, int* value, int min, int max);
@@ -405,8 +411,16 @@ namespace TFE_FrontEndUI
 	{
 		s_appState = APP_STATE_MENU;
 		s_subUI = FEUI_CONFIG;
-		s_relativeMode = TFE_Input::relativeModeEnabled();
-		TFE_Input::enableRelativeMode(false);
+		if (!TFE_Settings::getTempSettings()->vr)
+		{
+			s_relativeMode = TFE_Input::relativeModeEnabled();
+			TFE_Input::enableRelativeMode(false);
+		}
+		else
+		{
+			s_relativeMode = true;
+			TFE_Input::enableRelativeMode(true);
+		}
 		pickCurrentResolution();
 	}
 
@@ -473,6 +487,34 @@ namespace TFE_FrontEndUI
 		TFE_ProfilerView::enable(!isEnabled);
 	}
 
+	void ImGuiBeginDisabled()
+	{
+		ImGui::PushItemFlag(ImGuiItemFlags_Disabled, true);
+		ImGui::PushStyleVar(ImGuiStyleVar_Alpha, ImGui::GetStyle().Alpha * 0.5f);
+	}
+
+	void ImGuiEndDisabled()
+	{
+		ImGui::PopItemFlag();
+		ImGui::PopStyleVar();
+	}
+
+	void ImGuiBeginDisabledInVR()
+	{
+		if (TFE_Settings::getTempSettings()->vr)
+		{
+			ImGuiBeginDisabled();
+		}
+	}
+
+	void ImGuiEndDisabledInVR()
+	{
+		if (TFE_Settings::getTempSettings()->vr)
+		{
+			ImGuiEndDisabled();
+		}
+	}
+
 	void showNoGameDataUI()
 	{
 		char settingsPath[TFE_MAX_PATH];
@@ -525,8 +567,8 @@ namespace TFE_FrontEndUI
 		// Calculate the window size.
 		ImFont* fpsFont = s_versionFont;
 		ImVec2 size = fpsFont->CalcTextSizeA(fpsFont->FontSize, 1024.0f, 0.0f, "FPS: 99999");
-		f32 width  = size.x + 8.0f;
-		f32 height = size.y + 8.0f;
+		f32 width  = 1.0f * size.x + 8.0f;
+		f32 height = 1.0f * size.y + 8.0f;
 
 		// Get the raw delta time.
 		const f64 dt = TFE_System::getDeltaTimeRaw();
@@ -543,6 +585,7 @@ namespace TFE_FrontEndUI
 		ImGui::SetNextWindowPos(ImVec2(windowWidth - width, 0.0f));
 		ImGui::Begin("##FPS", nullptr, windowFlags);
 		ImGui::Text("FPS: %d", s32(aveFps + 0.5));
+		//ImGui::Text("precise frustum: %d", TFE_FrontEndUI::preciseFrustum);
 		ImGui::End();
 		ImGui::PopFont();
 	}
@@ -640,55 +683,63 @@ namespace TFE_FrontEndUI
 
 			if (s_appState == APP_STATE_SET_DEFAULTS)
 			{
-				DisplayInfo displayInfo;
-				TFE_RenderBackend::getDisplayInfo(&displayInfo);
-
-				bool active = true;
-				ImGui::PushFont(s_dialogFont);
-				ImGui::SetNextWindowPos(ImVec2(max(0.0f, (displayInfo.width - 1280.0f * s_uiScale) * 0.5f), max(0.0f, (displayInfo.height - 300.0f * s_uiScale) * 0.5f)));
-				ImGui::SetNextWindowSize(ImVec2(1280.0f * s_uiScale, 300.0f * s_uiScale));
-				ImGui::Begin("Select Default Settings", &active, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
-
-				ImGui::LabelText("##ConfigLabel", "Please select the appropriate defaults.");
-				ImGui::PopFont();
-
-				ImGui::PushFont(s_versionFont);
-				ImGui::LabelText("##ConfigLabel", "Individual settings, (crosshair pattern, pitch limits, etc.), can be changed using");
-				ImGui::LabelText("##ConfigLabel", "  Settings/Configuration at any time.");
-				ImGui::PopFont();
-
-				ImGui::Separator();
-				ImGui::PushFont(s_dialogFont);
-
-				ImGui::LabelText("##ConfigLabel", "Modern:  Similar to Retro but adds more modern effects such as bloom.");
-				ImGui::LabelText("##ConfigLabel", "Retro:   Play in high resolution, widescreen, and use modern controls.");
-				ImGui::LabelText("##ConfigLabel", "Vanilla: Play using the original resolution and controls.");
-				ImGui::Separator();
-
-				s_inputConfig = inputMapping_get();
-				TFE_Settings_Game* gameSettings = TFE_Settings::getGameSettings();
-				TFE_Settings_Graphics* graphicsSettings = TFE_Settings::getGraphicsSettings();
-								
-				ImGui::SetCursorPosX(1280.0f * s_uiScale * 0.5f - 128.0f*s_uiScale);
-				if (ImGui::Button("Modern"))
+				if (TFE_Settings::getTempSettings()->vr)
 				{
 					setSettingsTemplate(TEMPLATE_MODERN);
 					s_appState = APP_STATE_MENU;
 				}
-				ImGui::SameLine();
-				if (ImGui::Button("Retro"))
+				else
 				{
-					setSettingsTemplate(TEMPLATE_RETRO);
-					s_appState = APP_STATE_MENU;
+					DisplayInfo displayInfo;
+					TFE_RenderBackend::getDisplayInfo(&displayInfo);
+
+					bool active = true;
+					ImGui::PushFont(s_dialogFont);
+					ImGui::SetNextWindowPos(ImVec2(max(0.0f, (displayInfo.width - 1280.0f * s_uiScale) * 0.5f), max(0.0f, (displayInfo.height - 300.0f * s_uiScale) * 0.5f)));
+					ImGui::SetNextWindowSize(ImVec2(1280.0f * s_uiScale, 300.0f * s_uiScale));
+					ImGui::Begin("Select Default Settings", &active, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
+
+					ImGui::LabelText("##ConfigLabel", "Please select the appropriate defaults.");
+					ImGui::PopFont();
+
+					ImGui::PushFont(s_versionFont);
+					ImGui::LabelText("##ConfigLabel", "Individual settings, (crosshair pattern, pitch limits, etc.), can be changed using");
+					ImGui::LabelText("##ConfigLabel", "  Settings/Configuration at any time.");
+					ImGui::PopFont();
+
+					ImGui::Separator();
+					ImGui::PushFont(s_dialogFont);
+
+					ImGui::LabelText("##ConfigLabel", "Modern:  Similar to Retro but adds more modern effects such as bloom.");
+					ImGui::LabelText("##ConfigLabel", "Retro:   Play in high resolution, widescreen, and use modern controls.");
+					ImGui::LabelText("##ConfigLabel", "Vanilla: Play using the original resolution and controls.");
+					ImGui::Separator();
+
+					s_inputConfig = inputMapping_get();
+					TFE_Settings_Game* gameSettings = TFE_Settings::getGameSettings();
+					TFE_Settings_Graphics* graphicsSettings = TFE_Settings::getGraphicsSettings();
+
+					ImGui::SetCursorPosX(1280.0f * s_uiScale * 0.5f - 128.0f * s_uiScale);
+					if (ImGui::Button("Modern"))
+					{
+						setSettingsTemplate(TEMPLATE_MODERN);
+						s_appState = APP_STATE_MENU;
+					}
+					ImGui::SameLine();
+					if (ImGui::Button("Retro"))
+					{
+						setSettingsTemplate(TEMPLATE_RETRO);
+						s_appState = APP_STATE_MENU;
+					}
+					ImGui::SameLine();
+					if (ImGui::Button("Vanilla"))
+					{
+						setSettingsTemplate(TEMPLATE_VANILLA);
+						s_appState = APP_STATE_MENU;
+					}
+					ImGui::End();
+					ImGui::PopFont();
 				}
-				ImGui::SameLine();
-				if (ImGui::Button("Vanilla"))
-				{
-					setSettingsTemplate(TEMPLATE_VANILLA);
-					s_appState = APP_STATE_MENU;
-				}
-				ImGui::End();
-				ImGui::PopFont();
 			}
 			else
 			{
@@ -847,6 +898,12 @@ namespace TFE_FrontEndUI
 				TFE_Settings::writeToDisk();
 				inputMapping_serialize();
 			}
+			if (ImGui::Button("Vr", sideBarButtonSize))
+			{
+				s_configTab = CONFIG_VR;
+				TFE_Settings::writeToDisk();
+				inputMapping_serialize();
+			}
 			if (ImGui::Button("Sound", sideBarButtonSize))
 			{
 				s_configTab = CONFIG_SOUND;
@@ -938,6 +995,9 @@ namespace TFE_FrontEndUI
 				break;
 			case CONFIG_HUD:
 				configHud();
+				break;
+			case CONFIG_VR:
+				configVr();
 				break;
 			case CONFIG_SOUND:
 				configSound();
@@ -2359,6 +2419,7 @@ namespace TFE_FrontEndUI
 		TFE_Settings_Graphics* graphics = TFE_Settings::getGraphicsSettings();
 		TFE_Settings_Window* window = TFE_Settings::getWindowSettings();
 		TFE_Settings_Game* game = TFE_Settings::getGameSettings();
+		const bool inVr = TFE_Settings::getTempSettings()->vr;
 
 		//////////////////////////////////////////////////////
 		// Window Settings.
@@ -2367,6 +2428,7 @@ namespace TFE_FrontEndUI
 		ImGui::LabelText("##ConfigLabel", "Window");
 		ImGui::PopFont();
 
+		ImGuiBeginDisabledInVR();
 		bool fullscreen = window->fullscreen;
 		bool windowed = !fullscreen;
 		bool vsync = TFE_System::getVSync();
@@ -2384,6 +2446,7 @@ namespace TFE_FrontEndUI
 		{
 			fullscreen = !windowed;
 		}
+		ImGuiEndDisabledInVR();
 		ImGui::SameLine();
 		if (ImGui::Checkbox("Show FPS", &showFps))
 		{
@@ -2399,65 +2462,68 @@ namespace TFE_FrontEndUI
 		//////////////////////////////////////////////////////
 		// Resolution
 		//////////////////////////////////////////////////////
-		bool widescreen = graphics->widescreen;
-
-		ImGui::PushFont(s_dialogFont);
-		ImGui::LabelText("##ConfigLabel", "Virtual Resolution");
-		ImGui::PopFont();
-
-		ImGui::LabelText("##ConfigLabel", "Standard Resolution:"); ImGui::SameLine(150 * s_uiScale);
-		ImGui::SetNextItemWidth(196);
-		ImGui::Combo("##Resolution", &s_resIndex, widescreen ? c_resolutionsWide : c_resolutions, IM_ARRAYSIZE(c_resolutions));
-		if (s_resIndex == TFE_ARRAYSIZE(c_resolutionDim))
+		if (!inVr)
 		{
-			DisplayInfo displayInfo;
-			TFE_RenderBackend::getDisplayInfo(&displayInfo);
-			graphics->gameResolution.x = displayInfo.width;
-			graphics->gameResolution.z = displayInfo.height;
-			graphics->widescreen = true;
-			widescreen = true;
-		}
-		else if (s_resIndex == TFE_ARRAYSIZE(c_resolutionDim) + 1)
-		{
-			ImGui::LabelText("##ConfigLabel", "Custom:"); ImGui::SameLine(100 * s_uiScale);
+			bool widescreen = graphics->widescreen;
+
+			ImGui::PushFont(s_dialogFont);
+			ImGui::LabelText("##ConfigLabel", "Virtual Resolution");
+			ImGui::PopFont();
+
+			ImGui::LabelText("##ConfigLabel", "Standard Resolution:"); ImGui::SameLine(150 * s_uiScale);
 			ImGui::SetNextItemWidth(196);
-			ImGui::InputInt2("##CustomInput", graphics->gameResolution.m);
-
-			graphics->gameResolution.x = max(graphics->gameResolution.x, 10);
-			graphics->gameResolution.z = max(graphics->gameResolution.z, 10);
-		}
-		else
-		{
-			graphics->gameResolution = c_resolutionDim[s_resIndex];
-		}
-
-		ImGui::Checkbox("Widescreen", &widescreen);
-		if (widescreen != graphics->widescreen)
-		{
-			graphics->widescreen = widescreen;
-			if (s_resIndex == TFE_ARRAYSIZE(c_resolutionDim) && !widescreen)
+			ImGui::Combo("##Resolution", &s_resIndex, widescreen ? c_resolutionsWide : c_resolutions, IM_ARRAYSIZE(c_resolutions));
+			if (s_resIndex == TFE_ARRAYSIZE(c_resolutionDim))
 			{
-				// Find the closest match.
-				s32 height = graphics->gameResolution.z;
-				s32 diff = INT_MAX;
-				s32 index = -1;
-				for (s32 i = 0; i < TFE_ARRAYSIZE(c_resolutionDim); i++)
+				DisplayInfo displayInfo;
+				TFE_RenderBackend::getDisplayInfo(&displayInfo);
+				graphics->gameResolution.x = displayInfo.width;
+				graphics->gameResolution.z = displayInfo.height;
+				graphics->widescreen = true;
+				widescreen = true;
+			}
+			else if (s_resIndex == TFE_ARRAYSIZE(c_resolutionDim) + 1)
+			{
+				ImGui::LabelText("##ConfigLabel", "Custom:"); ImGui::SameLine(100 * s_uiScale);
+				ImGui::SetNextItemWidth(196);
+				ImGui::InputInt2("##CustomInput", graphics->gameResolution.m);
+
+				graphics->gameResolution.x = max(graphics->gameResolution.x, 10);
+				graphics->gameResolution.z = max(graphics->gameResolution.z, 10);
+			}
+			else
+			{
+				graphics->gameResolution = c_resolutionDim[s_resIndex];
+			}
+
+			ImGui::Checkbox("Widescreen", &widescreen);
+			if (widescreen != graphics->widescreen)
+			{
+				graphics->widescreen = widescreen;
+				if (s_resIndex == TFE_ARRAYSIZE(c_resolutionDim) && !widescreen)
 				{
-					s32 curDiff = TFE_Jedi::abs(height - c_resolutionDim[i].z);
-					if (c_resolutionDim[i].z <= height && curDiff < diff)
+					// Find the closest match.
+					s32 height = graphics->gameResolution.z;
+					s32 diff = INT_MAX;
+					s32 index = -1;
+					for (s32 i = 0; i < TFE_ARRAYSIZE(c_resolutionDim); i++)
 					{
-						index = i;
-						diff = curDiff;
+						s32 curDiff = TFE_Jedi::abs(height - c_resolutionDim[i].z);
+						if (c_resolutionDim[i].z <= height && curDiff < diff)
+						{
+							index = i;
+							diff = curDiff;
+						}
+					}
+					if (index >= 0)
+					{
+						graphics->gameResolution = c_resolutionDim[index];
+						s_resIndex = index;
 					}
 				}
-				if (index >= 0)
-				{
-					graphics->gameResolution = c_resolutionDim[index];
-					s_resIndex = index;
-				}
 			}
+			ImGui::Separator();
 		}
-		ImGui::Separator();
 
 		//////////////////////////////////////////////////////
 		// Renderer
@@ -2501,7 +2567,9 @@ namespace TFE_FrontEndUI
 
 		ImGui::LabelText("##ConfigLabel", "Renderer:"); ImGui::SameLine(75 * s_uiScale);
 		ImGui::SetNextItemWidth(196 * s_uiScale);
+		ImGuiBeginDisabledInVR();
 		ImGui::Combo("##Renderer", &graphics->rendererIndex, c_renderer, IM_ARRAYSIZE(c_renderer));
+		ImGuiEndDisabledInVR();
 		if (graphics->rendererIndex == 0)
 		{
 			// Software
@@ -2524,28 +2592,44 @@ namespace TFE_FrontEndUI
 				game->df_pitchLimit = PitchLimit(s_pitchLimit);
 			}
 
-			// FOV.
-			ImGui::SetNextItemWidth(64 * s_uiScale);
-			ImGui::LabelText("##Label", "FOV"); ImGui::SameLine(comboOffset);
-			ImGui::SetNextItemWidth(128 * s_uiScale);
-			ImGui::InputInt("##FOVText", &graphics->fov, 1, 20, ImGuiInputTextFlags_CharsDecimal);
-			graphics->fov = clamp(graphics->fov, 5, 175);
+			if (!inVr)
+			{
+				// FOV.
+				ImGui::SetNextItemWidth(64 * s_uiScale);
+				ImGui::LabelText("##Label", "FOV"); ImGui::SameLine(comboOffset);
+				ImGui::SetNextItemWidth(128 * s_uiScale);
+				ImGui::InputInt("##FOVText", &graphics->fov, 1, 20, ImGuiInputTextFlags_CharsDecimal);
+				graphics->fov = clamp(graphics->fov, 5, 175);
+			}
 
 			// Sky rendering mode.
 			s32 skyMode = graphics->skyMode;
 			ImGui::LabelText("##ConfigLabel", "Sky Render Mode"); ImGui::SameLine(comboOffset);
 			ImGui::SetNextItemWidth(196 * s_uiScale);
+			ImGuiBeginDisabledInVR();
 			if (ImGui::Combo("##SkyMode", &skyMode, c_tfeSkyModeStrings, IM_ARRAYSIZE(c_tfeSkyModeStrings)))
 			{
 				graphics->skyMode = SkyMode(skyMode);
 			}
+			ImGuiEndDisabledInVR();
 
 			ImGui::Separator();
 
 			// Color Mode
 			ImGui::LabelText("##ConfigLabel", "Color Mode"); ImGui::SameLine(90 * s_uiScale);
 			ImGui::SetNextItemWidth(196 * s_uiScale);
-			ImGui::Combo("##ColorMode", &graphics->colorMode, c_colorMode, IM_ARRAYSIZE(c_colorMode));
+			if (inVr)
+			{
+				int colorMode = graphics->colorMode - 1;
+				if (ImGui::Combo("##ColorMode", &colorMode, &c_colorMode[1], IM_ARRAYSIZE(c_colorMode) - 1))
+				{
+					graphics->colorMode = colorMode + 1;
+				}
+			}
+			else
+			{
+				ImGui::Combo("##ColorMode", &graphics->colorMode, c_colorMode, IM_ARRAYSIZE(c_colorMode));
+			}
 
 			if (graphics->colorMode == COLORMODE_8BIT || graphics->colorMode == COLORMODE_8BIT_INTERP)
 			{
@@ -2677,17 +2761,17 @@ namespace TFE_FrontEndUI
 		ImGui::InputFloat("##HudScaleText", &hud->scale, 0.01f, 0.1f, "%.3f", ImGuiInputTextFlags_CharsHexadecimal);
 
 		ImGui::SetNextItemWidth(196*s_uiScale);
-		ImGui::SliderInt("Offset Lt", &hud->pixelOffset[0], -512, 512); ImGui::SameLine(0.0f, 3.0f*s_uiScale);
+		ImGui::SliderInt("Offset Lt", &hud->pixelOffset[0], -4 * 512, 4 * 512); ImGui::SameLine(0.0f, 3.0f*s_uiScale);
 		ImGui::SetNextItemWidth(128 * s_uiScale);
 		ImGui::InputInt("##HudOffsetX0Text", &hud->pixelOffset[0], 1, 10);
 		
 		ImGui::SetNextItemWidth(196 * s_uiScale);
-		ImGui::SliderInt("Offset Rt", &hud->pixelOffset[1], -512, 512); ImGui::SameLine(0.0f, 3.0f*s_uiScale);
+		ImGui::SliderInt("Offset Rt", &hud->pixelOffset[1], -4 * 512, 4 * 512); ImGui::SameLine(0.0f, 3.0f*s_uiScale);
 		ImGui::SetNextItemWidth(128 * s_uiScale);
 		ImGui::InputInt("##HudOffsetX1Text", &hud->pixelOffset[1], 1, 10);
 		
 		ImGui::SetNextItemWidth(196*s_uiScale);
-		ImGui::SliderInt("Offset Y", &hud->pixelOffset[2], -512, 512); ImGui::SameLine(0.0f, 10.0f*s_uiScale);
+		ImGui::SliderInt("Offset Y", &hud->pixelOffset[2], -4 * 512, 4 * 512); ImGui::SameLine(0.0f, 10.0f*s_uiScale);
 		ImGui::SetNextItemWidth(128 * s_uiScale);
 		ImGui::InputInt("##HudOffsetYText", &hud->pixelOffset[2], 1, 10);
 
@@ -2696,6 +2780,121 @@ namespace TFE_FrontEndUI
 		hud->pixelOffset[0] = clamp(hud->pixelOffset[0], -maxOffset, maxOffset);
 		hud->pixelOffset[1] = clamp(hud->pixelOffset[1], -maxOffset, maxOffset);
 		hud->pixelOffset[2] = clamp(hud->pixelOffset[2], -maxOffset, maxOffset);
+	}
+
+	void ScreenToVR(const char* name, TFE_Settings_Vr::ScreenToVr& screenToVr, bool disableLockToCamera = false)
+	{
+		ImGui::PushFont(s_dialogFont);
+		ImGui::LabelText("##ConfigLabel", name);
+		ImGui::PopFont();
+
+		ImGui::PushID(name);
+		ImGui::DragFloat("Distance", &screenToVr.distance, 0.01f, 1.0f, 10.0f, "%.2f");
+		//ImGui::InputFloat("Distance2", &screenToVr.distance, 0.01f, 0.1f, "%.2f");
+		//ImGui::SliderFloat("Distance3", &screenToVr.distance, 1.0f, 10.0f, "%.2f");
+		Tooltip("Distance to the plane we are projecting to.");
+		ImGui::DragFloat3("Shift", screenToVr.shift.m, 0.01f, -10.0f /*-screenToVr.distance * 0.5f*/, 10.0f, "%.2f");
+		//ImGui::SliderFloat3("Shift2", screenToVr.shift.m, -10.0f, 10.0f, "%.2f");
+		Tooltip("Shift in 3D space (X,Y,Z) after projection, note that -Z points forward.");
+		//	"  Z value is limited to 50% of Distance to avoid moving it behind the camera");
+		
+		//if (disableLockToCamera)
+		//{
+		//	ImGuiBeginDisabled();
+		//	screenToVr.lockToCamera = false;
+		//}
+		//ImGui::Checkbox("Lock to Camera", &screenToVr.lockToCamera);
+		//if (disableLockToCamera)
+		//{
+		//	ImGuiEndDisabled();
+		//}
+		if (disableLockToCamera)
+		{ 
+			screenToVr.lockToCamera = false;
+		}
+		else
+		{
+			ImGui::Checkbox("Lock to Camera", &screenToVr.lockToCamera);
+		}
+
+		ImGui::PopID();
+	}
+
+	void RGBAFields(const char* label, RGBA* color)
+	{
+		RGBAf c = RGBAf();
+		c.r = color->getRedF();
+		c.g = color->getGreenF();
+		c.b = color->getBlueF();
+		c.a = color->getAlphaF();
+
+		if (ImGui::SliderFloat4((string("##color") + label).c_str(), &c.r, 0.0f, 1.0f))
+		{
+			color->color = RGBA::fromFloats(c.r, c.g, c.b, c.a).color;
+		}
+
+		ImGui::SameLine();
+		ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(color->getRedF(), color->getGreenF(), color->getBlueF(), color->getAlphaF()));
+		ImGui::LabelText("##ConfigLabel", "%s", label);
+		ImGui::PopStyleColor();
+	}
+
+	void configVr()
+	{
+		TFE_Settings_Vr* vrSettings = TFE_Settings::getVrSettings();
+
+		ImGui::TextWrapped("VR runtime: %s", vr::GetRuntimeInfo());
+		ImGui::Separator();
+
+		if (ImGui::Button("Reset To Defaults"))
+		{
+			vrSettings->resetToDefaults();
+		}
+		Tooltip("you can use --vrResetSettings CLI command to do it on start up, do not forget to remove it next time you want to run"
+			" the game as it will reset all your VR setting changes again.");
+
+		ImGui::TextWrapped("To view screen game items (Menu, Pda, Hud, Messages, Weapon, Config, Automap, Crosshair) correctly "
+			"we have to project them from screen space to 3D plane in front of the player at specified Distance."
+			"Then we can adjust its position in space by Shift.");
+
+		ScreenToVR("Menu", vrSettings->menuToVr);
+		ImGui::Separator();
+
+		ScreenToVR("Pda & videos", vrSettings->pdaToVr);
+		ImGui::Separator();
+
+		ScreenToVR("Hud", vrSettings->hudToVr);
+		ImGui::TextWrapped("Note that you can adjust Hud screen positions also in Hud config section.");
+		ImGui::Separator();
+
+		ScreenToVR("Messages", vrSettings->messagesToVr);
+		ImGui::Separator();
+
+		ScreenToVR("Weapon", vrSettings->weaponToVr, true);
+		ImGui::Separator();
+
+		ScreenToVR("Config (ImGui)", vrSettings->configToVr);
+		if (vrSettings->configToVr.shift.z > 0.5f * vrSettings->configToVr.distance)
+		{
+			vrSettings->configToVr.shift.z = 0.5f * vrSettings->configToVr.distance;
+		}
+		ImGui::SliderFloat("Dot size", &vrSettings->configDotSize, 2.0f, 50.0f, "%.2f");
+		RGBAFields("Dot color", &vrSettings->configDotColor);
+		ImGui::Separator();
+
+		ScreenToVR("Automap", vrSettings->automapToVr);
+		ImGui::SliderFloat("Lines width", &vrSettings->automapWidthMultiplier, 0.5f, 10.0f, "%.2f");
+		ImGui::Separator();
+
+		ScreenToVR("Crosshair", vrSettings->overlayToVr, true);
+		ImGui::Separator();
+
+		ImGui::PushFont(s_dialogFont);
+		ImGui::LabelText("##ConfigLabel", "Player");
+		ImGui::PopFont();
+		ImGui::SliderFloat("Scale (Experimental)", &vrSettings->playerScale, 0.01f, 100.0f, "%.2f");
+		Tooltip("Scale distance between eyes, so when it's big number the world looks small "
+		"but it introduces some rendering artifacts as engine assumes looking from point between eyes.");
 	}
 
 	// Uses a percentage slider (0 - 100%) to adjust a floating point value (0.0 - 1.0).

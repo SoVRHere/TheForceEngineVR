@@ -522,6 +522,22 @@ namespace TFE_DarkForces
 		
 	void hud_drawMessage(u8* framebuffer)
 	{
+		ScopeFunctions scopeFuncs{
+			[]() {
+				if (TFE_Settings::getTempSettings()->vr)
+				{
+					const TFE_Settings_Vr::ScreenToVr& toVr = TFE_Settings::getVrSettings()->messagesToVr;
+					static Vec4f shift;
+					shift = { toVr.shift.x, toVr.shift.y, toVr.shift.z, toVr.distance };
+					TFE_Jedi::ShiftVR = &shift;
+					TFE_Jedi::LockToCameraVR = toVr.lockToCamera;
+				}
+			},
+			[]() {
+				TFE_Jedi::ShiftVR = nullptr;
+			},
+		};
+
 		if (s_missionMode == MISSION_MODE_MAIN && s_hudMessage[0])
 		{
 			displayHudMessage(s_hudFont, (DrawRect*)vfb_getScreenRect(VFB_RECT_UI), 4, 10, s_hudMessage, framebuffer);
@@ -592,6 +608,22 @@ namespace TFE_DarkForces
 		{
 			s_leftHudMove--;
 		}
+
+		ScopeFunctions scopeFuncs{ 
+			[]() {
+				if (TFE_Settings::getTempSettings()->vr)
+				{
+					const TFE_Settings_Vr::ScreenToVr& toVr = TFE_Settings::getVrSettings()->hudToVr;
+					static Vec4f shift;
+					shift = { toVr.shift.x, toVr.shift.y, toVr.shift.z, toVr.distance };
+					TFE_Jedi::ShiftVR = &shift;
+					TFE_Jedi::LockToCameraVR = toVr.lockToCamera;
+				}
+			},
+			[]() {
+				TFE_Jedi::ShiftVR = nullptr;
+			},
+		};
 
 		// 1. Draw the base.
 		TFE_Settings_Hud* hudSettings = TFE_Settings::getHudSettings();

@@ -27,6 +27,7 @@ struct Vec2f
 	union
 	{
 		struct { f32 x, z; };
+		struct { f32 x, y; };
 		f32 m[2];
 	};
 };
@@ -55,6 +56,15 @@ struct Vec2i
 	{
 		struct { s32 x, z; };
 		s32 m[2];
+	};
+};
+
+struct Vec2ui
+{
+	union
+	{
+		struct { u32 x, y; };
+		u32 m[2];
 	};
 };
 

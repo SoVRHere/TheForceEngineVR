@@ -3,6 +3,7 @@
 #include <TFE_RenderBackend/vertexBuffer.h>
 #include <TFE_RenderBackend/indexBuffer.h>
 #include <TFE_System/system.h>
+#include <TFE_Settings/settings.h>
 #include <vector>
 
 #define QUAD_MAX_NUM 1024
@@ -46,7 +47,18 @@ namespace TFE_RenderShared
 
 	bool quadInit()
 	{
-		if (!s_shader.load("Shaders/quad2d.vert", "Shaders/quad2d.frag"))
+		u32 defineCount = 0;
+		ShaderDefine defines[2/*VR*/];
+		if (TFE_Settings::getTempSettings()->vr)
+		{
+			defines[defineCount++] = { "OPT_VR", "1" };
+			if (TFE_Settings::getTempSettings()->vrMultiview)
+			{
+				defines[defineCount++] = { "OPT_VR_MULTIVIEW", "1" };
+			}
+		}
+
+		if (!s_shader.load("Shaders/quad2d.vert", "Shaders/quad2d.frag", defineCount, defines, SHADER_VER_STD))
 		{
 			return false;
 		}

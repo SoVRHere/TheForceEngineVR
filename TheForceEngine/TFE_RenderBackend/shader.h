@@ -9,6 +9,7 @@
 
 #include <TFE_System/types.h>
 #include <string>
+#include <vector>
 
 enum ShaderVariableType
 {
@@ -43,6 +44,14 @@ struct ShaderDefine
 	std::string value;
 };
 
+struct ShaderUniform
+{
+	std::string name;
+	s32 location{ -1 };
+	s32 size{ -1 };
+	u32 type{ 0 };
+};
+
 class Shader
 {
 public:
@@ -57,7 +66,7 @@ public:
 	static void unbind();
 
 	void bindTextureNameToSlot(const char* texName, s32 slot);
-	s32  getVariableId(const char* name);
+	s32  getVariableId(const char* name, const ShaderUniform** uniform = nullptr);
 	void setVariable(s32 id, ShaderVariableType type, const f32* data);
 	void setVariable(s32 id, ShaderVariableType type, const s32* data);
 	void setVariable(s32 id, ShaderVariableType type, const u32* data);
@@ -71,4 +80,5 @@ private:
 	u32 m_gpuHandle;
 	s32 m_clipPlaneCount;
 	ShaderVersion m_shaderVersion;
+	std::vector<ShaderUniform> m_uniforms;
 };

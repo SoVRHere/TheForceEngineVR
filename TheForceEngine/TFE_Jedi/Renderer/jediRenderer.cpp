@@ -251,7 +251,7 @@ namespace TFE_Jedi
 		const bool fovChanged = (graphics->fov != s_fov);
 		s_fov = graphics->fov;
 
-		s32 width  = graphics->gameResolution.x;
+		s32 width = graphics->gameResolution.x;
 		s32 height = graphics->gameResolution.z;
 		if (graphics->widescreen && (height == 200 || height == 400))
 		{
@@ -283,6 +283,15 @@ namespace TFE_Jedi
 		{
 			s_clearCachedTextures = false;
 			updateTexturePacking = true;
+		}
+
+		if (TFE_Settings::getTempSettings()->vr)
+		{
+			if (subRenderer != TSR_CLASSIC_GPU)
+			{
+				width = 320 * 2;
+				height = 240 * 2;
+			}
 		}
 
 		if (!vfb_setResolution(width, height) && !fovChanged && !updateTexturePacking)

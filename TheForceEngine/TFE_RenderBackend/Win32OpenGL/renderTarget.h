@@ -14,6 +14,7 @@ public:
 	~RenderTarget();
 
 	bool create(s32 textureCount, TextureGpu** textures, bool depthBuffer);
+	bool create(s32 textureCount, TextureGpu** texture, TextureGpu* depthTexture, bool multiview);
 	void bind();
 	void clear(const f32* color, f32 depth, u8 stencil = 0, bool clearColor = true);
 	void clearDepth(f32 depth);
@@ -31,7 +32,9 @@ private:
 	};
 
 	const TextureGpu* m_texture[MAX_ATTACHMENT];
+	const TextureGpu* m_depth{ nullptr };
 	u32 m_textureCount;
 	u32 m_gpuHandle;
 	u32 m_depthBufferHandle;
+	bool mMultiview{ false };
 };

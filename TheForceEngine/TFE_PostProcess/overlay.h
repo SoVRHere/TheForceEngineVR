@@ -21,6 +21,14 @@ public:
 	s32 m_tintId;
 	s32 m_uvOffsetSizeId;
 
+	s32 m_cameraProjId = -1;
+	s32 m_screenSizeId = -1;
+	s32 m_frustumId = -1;
+	s32 m_HmdViewId = -1;
+	s32 m_ShiftId = -1;
+	s32 m_FovId = -1;
+	s32 m_scaleId = -1;
+
 private:
 	Shader m_overlayShader;
 	bool buildShaders();

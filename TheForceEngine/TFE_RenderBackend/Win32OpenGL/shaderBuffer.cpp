@@ -1,5 +1,5 @@
 #include <TFE_RenderBackend/shaderBuffer.h>
-#include "gl.h"
+#include <TFE_RenderBackend/Win32OpenGL/openGL_Debug.h>
 #include <memory.h>
 #include "openGL_Caps.h"
 
@@ -32,11 +32,13 @@ bool ShaderBuffer::create(u32 count, const ShaderBufferDef& bufferDef, bool dyna
 	glBindBuffer(GL_TEXTURE_BUFFER, m_gpuHandle[0]);
 	glBufferData(GL_TEXTURE_BUFFER, m_size, initData, dynamic ? GL_STREAM_DRAW : GL_STATIC_DRAW);
 	glBindBuffer(GL_TEXTURE_BUFFER, 0);
+	TFE_ASSERT_GL;
 
 	glGenTextures(1, &m_gpuHandle[1]);
 	glBindTexture(GL_TEXTURE_BUFFER, m_gpuHandle[1]);
 	glTexBuffer(GL_TEXTURE_BUFFER, internalFormat, m_gpuHandle[0]);
 	glBindTexture(GL_TEXTURE_BUFFER, 0);
+	TFE_ASSERT_GL;
 	
 	return true;
 }
@@ -45,8 +47,8 @@ void ShaderBuffer::destroy()
 {
 	if (m_initialized)
 	{
-		if (m_gpuHandle[1]) { glDeleteTextures(1, &m_gpuHandle[1]); }
-		if (m_gpuHandle[0]) { glDeleteBuffers(1, &m_gpuHandle[0]); }
+		if (m_gpuHandle[1]) { glDeleteTextures(1, &m_gpuHandle[1]); TFE_ASSERT_GL; }
+		if (m_gpuHandle[0]) { glDeleteBuffers(1, &m_gpuHandle[0]); TFE_ASSERT_GL; }
 	}
 	m_gpuHandle[0] = 0;
 	m_gpuHandle[1] = 0;
@@ -58,6 +60,7 @@ void ShaderBuffer::update(const void* buffer, size_t size)
 	glBindBuffer(GL_TEXTURE_BUFFER, m_gpuHandle[0]);
 	glBufferData(GL_TEXTURE_BUFFER, size, buffer, m_dynamic ? GL_DYNAMIC_DRAW : GL_STATIC_DRAW);
 	glBindBuffer(GL_TEXTURE_BUFFER, 0);
+	TFE_ASSERT_GL;
 }
 
 void ShaderBuffer::bind(s32 bindPoint) const
@@ -65,6 +68,7 @@ void ShaderBuffer::bind(s32 bindPoint) const
 	if (bindPoint < 0) { return; }
 	glActiveTexture(GL_TEXTURE0 + bindPoint);
 	glBindTexture(GL_TEXTURE_BUFFER, m_gpuHandle[1]);
+	TFE_ASSERT_GL;
 }
 
 void ShaderBuffer::unbind(s32 bindPoint) const
@@ -72,6 +76,7 @@ void ShaderBuffer::unbind(s32 bindPoint) const
 	if (bindPoint < 0) { return; }
 	glActiveTexture(GL_TEXTURE0 + bindPoint);
 	glBindTexture(GL_TEXTURE_BUFFER, 0);
+	TFE_ASSERT_GL;
 }
 
 s32 ShaderBuffer::getMaxSize()

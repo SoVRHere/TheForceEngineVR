@@ -21,6 +21,7 @@
 #include <TFE_RenderBackend/shaderBuffer.h>
 
 #include <TFE_Settings/settings.h>
+#include <TFE_Vr/vr.h>
 
 #include "modelGPU.h"
 #include "frustum.h"
@@ -32,6 +33,16 @@
 #include <vector>
 
 using namespace TFE_RenderBackend;
+
+namespace TFE_RenderBackend
+{
+	extern Mat4  s_cameraProjVR[2];
+	extern Mat4  s_cameraProjVR_YDown[2];
+	extern Mat3  s_cameraMtxVR[2];
+	extern Mat3  s_cameraMtxVR_YDown[2];
+	extern Vec3f s_cameraPosVR[2];
+	extern Vec3f s_cameraPosVR_YDown[2];
+}
 
 namespace TFE_Jedi
 {
@@ -79,6 +90,8 @@ namespace TFE_Jedi
 		bool trueColor = false;
 		bool ditheredBilinear = false;
 		bool bloom = false;
+		bool vr = false;
+		bool vrMultiview = false;
 	};
 	
 	static const AttributeMapping c_modelAttrMapping[] =
@@ -105,8 +118,11 @@ namespace TFE_Jedi
 	struct ShaderInputsMGPU
 	{
 		s32 cameraPosId;
+		const ShaderUniform* cameraPos{ nullptr };
 		s32 cameraViewId;
+		const ShaderUniform* cameraView{ nullptr };
 		s32 cameraProjId;
+		const ShaderUniform* cameraProj{ nullptr };
 		s32 cameraDirId;
 		s32 lightDataId;
 		s32 textureOffsetId;
@@ -185,9 +201,9 @@ namespace TFE_Jedi
 		}
 		shader->enableClipPlanes(MAX_PORTAL_PLANES);
 
-		s_shaderInputs[variant].cameraPosId   = shader->getVariableId("CameraPos");
-		s_shaderInputs[variant].cameraViewId  = shader->getVariableId("CameraView");
-		s_shaderInputs[variant].cameraProjId  = shader->getVariableId("CameraProj");
+		s_shaderInputs[variant].cameraPosId   = shader->getVariableId("CameraPos", &s_shaderInputs[variant].cameraPos);
+		s_shaderInputs[variant].cameraViewId  = shader->getVariableId("CameraView", &s_shaderInputs[variant].cameraView);
+		s_shaderInputs[variant].cameraProjId  = shader->getVariableId("CameraProj", &s_shaderInputs[variant].cameraProj);
 		s_shaderInputs[variant].cameraDirId   = shader->getVariableId("CameraDir");
 		s_shaderInputs[variant].cameraRightId = shader->getVariableId("CameraRight");
 		s_shaderInputs[variant].modelMtxId    = shader->getVariableId("ModelMtx");
@@ -230,9 +246,11 @@ namespace TFE_Jedi
 		TFE_Settings_Graphics* graphics = TFE_Settings::getGraphicsSettings();
 		bool needsUpdate = initialize ||
 			s_shaderSettings.ditheredBilinear != graphics->ditheredBilinear ||
-			s_shaderSettings.bloom != graphics->bloomEnabled || 
+			s_shaderSettings.bloom != graphics->bloomEnabled ||
 			s_shaderSettings.colormapInterp != (graphics->colorMode == COLORMODE_8BIT_INTERP) ||
-			s_shaderSettings.trueColor != (graphics->colorMode == COLORMODE_TRUE_COLOR);
+			s_shaderSettings.trueColor != (graphics->colorMode == COLORMODE_TRUE_COLOR) ||
+			s_shaderSettings.vr != TFE_Settings::getTempSettings()->vr ||
+			s_shaderSettings.vrMultiview != TFE_Settings::getTempSettings()->vrMultiview;
 		if (!needsUpdate) { return true; }
 
 		// Then update the settings.
@@ -240,6 +258,8 @@ namespace TFE_Jedi
 		s_shaderSettings.bloom = graphics->bloomEnabled;
 		s_shaderSettings.colormapInterp = (graphics->colorMode == COLORMODE_8BIT_INTERP);
 		s_shaderSettings.trueColor = (graphics->colorMode == COLORMODE_TRUE_COLOR);
+		s_shaderSettings.vr = TFE_Settings::getTempSettings()->vr;
+		s_shaderSettings.vrMultiview = TFE_Settings::getTempSettings()->vrMultiview;
 
 		ShaderDefine defines[16] = {};
 
@@ -271,6 +291,14 @@ namespace TFE_Jedi
 			defines[defineCount].name = "OPT_TRUE_COLOR";
 			defines[defineCount].value = "1";
 			defineCount++;
+		}
+		if (s_shaderSettings.vr)
+		{
+			defines[defineCount++] = { "OPT_VR", "1" };
+			if (s_shaderSettings.vrMultiview)
+			{
+				defines[defineCount++] = { "OPT_VR_MULTIVIEW", "1" };
+			}
 		}
 
 		bool result = true;
@@ -808,15 +836,31 @@ namespace TFE_Jedi
 			const size_t listCount = s_modelDrawList[s].size();
 			const ModelDraw* drawList = s_modelDrawList[s].data();
 			if (!listCount) { continue; }
-			
+
+			const bool inVr = TFE_Settings::getTempSettings()->vr;
+
 			// Bind the shader and set per-frame shader variables.
 			shader->bind();
 
-			shader->setVariable(s_shaderInputs[s].cameraPosId,   SVT_VEC3,   s_cameraPos.m);
-			shader->setVariable(s_shaderInputs[s].cameraViewId,  SVT_MAT3x3, s_cameraMtx.data);
-			shader->setVariable(s_shaderInputs[s].cameraProjId,  SVT_MAT4x4, s_cameraProj.data);
-			shader->setVariable(s_shaderInputs[s].cameraDirId,   SVT_VEC3,   s_cameraDir.m);
-			shader->setVariable(s_shaderInputs[s].cameraRightId, SVT_VEC3,   s_cameraRight.m);
+			(s_shaderInputs[s].cameraPos && s_shaderInputs[s].cameraPos->size > 1) ?
+				shader->setVariableArray(s_shaderInputs[s].cameraPosId, SVT_VEC3, s_cameraPosVR_YDown[0].m, 2) :
+				shader->setVariable(s_shaderInputs[s].cameraPosId, SVT_VEC3, s_cameraPos.m);
+			(s_shaderInputs[s].cameraView && s_shaderInputs[s].cameraView->size > 1) ?
+				shader->setVariableArray(s_shaderInputs[s].cameraViewId, SVT_MAT3x3, s_cameraMtxVR_YDown[0].data, 2) :
+				shader->setVariable(s_shaderInputs[s].cameraViewId, SVT_MAT3x3, s_cameraMtx.data);
+			(s_shaderInputs[s].cameraProj && s_shaderInputs[s].cameraProj->size > 1) ?
+				shader->setVariableArray(s_shaderInputs[s].cameraProjId, SVT_MAT4x4, s_cameraProjVR_YDown[0].data, 2) :
+				shader->setVariable(s_shaderInputs[s].cameraProjId, SVT_MAT4x4, s_cameraProj.data);
+			if (inVr)
+			{
+				shader->setVariable(s_shaderInputs[s].cameraDirId, SVT_VEC3, TFE_Math::scale(s_cameraMtxVR_YDown[0].m2, -1.0f).m);
+				shader->setVariable(s_shaderInputs[s].cameraRightId, SVT_VEC3, s_cameraMtxVR_YDown[0].m0.m);
+			}
+			else
+			{
+				shader->setVariable(s_shaderInputs[s].cameraDirId, SVT_VEC3, s_cameraDir.m);
+				shader->setVariable(s_shaderInputs[s].cameraRightId, SVT_VEC3, s_cameraRight.m);
+			}
 			if (s_shaderInputs[s].texSamplingParamId > 0)
 			{
 				const f32 texSamplingParam[] = { settings->useBilinear ? settings->bilinearSharpness : 0.0f, 0.0f, 0.0f, 0.0f };
@@ -834,20 +878,20 @@ namespace TFE_Jedi
 			{
 				shader->setVariable(s_shaderInputs[s].textureSettings, SVT_USCALAR, &s_textureSettings);
 			}
-			
+
 			// Draw items in the current draw list (draw lists are bucketed by shader).
 			for (size_t i = 0; i < listCount; i++)
 			{
 				const ModelDraw* drawItem = &drawList[i];
-				const ModelGPU* model = (ModelGPU *)drawItem->modelId;
+				const ModelGPU* model = (ModelGPU*)drawItem->modelId;
 				const u32 portalInfo[] = { drawItem->portalInfo, drawItem->portalInfo };
 
 				// Per-draw shader variables.
-				shader->setVariable(s_shaderInputs[s].modelPosId,  SVT_VEC3,   drawItem->posWS.m);
-				shader->setVariable(s_shaderInputs[s].modelMtxId,  SVT_MAT3x3, drawItem->transform);
-				shader->setVariable(s_shaderInputs[s].lightDataId, SVT_VEC2,   drawItem->lightData.m);
+				shader->setVariable(s_shaderInputs[s].modelPosId, SVT_VEC3, drawItem->posWS.m);
+				shader->setVariable(s_shaderInputs[s].modelMtxId, SVT_MAT3x3, drawItem->transform);
+				shader->setVariable(s_shaderInputs[s].lightDataId, SVT_VEC2, drawItem->lightData.m);
 				shader->setVariable(s_shaderInputs[s].textureOffsetId, SVT_VEC4, drawItem->textureOffsets.m);
-				shader->setVariable(s_shaderInputs[s].portalInfo,  SVT_UVEC2,  portalInfo);
+				shader->setVariable(s_shaderInputs[s].portalInfo, SVT_UVEC2, portalInfo);
 
 				// Draw the geometry (note a single vertex/index buffer is used, so this is just a count and start offset).
 				TFE_RenderBackend::drawIndexedTriangles(model->polyCount, sizeof(u32), model->indexStart);

@@ -20,8 +20,20 @@ void BloomMerge::destroy()
 
 bool BloomMerge::buildShaders()
 {
+	ShaderDefine defines[2] = {};
+	u32 defineCount = 0;
+
+	if (TFE_Settings::getTempSettings()->vr)
+	{
+		defines[defineCount++] = { "OPT_VR", "1" };
+		if (TFE_Settings::getTempSettings()->vrMultiview)
+		{
+			defines[defineCount++] = { "OPT_VR_MULTIVIEW", "1" };
+		}
+	}
+
 	// Base shader.
-	if (!m_shaderInternal.load("Shaders/bloom.vert", "Shaders/bloomMerge.frag", 0u, nullptr, SHADER_VER_STD))
+	if (!m_shaderInternal.load("Shaders/bloom.vert", "Shaders/bloomMerge.frag", defineCount, defines, SHADER_VER_STD))
 	{
 		return false;
 	}

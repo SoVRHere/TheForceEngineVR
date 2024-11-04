@@ -13,6 +13,8 @@ I believe that I have captured all of the individual contributors and dependenci
   * Pawel "Dzierzan" Dzierzanowski - Adjustable Hud mod (built-in).
   * Secbase Unlimited - Thorough testing and very cool test levels that are now used internally to provide regression testing.
 
+  * Ernest Mikita - VR port ([Discord](https://discord.gg/8XuXVFzyNu))
+
 ## Testers
 The Force Engine would not be where it is today without the tireless efforts of many individuals playing through the game and mods again and again using TFE. They had to deal with all manner of issues and crashes. It was their diligent bug reports, questions, and suggestions that made it possible to bring this projection to version 1.0 and beyond.
 
@@ -71,6 +73,10 @@ SDL 2.0.x
 GLAD
   * [https://gen.glad.sh](https://gen.glad.sh)
   * License: MIT
+
+fmt
+  * [https://github.com/fmtlib/fmt)
+  * License: [Custom](https://github.com/fmtlib/fmt?tab=License-1-ov-file#readme)
 
 **UI**
 imGUI

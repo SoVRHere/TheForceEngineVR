@@ -22,7 +22,7 @@ namespace TFE_Jedi
 	Vec3f s_cameraDir;
 	Vec3f s_cameraDirXZ;
 	Vec3f s_cameraRight;
-	
+
 namespace RClassic_GPU
 {
 	void resetState()
@@ -96,6 +96,8 @@ namespace RClassic_GPU
 		s_cameraMtx.m2 = { sinYaw * cosPitch, -sinPitch, -cosYaw * cosPitch };
 		s_cameraDir    = { -s_cameraMtx.m2.x, -s_cameraMtx.m2.y, -s_cameraMtx.m2.z };
 		s_cameraRight  = {  s_cameraMtx.m0.x,  s_cameraMtx.m0.y,  s_cameraMtx.m0.z };
+
+		TFE_RenderBackend::updateVRCamera();
 	}
 
 	void transformPointByCamera(vec3_float* worldPoint, vec3_float* viewPoint)

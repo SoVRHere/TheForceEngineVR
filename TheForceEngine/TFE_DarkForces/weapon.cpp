@@ -9,7 +9,9 @@
 #include <TFE_Jedi/Renderer/virtualFramebuffer.h>
 #include <TFE_Jedi/Renderer/jediRenderer.h>
 #include <TFE_Jedi/Renderer/screenDraw.h>
+#include <TFE_Jedi/Renderer/RClassic_GPU/screenDrawGPU.h>
 #include <TFE_Jedi/Serialization/serialization.h>
+#include <TFE_Settings/settings.h>
 
 namespace TFE_DarkForces
 {
@@ -1203,6 +1205,22 @@ namespace TFE_DarkForces
 	{
 		const fixed16_16 weaponLightingZDist  = FIXED(6);
 		const fixed16_16 gasmaskLightingZDist = FIXED(2);
+
+		ScopeFunctions scopeFuncs{
+			[]() {
+				if (TFE_Settings::getTempSettings()->vr)
+				{
+					const TFE_Settings_Vr::ScreenToVr& toVr = TFE_Settings::getVrSettings()->weaponToVr;
+					static Vec4f shift;
+					shift = { toVr.shift.x, toVr.shift.y, toVr.shift.z, toVr.distance };
+					TFE_Jedi::ShiftVR = &shift;
+					TFE_Jedi::LockToCameraVR = toVr.lockToCamera;
+				}
+			},
+			[]() {
+				TFE_Jedi::ShiftVR = nullptr;
+			},
+		};
 
 		PlayerWeapon* weapon = s_curPlayerWeapon;
 		if (weapon && !s_weaponOffAnim)

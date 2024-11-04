@@ -25,6 +25,7 @@ enum TexFormat
 	TEX_R8,
 	TEX_RGBAF16,
 	TEX_R16F,
+	TEX_DEPTH24_STENCIL8,
 	TEX_COUNT
 };
 
@@ -32,10 +33,12 @@ class TextureGpu
 {
 public:
 	TextureGpu() : m_width(0), m_height(0), m_channels(4), m_bytesPerChannel(1), m_layers(1), m_mipCount(1), m_gpuHandle(0) {}
+	TextureGpu(u32 handle) : m_width(0), m_height(0), m_channels(4), m_bytesPerChannel(1), m_layers(1), m_mipCount(1), m_gpuHandle(handle), m_handleOwner(false) {}
 	~TextureGpu();
 
 	bool create(u32 width, u32 height, TexFormat format = TEX_RGBA8, bool hasMipmaps = false, MagFilter magFilter = MAG_FILTER_NONE);
 	bool createArray(u32 width, u32 height, u32 layers, u32 channels = 4, u32 mipCount = 1);
+	bool createArray(u32 width, u32 height, u32 layers, TexFormat format, bool hasMipmaps = false, MagFilter magFilter = MAG_FILTER_NONE);
 	bool createWithData(u32 width, u32 height, const void* buffer, MagFilter magFilter = MAG_FILTER_NONE);
 	bool update(const void* buffer, size_t size, s32 layer = -1, s32 mipLevel = 0);	// layer = -1 means update all layers, otherwise it is the layer index.
 	void setFilter(MagFilter magFilter, MinFilter minFilter, bool isArray = false) const;
@@ -59,4 +62,5 @@ private:
 	u32 m_layers;
 	u32 m_mipCount;
 	u32 m_gpuHandle;
+	bool m_handleOwner{ true };
 };

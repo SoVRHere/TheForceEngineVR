@@ -146,6 +146,21 @@ namespace TFE_Math
 		return plane->x*pos->x + plane->y*pos->y + plane->z*pos->z + plane->w;
 	}
 
+	inline Vec3f add(const Vec3f& a, const Vec3f& b)
+	{
+		return { a.x + b.x, a.y + b.y, a.z + b.z };
+	}
+
+	//inline Vec3f add(const Vec3f& a, const Vec3f& b, float scale)
+	//{
+	//	return { scale * (a.x + b.x), scale * (a.y + b.y), scale * (a.z + b.z) };
+	//}
+
+	inline Vec3f scale(const Vec3f& a, float scale)
+	{
+		return { scale * a.x, scale * a.y, scale * a.z };
+	}
+
 	Mat3 computeViewMatrix(const Vec3f* lookDir, const Vec3f* upDir);
 	Mat3 transpose(const Mat3& mtx);
 	Mat4 transpose4(Mat4 mtx);
@@ -153,6 +168,12 @@ namespace TFE_Math
 	Mat4 computeProjMatrixExplicit(f32 xScale, f32 yScale, f32 zNear, f32 zFar);
 	Mat4 computeInvProjMatrix(const Mat4& mtx);
 	Mat4 mulMatrix4(const Mat4& mtx0, const Mat4& mtx1);
+	Mat4 buildMatrix4(const Mat3& mtx, const Vec3f& pos);
+	Mat3 getMatrix3(const Mat4& mtx);
+	Vec3f getVec3(const Vec4f& v);
+	Vec3f getTranslation(const Mat4& mtx);
+	const Mat4& getIdentityMatrix4();
+	const Mat3& getIdentityMatrix3();
 
 	void buildRotationMatrix(Vec3f angles, Vec3f* mat);
 

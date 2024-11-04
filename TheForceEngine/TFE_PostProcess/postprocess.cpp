@@ -6,8 +6,21 @@
 #include <TFE_RenderBackend/vertexBuffer.h>
 #include <TFE_RenderBackend/indexBuffer.h>
 #include <TFE_System/profiler.h>
+#include <TFE_System/math.h>
+#include <TFE_Settings/settings.h>
+#include <TFE_Vr/vr.h>
 #include <assert.h>
 #include <vector>
+
+namespace TFE_RenderBackend
+{
+	extern Mat4  s_cameraProjVR[2];
+	extern Mat4  s_cameraProjVR_YDown[2];
+	extern Mat3  s_cameraMtxVR[2];
+	extern Mat3  s_cameraMtxVR_YDown[2];
+	extern Vec3f s_cameraPosVR[2];
+	extern Vec3f s_cameraPosVR_YDown[2];
+}
 
 namespace TFE_PostProcess
 {
@@ -346,6 +359,24 @@ namespace TFE_PostProcess
 
 			// Tint.
 			shader->setVariable(s_overlayEffect->m_tintId, SVT_VEC4, effect->tint);
+
+			if (TFE_Settings::getTempSettings()->vr)
+			{
+				const TFE_Settings_Vr* vrSettings = TFE_Settings::getVrSettings();
+				const std::array<Vec3f, 8>& frustum = vr::GetUnitedFrustum();
+				const Mat3 hmdMtx = TFE_Math::getMatrix3(vr::GetEyePose(vr::Side::Left).mTransformation);
+				const Vec2ui& targetSize = vr::GetRenderTargetSize();
+				//const Vec2f& fov = vr::GetFov();
+				const Vec3f& shift = vrSettings->overlayToVr.shift;
+
+				shader->setVariableArray(s_overlayEffect->m_cameraProjId, SVT_MAT4x4, TFE_RenderBackend::s_cameraProjVR[0].data, 2);
+				shader->setVariable(s_overlayEffect->m_screenSizeId, SVT_VEC2, Vec2f{ f32(targetSize.x), f32(targetSize.y) }.m);
+				shader->setVariableArray(s_overlayEffect->m_frustumId, SVT_VEC3, frustum.data()->m, (u32)frustum.size());
+				shader->setVariable(s_overlayEffect->m_HmdViewId, SVT_MAT3x3, hmdMtx.data);
+				shader->setVariable(s_overlayEffect->m_ShiftId, SVT_VEC4, Vec4f{ shift.x, shift.y, shift.z, vrSettings->overlayToVr.distance }.m);
+				//shader->setVariable(s_overlayEffect->m_FovId, SVT_VEC2, fov.m);
+				//shader->setVariable(s_overlayEffect->m_scaleId, SVT_SCALAR, &scale);
+			}
 
 			drawRectangle();
 		}

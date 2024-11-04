@@ -34,6 +34,9 @@
 #include <sys/types.h>
 #include <sys/timeb.h>
 
+#include <TFE_Jedi/Renderer/jediRenderer.h>
+#include <TFE_Vr/vr.h>
+
 #if ENABLE_EDITOR == 1
 #include <TFE_Editor/editor.h>
 #endif
@@ -82,6 +85,11 @@ static const char* s_loadRequestFilename = nullptr;
 
 void parseOption(const char* name, const std::vector<const char*>& values, bool longName);
 bool validatePath();
+
+namespace TFE_RenderBackend
+{
+	extern vr::UpdateStatus s_VRUpdateStatus;
+}
 
 void handleEvent(SDL_Event& Event)
 {
@@ -250,6 +258,11 @@ bool sdlInit()
 	if (code != 0) { return false; }
 
 	TFE_Settings_Window* windowSettings = TFE_Settings::getWindowSettings();
+	if (TFE_Settings::getTempSettings()->vr)
+	{
+		windowSettings->fullscreen = false;
+		TFE_Settings::getTempSettings()->forceFullscreen = false;
+	}
 	bool fullscreen    = windowSettings->fullscreen || TFE_Settings::getTempSettings()->forceFullscreen;
 	s_displayWidth     = windowSettings->width;
 	s_displayHeight    = windowSettings->height;
@@ -344,6 +357,11 @@ void setAppState(AppState newState, int argc, char* argv[])
 		{
 			newState = APP_STATE_GAME;
 			TFE_FrontEndUI::setAppState(APP_STATE_GAME);
+
+			if (TFE_Settings::getTempSettings()->vr)
+			{
+				vr::Reset();
+			}
 
 			TFE_Game* gameInfo = TFE_Settings::getGame();
 			if (s_curGame)
@@ -530,12 +548,90 @@ bool validatePath()
 	return TFE_Paths::hasPath(PATH_SOURCE_DATA);
 }
 
+void updateVR()
+{
+	if (TFE_Settings::getTempSettings()->vr)
+	{
+		// always enable relative mode for VR to avoid mouse clicks outside of the window leading to loosing window focus
+		TFE_Input::enableRelativeMode(true);
+
+		TFE_RenderBackend::s_VRUpdateStatus = vr::UpdateFrame(0.1f, 4096.0f/*TODO: extract from s_cameraProj*/);
+		vr::UpdateView(vr::Side::Left);
+
+		TFE_RenderBackend::unbindRenderTarget();
+
+		// in the case we are in Menu computeCameraTransform is not called
+		// so we call it here, it's one frame behind but it looks ok
+		TFE_RenderBackend::updateVRCamera();
+	}
+
+	// VR loop looks like this
+	//do
+	//{
+	//	updateStatus = vr::UpdateFrame();
+
+	//	for (vr::Side side : TFE_Settings::getTempSettings()->vrMultiview ? { vr::Side::Left } : { vr::Side::Left, vr::Side::Right })
+	//	{
+	//		vr::UpdateView(side);
+	//		vr::ClearRenderTarget(side);
+	//		// render stuff here
+	//		vr::Commit(side);
+	//	}
+	//	vr::SubmitFrame();
+	//} while (true);
+}
+
+void overrideVRSettings(bool firstRun)
+{
+	if (TFE_Settings::getTempSettings()->vrResetSettings)
+	{
+		TFE_Settings::getVrSettings()->resetToDefaults();
+		TFE_Settings::getTempSettings()->vrResetSettings = false;
+	}
+
+	TFE_Settings_Graphics* graphicsSettings = TFE_Settings::getGraphicsSettings();
+
+	//graphicsSettings->gameResolution = { 2560, 1440 };
+	//graphicsSettings->widescreen = true;
+
+	// always avoid incompatible settings/set preferred setting
+	if (TFE_Settings::getTempSettings()->vr)
+	{
+		graphicsSettings->gameResolution = { (s32)vr::GetRenderTargetSize().x, (s32)vr::GetRenderTargetSize().y };
+		graphicsSettings->rendererIndex = RENDERER_HARDWARE;
+		graphicsSettings->skyMode = SKYMODE_CYLINDER;
+
+		if (!firstRun)
+		{
+			// on non first run it will be set elsewhere (see APP_STATE_SET_DEFAULTS)
+			if (graphicsSettings->colorMode == COLORMODE_8BIT) // not supported
+			{
+				graphicsSettings->colorMode = COLORMODE_TRUE_COLOR;
+			}
+		}
+
+		// Quest 2: 2080/2096
+		// Quest 3: 2064/2272
+		//graphicsSettings->gameResolution = { 2064, 1548 /*2064.0 * (3.0 / 4.0)*/ };
+		//graphicsSettings->gameResolution = { 1600, 1200 };
+		//graphicsSettings->widescreen = false;
+
+		//graphicsSettings->reticleEnable = false;
+		//graphicsSettings->bloomEnabled = false;
+
+		TFE_Settings_Game* gameSettings = TFE_Settings::getGameSettings();
+		//gameSettings->df_pitchLimit = PitchLimit::PITCH_MAXIMUM;
+
+		TFE_System::setVsync(false);
+	}
+}
+
 int main(int argc, char* argv[])
 {
-	#if INSTALL_CRASH_HANDLER
+#if INSTALL_CRASH_HANDLER
 	TFE_CrashHandler::setProcessExceptionHandlers();
 	TFE_CrashHandler::setThreadExceptionHandlers();
-	#endif
+#endif
 
 	// Paths
 	bool pathsSet = true;
@@ -584,10 +680,10 @@ int main(int argc, char* argv[])
 	// Validate the current game path.
 	validatePath();
 
-	TFE_System::logWrite(LOG_MSG, "Paths", "Program Path: \"%s\"",   TFE_Paths::getPath(PATH_PROGRAM));
-	TFE_System::logWrite(LOG_MSG, "Paths", "Program Data: \"%s\"",   TFE_Paths::getPath(PATH_PROGRAM_DATA));
+	TFE_System::logWrite(LOG_MSG, "Paths", "Program Path: \"%s\"", TFE_Paths::getPath(PATH_PROGRAM));
+	TFE_System::logWrite(LOG_MSG, "Paths", "Program Data: \"%s\"", TFE_Paths::getPath(PATH_PROGRAM_DATA));
 	TFE_System::logWrite(LOG_MSG, "Paths", "User Documents: \"%s\"", TFE_Paths::getPath(PATH_USER_DOCUMENTS));
-	TFE_System::logWrite(LOG_MSG, "Paths", "Source Data: \"%s\"",    TFE_Paths::getPath(PATH_SOURCE_DATA));
+	TFE_System::logWrite(LOG_MSG, "Paths", "Source Data: \"%s\"", TFE_Paths::getPath(PATH_SOURCE_DATA));
 
 	// Create a screenshot directory
 	char screenshotDir[TFE_MAX_PATH];
@@ -616,7 +712,7 @@ int main(int argc, char* argv[])
 	TFE_Settings_Window* windowSettings = TFE_Settings::getWindowSettings();
 	TFE_Settings_Graphics* graphics = TFE_Settings::getGraphicsSettings();
 	TFE_System::init(s_refreshRate, graphics->vsync, c_gitVersion);
-	
+
 	// Setup the GPU Device and Window.
 	u32 windowFlags = 0;
 	if (windowSettings->fullscreen || TFE_Settings::getTempSettings()->forceFullscreen)
@@ -645,6 +741,7 @@ int main(int argc, char* argv[])
 		TFE_System::logClose();
 		return PROGRAM_ERROR;
 	}
+	overrideVRSettings(firstRun);
 	TFE_FrontEndUI::initConsole();
 	TFE_Audio::init(s_nullAudioDevice, TFE_Settings::getSoundSettings()->audioDevice);
 	TFE_MidiPlayer::init(TFE_Settings::getSoundSettings()->midiOutput, (MidiDeviceType)TFE_Settings::getSoundSettings()->midiType);
@@ -726,6 +823,14 @@ int main(int argc, char* argv[])
 		s32 mouseAbsX, mouseAbsY;
 		u32 state = SDL_GetRelativeMouseState(&mouseX, &mouseY);
 		SDL_GetMouseState(&mouseAbsX, &mouseAbsY);
+		if (TFE_Settings::getTempSettings()->vr)
+		{
+			// absolute mouse position is returned for current window, not the VR window,
+			// we have to convert it to VR window coordinates
+			const Vec2ui& targetSize = vr::GetRenderTargetSize();
+			mouseAbsX = (s32)((f32)mouseAbsX * (f32)targetSize.x / (f32)s_displayWidth);
+			mouseAbsY = (s32)((f32)mouseAbsY * (f32)targetSize.y / (f32)s_displayHeight);
+		}
 		TFE_Input::setRelativeMousePos(mouseX, mouseY);
 		TFE_Input::setMousePos(mouseAbsX, mouseAbsY);
 		inputMapping_updateInput();
@@ -868,13 +973,19 @@ int main(int argc, char* argv[])
 			if (!s_curGame)
 			{
 				s_curState = APP_STATE_MENU;
+				updateVR();
 			}
 			else
 			{
+				updateVR();
 				TFE_SaveSystem::update();
 				s_curGame->loopGame();
 				endInputFrame = TFE_Jedi::task_run() != 0;
 			}
+		}
+		else if (s_curState == APP_STATE_MENU)
+		{
+			updateVR();
 		}
 		else
 		{
@@ -941,6 +1052,7 @@ int main(int argc, char* argv[])
 	TFE_RenderBackend::updateSettings();
 	TFE_Settings::shutdown();
 	TFE_Jedi::texturepacker_freeGlobal();
+	vr::Shutdown();
 	TFE_RenderBackend::destroy();
 	TFE_SaveSystem::destroy();
 	SDL_Quit();
@@ -1007,6 +1119,33 @@ void parseOption(const char* name, const std::vector<const char*>& values, bool 
 		else if (strcasecmp(name, "skip_load_delay") == 0)
 		{
 			TFE_Settings::getTempSettings()->skipLoadDelay = true;
+		}
+		else if (strcasecmp(name, "load") == 0)
+		{
+			const char* fileName = values.size() >= 1 ? values[0] : nullptr;
+			if (fileName)
+			{
+				TFE_SaveSystem::postLoadRequest(fileName);
+			}
+		}
+#if defined(START_VR)
+		else if (strcasecmp(name, "novr") == 0)
+		{
+			TFE_Settings::getTempSettings()->vr = false;
+		}
+#else
+		else if (strcasecmp(name, "vr") == 0)
+		{
+			TFE_Settings::getTempSettings()->vr = true;
+		}
+#endif
+		else if (strcasecmp(name, "vrMultiview") == 0)
+		{
+			TFE_Settings::getTempSettings()->vrMultiview = true;
+		}
+		else if (strcasecmp(name, "vrResetSettings") == 0)
+		{
+			TFE_Settings::getTempSettings()->vrResetSettings = true;
 		}
 	}
 }
