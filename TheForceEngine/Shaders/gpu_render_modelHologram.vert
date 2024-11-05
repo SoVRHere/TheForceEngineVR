@@ -1,7 +1,18 @@
+#include "Shaders/vr.h"
+
+#ifdef OPT_VR_MULTIVIEW
+uniform vec3 CameraPos_[2];
+uniform mat3 CameraView_[2];
+uniform mat4 CameraProj_[2];
+#define CameraPos CameraPos_[gl_ViewID_OVR]
+#define CameraView CameraView_[gl_ViewID_OVR]
+#define CameraProj CameraProj_[gl_ViewID_OVR]
+#else
 uniform vec3 CameraPos;
-uniform vec3 CameraRight;
 uniform mat3 CameraView;
 uniform mat4 CameraProj;
+#endif
+uniform vec3 CameraRight;
 
 uniform mat3 ModelMtx;
 uniform vec3 ModelPos;

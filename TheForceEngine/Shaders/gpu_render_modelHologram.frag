@@ -1,3 +1,5 @@
+#include "Shaders/vr.h"
+
 uniform sampler2D Palette;
 #ifdef OPT_TRUE_COLOR
 flat in vec3 Frag_Color;

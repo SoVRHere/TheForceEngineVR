@@ -27,10 +27,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Update version file
-        run: |
-          echo 'const char c_gitVersion[] = R"(' > ${{github.workspace}}/TheForceEngine/gitVersion.h
-          git describe --tags >> ${{github.workspace}}/TheForceEngine/gitVersion.h
-          echo ')";' >> ${{github.workspace}}/TheForceEngine/gitVersion.h
+        run: "const char version[] = ""$(git describe --tags)"";" | Set-Content -Path ${{github.workspace}}/TheForceEngine/gitVersion.h
         
       - name: Add msbuild to PATH
         uses: microsoft/setup-msbuild@v2

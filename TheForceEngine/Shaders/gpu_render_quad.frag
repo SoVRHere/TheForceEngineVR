@@ -1,3 +1,4 @@
+#include "Shaders/vr.h"
 #include "Shaders/filter.h"
 
 uniform sampler2D Colormap;

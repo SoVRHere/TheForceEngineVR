@@ -1,8 +1,14 @@
+#include "Shaders/vr.h"
 #include "Shaders/filter.h"
 #include "Shaders/textureSampleFunc.h"
 #include "Shaders/lighting.h"
 
+#ifdef OPT_VR_MULTIVIEW
+uniform vec3 CameraPos_[2];
+#define CameraPos CameraPos_[gl_ViewID_OVR]
+#else
 uniform vec3 CameraPos;
+#endif
 uniform vec3 CameraDir;
 uniform vec2 LightData;
 uniform vec4 TextureOffsets;

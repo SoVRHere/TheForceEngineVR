@@ -1,11 +1,13 @@
-uniform sampler2D MergeCur;		// Higher resolution source.
-uniform sampler2D MergePrev;	// Lower resolution upscale.
+#include "Shaders/vr.h"
+
+uniform MV_SAMPLER2D MergeCur;	// Higher resolution source.
+uniform MV_SAMPLER2D MergePrev;	// Lower resolution upscale.
 uniform float bloomSpread;
 
 in vec2 Frag_UV;
 out vec4 Out_Color;
 
-vec3 blur3x3(sampler2D tex, vec2 uv, vec2 scale)
+vec3 blur3x3(MV_SAMPLER2D tex, vec2 uv, vec2 scale)
 {
 	const float weights[9] = float[9](
 		0.0625f, 0.125f, 0.0625f,	// Tent filter
@@ -23,7 +25,7 @@ vec3 blur3x3(sampler2D tex, vec2 uv, vec2 scale)
 		for (int x = -1; x <= 1; x++, i++)
 		{
 			sampleUV.x = uv.x + float(x) * scale.x;
-			sum += texture(tex, sampleUV).rgb * weights[i];
+			sum += texture(tex, MV_SAMPLE_UV(sampleUV)).rgb * weights[i];
 		}
 	}
 	return sum;
@@ -32,7 +34,7 @@ vec3 blur3x3(sampler2D tex, vec2 uv, vec2 scale)
 void main()
 {
 	float blurScale = 1.5;
-	vec3 curSample = texture(MergeCur, Frag_UV).rgb;
+	vec3 curSample = texture(MergeCur, MV_SAMPLE_UV(Frag_UV)).rgb;
 
 	// 3x3 blur on upscale.
 	vec2 scaleUpsampled = vec2(blurScale) / vec2(textureSize(MergePrev, 0));

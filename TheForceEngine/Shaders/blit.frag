@@ -1,7 +1,16 @@
-uniform sampler2D VirtualDisplay;
+#include "Shaders/vr.h"
 
+#if defined(OPT_VR_MULTIVIEW) && !defined(ENABLE_GPU_COLOR_CONVERSION)
+#define MV_SAMPLE_UV_(uv) vec3((uv), gl_ViewID_OVR)
+#define MV_SAMPLER2D_ sampler2DArray
+#else
+#define MV_SAMPLE_UV_(uv) (uv)
+#define MV_SAMPLER2D_ sampler2D
+#endif
+
+uniform MV_SAMPLER2D_ VirtualDisplay;
 #ifdef ENABLE_BLOOM
-uniform sampler2D Bloom;
+uniform MV_SAMPLER2D_ Bloom;
 #endif
 
 #ifdef ENABLE_GPU_COLOR_CONVERSION
@@ -57,14 +66,14 @@ void main()
 {
 #ifdef ENABLE_GPU_COLOR_CONVERSION
 	// read the color index, it will be 0.0 - 255.0/256.0 range which maps to 0 - 255
-	float index = texture(VirtualDisplay, Frag_UV).r;
+	float index = texture(VirtualDisplay, MV_SAMPLE_UV_(Frag_UV)).r;
 	Out_Color.rgb = texture(Palette, vec2(index, 0.5)).rgb;
 #else
-	Out_Color.rgb = texture(VirtualDisplay, Frag_UV).rgb;
+	Out_Color.rgb = texture(VirtualDisplay, MV_SAMPLE_UV_(Frag_UV)).rgb;
 #endif
 
 #ifdef ENABLE_BLOOM
-	vec3 bloom = texture(Bloom, Frag_UV).rgb;
+	vec3 bloom = texture(Bloom, MV_SAMPLE_UV_(Frag_UV)).rgb;
 	// clamp to 1.0 to avoid issues with color correction below.
 	Out_Color.rgb = clamp(Out_Color.rgb + bloom, vec3(0.0), vec3(1.0));
 #endif

@@ -1,3 +1,4 @@
+#include "Shaders/vr.h"
 #ifdef OPT_CURVE
 #include "Shaders/curve.h"
 #endif

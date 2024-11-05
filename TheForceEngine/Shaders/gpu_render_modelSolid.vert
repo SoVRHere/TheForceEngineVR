@@ -1,14 +1,25 @@
+#include "Shaders/vr.h"
+
 uniform sampler2D Colormap;
 #include "Shaders/lighting.h"
 #ifdef OPT_TRUE_COLOR
 uniform sampler2D BasePalette;
 #endif
 
+#ifdef OPT_VR_MULTIVIEW
+uniform vec3 CameraPos_[2];
+uniform mat3 CameraView_[2];
+uniform mat4 CameraProj_[2];
+#define CameraPos CameraPos_[gl_ViewID_OVR]
+#define CameraView CameraView_[gl_ViewID_OVR]
+#define CameraProj CameraProj_[gl_ViewID_OVR]
+#else
 uniform vec3 CameraPos;
-uniform vec3 CameraRight;
-uniform vec3 CameraDir;
 uniform mat3 CameraView;
 uniform mat4 CameraProj;
+#endif
+uniform vec3 CameraRight;
+uniform vec3 CameraDir;
 uniform vec2 LightData;
 
 uniform mat3 ModelMtx;

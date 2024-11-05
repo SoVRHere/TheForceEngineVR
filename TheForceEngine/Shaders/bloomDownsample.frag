@@ -1,11 +1,13 @@
-uniform sampler2D ColorBuffer;
+#include "Shaders/vr.h"
+
+uniform MV_SAMPLER2D ColorBuffer;
 
 in vec2 Frag_UV;
 out vec4 Out_Color;
 
 vec3 sampleWithStep(vec2 uv, vec2 step, float x, float y)
 {
-	return texture(ColorBuffer, uv + step*vec2(x, y)).rgb;
+	return texture(ColorBuffer, MV_SAMPLE_UV(uv + step*vec2(x, y))).rgb;
 }
 
 vec3 smoothDownsample(vec2 baseUV, vec2 step)

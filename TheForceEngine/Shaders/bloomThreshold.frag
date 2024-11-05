@@ -1,5 +1,7 @@
-uniform sampler2D ColorBuffer;
-uniform sampler2D MaterialBuffer;
+#include "Shaders/vr.h"
+
+uniform MV_SAMPLER2D ColorBuffer;
+uniform MV_SAMPLER2D MaterialBuffer;
 uniform float bloomIntensity;
 
 in vec2 Frag_UV;
@@ -8,7 +10,7 @@ out vec4 Out_Color;
 vec3 sampleWeighted(vec2 uv, vec2 step, float x, float y)
 {
 	vec2 sampleUv = uv + step*vec2(x, y);
-	return texture(ColorBuffer, sampleUv).rgb * texture(MaterialBuffer, sampleUv).r;
+	return texture(ColorBuffer, MV_SAMPLE_UV(sampleUv)).rgb * texture(MaterialBuffer, MV_SAMPLE_UV(sampleUv)).r;
 }
 
 vec3 smoothWeightedDownsample(vec2 baseUV, vec2 step)

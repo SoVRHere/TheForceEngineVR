@@ -55,6 +55,9 @@
 *.ico
 *.bin
 *.tfs
+*.recipe
+*.vcxproj.FileListAbsolute.txt
+*.args.json
 *~
 
 #Directories

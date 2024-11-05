@@ -1,3 +1,5 @@
+#include "Shaders/vr.h"
+
 uniform vec4 ScaleOffset;
 in vec2 vtx_pos;
 in vec2 vtx_uv;

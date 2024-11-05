@@ -1,3 +1,5 @@
+#include "Shaders/vr.h"
+
 uniform sampler2D Image;
 uniform vec4 Tint;
 
