@@ -28,7 +28,7 @@ jobs:
 
       - name: Update version file
         run: |
-          "const char version[] = ""$(git describe --tags)"";" | Set-Content -Path ${{github.workspace}}/TheForceEngine/gitVersion.h
+          "const char c_gitVersion[] = ""$(git describe --tags)"";" | Set-Content -Path ${{github.workspace}}/TheForceEngine/gitVersion.h
         
       - name: Add msbuild to PATH
         uses: microsoft/setup-msbuild@v2
