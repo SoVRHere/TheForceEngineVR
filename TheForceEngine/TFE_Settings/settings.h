@@ -346,7 +346,7 @@ struct TFE_Settings_Vr
 
 		overlayToVr = { 10.0f, { 0.0f, 2.15f, 0.0f }, false };
 
-		playerScale = 1.0f;
+		playerScale = 0.01f;
 	}
 };
 

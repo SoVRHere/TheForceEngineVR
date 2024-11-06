@@ -41,7 +41,7 @@ Perfectly playable in 3DoF with keyboard + mouse / gamepad.
 
 ## Links
 Note: if you are in VR by clicking on links bellow a web browser and/Discord will be opened on your PC so the game window focus will be lost, just Alt-Tab back to game window to be able to use keyboard/mouse again.
-[GitHub](https://github.com/emikita/TheForceEngineVR)
+[GitHub](https://github.com/SoVRHere/TheForceEngineVR)
 [Discord](https://discord.gg/8XuXVFzyNu)
 [YouTube](https://www.youtube.com/channel/UCI20xAhQjT6r4fjBRZ6SgbQ)
 [Patreon](https://www.patreon.com/SoVRHere)
