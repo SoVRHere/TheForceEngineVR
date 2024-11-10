@@ -518,7 +518,7 @@ namespace TFE_FrontEndUI
 	void showNoGameDataUI()
 	{
 		char settingsPath[TFE_MAX_PATH];
-		TFE_Paths::appendPath(PATH_USER_DOCUMENTS, "settings.ini", settingsPath);
+		TFE_Paths::appendPath(PATH_USER_DOCUMENTS, TFE_Paths::settingIniFile, settingsPath);
 		const TFE_Game* game = TFE_Settings::getGame();
 
 		ImGui::PushFont(s_dialogFont);

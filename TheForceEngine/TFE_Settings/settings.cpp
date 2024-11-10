@@ -124,10 +124,10 @@ namespace TFE_Settings
 		}
 		strcpy(s_game.game, s_gameSettings.header[0].gameName);
 
-		TFE_Paths::appendPath(PATH_USER_DOCUMENTS, "settings.ini", s_settingsPath);
+		TFE_Paths::appendPath(PATH_USER_DOCUMENTS, TFE_Paths::settingIniFile, s_settingsPath);
 		if (FileUtil::exists(s_settingsPath))
 		{
-			// This is still the first run if the settings.ini file is empty.
+			// This is still the first run if the settings(_vr).ini file is empty.
 			firstRun = settingsFileEmpty();
 
 			if (readFromDisk())
@@ -135,7 +135,7 @@ namespace TFE_Settings
 				return true;
 			}
 			firstRun = false;
-			TFE_System::logWrite(LOG_WARNING, "Settings", "Cannot parse 'settings.ini' - recreating it.");
+			TFE_System::logWrite(LOG_WARNING, "Settings", "Cannot parse '%s' - recreating it.", TFE_Paths::settingIniFile);
 		}
 
 		firstRun = true;
@@ -303,7 +303,8 @@ namespace TFE_Settings
 			return true;
 		}
 		char msgBuffer[4096];
-		sprintf(msgBuffer, "Cannot write 'settings.ini' to '%s',\nmost likely Documents/ has been set to read-only, is located on One-Drive (currently not supported), or has been added as a Controlled Folder if running on Windows.\n https://www.tenforums.com/tutorials/87858-add-protected-folders-controlled-folder-access-windows-10-a.html", s_settingsPath);
+		sprintf(msgBuffer, "Cannot write '%s' to '%s',\nmost likely Documents/ has been set to read-only, is located on One-Drive (currently not supported), or has been added as a Controlled Folder if running on Windows.\n https://www.tenforums.com/tutorials/87858-add-protected-folders-controlled-folder-access-windows-10-a.html", 
+			TFE_Paths::settingIniFile, s_settingsPath);
 		TFE_System::postErrorMessageBox(msgBuffer, "Permissions Error");
 		return false;
 	}

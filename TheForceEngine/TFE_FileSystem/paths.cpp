@@ -21,6 +21,12 @@
 
 namespace TFE_Paths
 {
+#if defined(START_VR)
+	const char* const settingIniFile = "settings_vr.ini";
+#else
+	const char* const settingIniFile = "settings.ini";
+#endif
+
 	struct FileMapping
 	{
 		std::string fileName;
@@ -385,7 +391,7 @@ namespace TFE_Paths
 	{
 		// Support "Portable" methods as well.
 		char portableSettingsPath[TFE_MAX_PATH];
-		TFE_Paths::appendPath(PATH_PROGRAM, "settings.ini", portableSettingsPath);
+		TFE_Paths::appendPath(PATH_PROGRAM, TFE_Paths::settingIniFile, portableSettingsPath);
 		if (FileUtil::exists(portableSettingsPath))
 		{
 			return true;
