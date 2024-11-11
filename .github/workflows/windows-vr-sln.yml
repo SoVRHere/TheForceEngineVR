@@ -35,13 +35,12 @@ jobs:
         with:
           msbuild-architecture: x64  
 
-      - name: Build binaries
-        run: MSBuild.exe /p:Configuration=${{env.BUILD_TYPE}} /p:OutDir=${{github.workspace}}/Build/ TheForceEngineVR.sln
+      # - name: Build binaries
+        # run: MSBuild.exe /p:Configuration=${{env.BUILD_TYPE}} /p:OutDir=${{github.workspace}}/Build/ TheForceEngineVR.sln
         
       - name: Build artifacts
         run: |
           mkdir ${{env.ARTIFACTS_PATH}}
-          robocopy ${{github.workspace}}/Build/ ${{env.ARTIFACTS_PATH}}/ "TheForceEngineVR.exe"
           robocopy ${{github.workspace}}/TheForceEngine/ ${{env.ARTIFACTS_PATH}}/ "SDL2.dll"
           robocopy ${{github.workspace}}/TheForceEngine/ ${{env.ARTIFACTS_PATH}}/ "SDL2_image.dll"
           robocopy ${{github.workspace}}/TheForceEngine/ ${{env.ARTIFACTS_PATH}}/ "VrWrapper.dll"
@@ -102,15 +101,15 @@ jobs:
           draft: false
           prerelease: false
 
-      - name: Upload Release asset
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
-        with:
-          upload_url: ${{steps.create_release.outputs.upload_url}}
-          asset_path: ./TheForceEngineVR.zip  # Path to your artifact file(s)
-          asset_name: TheForceEngineVR.zip  # Custom name for the artifact file
-          asset_content_type: application/zip  # Adjust based on file type
+      # - name: Upload Release asset
+        # uses: actions/upload-release-asset@v1
+        # env:
+          # GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
+        # with:
+          # upload_url: ${{steps.create_release.outputs.upload_url}}
+          # asset_path: ./TheForceEngineVR.zip  # Path to your artifact file(s)
+          # asset_name: TheForceEngineVR.zip  # Custom name for the artifact file
+          # asset_content_type: application/zip  # Adjust based on file type
           
       - name: Upload Release installer
         uses: actions/upload-release-asset@v1
@@ -120,5 +119,5 @@ jobs:
           upload_url: ${{steps.create_release.outputs.upload_url}}
           asset_path: ./${{env.ARTIFACTS_PATH}}/"TheForceEngineVR Installer.exe"  # Path to your artifact file(s)
           asset_name: "TheForceEngineVR Installer.exe"  # Custom name for the artifact file
-          asset_content_type: application/application/vnd.microsoft.portable-executable  # Adjust based on file type
+          asset_content_type: application/vnd.microsoft.portable-executable  # Adjust based on file type
           
