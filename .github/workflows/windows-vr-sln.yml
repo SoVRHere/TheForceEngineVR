@@ -74,8 +74,8 @@ jobs:
           name: my-artifact
           path: ${{env.ARTIFACTS_PATH}}
           
-      - name: Download VC++ redistributables
-        run: curl -o ${{github.workspace}}/TheForceEngine/Installer/vc_redist.x64.exe https://aka.ms/vs/17/release/vc_redist.x64.exe
+      # - name: Download VC++ redistributables
+        # run: curl -o ${{github.workspace}}/TheForceEngine/Installer/vc_redist.x64.exe https://aka.ms/vs/17/release/vc_redist.x64.exe
           
       - name: Download Inno Setup
         run: curl -o innosetup.exe https://jrsoftware.org/download.php/is.exe
@@ -85,6 +85,7 @@ jobs:
         
       - name: Build Installer
         run: |
+          curl -o ${{github.workspace}}/TheForceEngine/Installer/vc_redist.x64.exe https://aka.ms/vs/17/release/vc_redist.x64.exe
           & "c:/Program Files (x86)/Inno Setup 6/ISCC.exe" /Qp /DAppVersionNumber="${{github.ref_name}}" /DMSVCPath="${{github.workspace}}" /DProgramPath="${{env.ARTIFACTS_PATH}}" "${{github.workspace}}/TheForceEngine/Installer/Installer.iss"
               
       - name: Compress artifact directory
