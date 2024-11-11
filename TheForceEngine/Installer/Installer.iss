@@ -49,7 +49,7 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 
 [Files]
 Source: "{#ProgramPath}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs
-Source: "{#MSVCPath}\VC_redist.x64.exe"; DestDir: {tmp}; Flags: deleteafterinstall
+Source: "VC_redist.x64.exe"; DestDir: {tmp}; Flags: deleteafterinstall
 
 [Dirs]
 Name: {app}; Permissions: users-full

@@ -75,7 +75,7 @@ jobs:
           path: ${{env.ARTIFACTS_PATH}}
           
       - name: Download VC++ redistributables
-        run: curl -o vc_redist.x64.exe https://aka.ms/vs/17/release/vc_redist.x64.exe
+        run: curl -o ${{github.workspace}}/TheForceEngine/Installer/vc_redist.x64.exe https://aka.ms/vs/17/release/vc_redist.x64.exe
           
       - name: Download Inno Setup
         run: curl -o innosetup.exe https://jrsoftware.org/download.php/is.exe
