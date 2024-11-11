@@ -85,6 +85,7 @@ jobs:
         
       - name: Build Installer
         run: |
+          $pwd
           & "c:/Program Files (x86)/Inno Setup 6/ISCC.exe" /Qp /DAppVersionNumber="${{github.ref_name}}" /DMSVCPath="${{github.workspace}}/" /DProgramPath=${{env.ARTIFACTS_PATH}} "${{github.workspace}}/TheForceEngine/Installer/Installer.iss"
               
       - name: Compress artifact directory
@@ -120,7 +121,7 @@ jobs:
           GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
         with:
           upload_url: ${{steps.create_release.outputs.upload_url}}
-          asset_path: "${{env.ARTIFACTS_PATH}}/../Installer/TheForceEngineVR Installer.exe"  # Path to your artifact file(s)
-          asset_name: "TheForceEngineVR Installer.exe"  # Custom name for the artifact file
+          asset_path: ${{env.ARTIFACTS_PATH}}/../Installer/TheForceEngineVR.Installer.exe  # Path to your artifact file(s)
+          asset_name: TheForceEngineVR.Installer.exe  # Custom name for the artifact file
           asset_content_type: application/vnd.microsoft.portable-executable  # Adjust based on file type
           

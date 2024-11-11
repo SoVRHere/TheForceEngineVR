@@ -26,13 +26,13 @@ LicenseFile=EULA.rtf
 ; Uncomment the following line to run in non administrative install mode (install for current user only.)
 ;PrivilegesRequired=lowest
 OutputDir=..\..\BuildArtifacts\Installer\
-OutputBaseFilename=TheForceEngineVR Installer
+OutputBaseFilename=TheForceEngineVR.Installer
 SetupIconFile=tfe.ico
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
-WizardSmallImageFile=Tfe55x55.bmp
-WizardImageFile=Tfe164x314.bmp
+WizardSmallImageFile=tfe55x55.bmp
+WizardImageFile=tfe164x314.bmp
 WizardImageStretch=no
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
