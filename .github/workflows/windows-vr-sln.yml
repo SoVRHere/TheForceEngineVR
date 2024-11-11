@@ -83,7 +83,7 @@ jobs:
         
       - name: Build Installer
         run: |
-          "c:/Program Files (x86)/Inno Setup 6/ISCC.exe" /Qp /DAppVersionNumber="${{github.ref_name}}" /DProgramPath=${{env.ARTIFACTS_PATH}} "${{github.workspace}}/TheForceEngine/Installer/Installer.iss"
+          & "c:/Program Files (x86)/Inno Setup 6/ISCC.exe" /Qp /DAppVersionNumber="${{github.ref_name}}" /DProgramPath=${{env.ARTIFACTS_PATH}} "${{github.workspace}}/TheForceEngine/Installer/Installer.iss"
               
       - name: Compress artifact directory
         run: Compress-Archive -Path ${{env.ARTIFACTS_PATH}}/ -Destination TheForceEngineVR.zip
