@@ -13,7 +13,7 @@ I believe that I have captured all of the individual contributors and dependenci
   * Pawel "Dzierzan" Dzierzanowski - Adjustable Hud mod (built-in).
   * Secbase Unlimited - Thorough testing and very cool test levels that are now used internally to provide regression testing.
 
-  * Ernest Mikita - VR port ([Discord](https://discord.gg/8XuXVFzyNu))
+  * Ernest Mikita - VR port, Windows installer ([Discord](https://discord.gg/8XuXVFzyNu))
 
 ## Testers
 The Force Engine would not be where it is today without the tireless efforts of many individuals playing through the game and mods again and again using TFE. They had to deal with all manner of issues and crashes. It was their diligent bug reports, questions, and suggestions that made it possible to bring this projection to version 1.0 and beyond.
@@ -112,6 +112,10 @@ Nuked-OPL3
 Angelscript
   * [https://www.angelcode.com/angelscript/](https://www.angelcode.com/angelscript/)
 
+**Windows Installer**
+  * [Inno Setup](https://jrsoftware.org/isinfo.php)
+  * License: [Inno Setup License](https://github.com/jrsoftware/issrc?tab=License-1-ov-file#readme)
+
 **Other**
   * [https://github.com/kuba--/zip](https://github.com/kuba--/zip)
   * License: Unlicense
@@ -121,3 +125,4 @@ Angelscript
 
   * [https://github.com/DaveGamble/cJSON](https://github.com/DaveGamble/cJSON)
   * License: MIT
+

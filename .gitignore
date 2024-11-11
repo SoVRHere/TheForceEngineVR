@@ -52,7 +52,6 @@
 
 # Other File Types
 *.aps
-*.ico
 *.bin
 *.tfs
 *.recipe
@@ -73,6 +72,7 @@ TheForceEngine/Exports/
 TheForceEngine/VTune Profiler Results/
 TheForceEngine/glslang/
 TheForceEngine/Documentation/blog posts/
+BuildArtifacts/
 BuildExes/
 Build/
 TheForceEngine/bug_reports/

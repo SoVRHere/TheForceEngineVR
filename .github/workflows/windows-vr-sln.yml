@@ -74,6 +74,16 @@ jobs:
         with:
           name: my-artifact
           path: ${{env.ARTIFACTS_PATH}}
+          
+      - name: Download Inno Setup
+        run: curl -o innosetup.exe https://jrsoftware.org/download.php/is.exe
+        
+      - name: Install Inno Setup
+        run: start innosetup.exe /silent
+        
+      - name: Build Installer
+        run: |
+          "c:/Program Files (x86)/Inno Setup 6/ISCC.exe" /Qp /DAppVersionNumber="${{github.ref_name}}" /DProgramPath=${{env.ARTIFACTS_PATH}} "${{github.workspace}}/TheForceEngine/Installer/Installer.iss"
               
       - name: Compress artifact directory
         run: Compress-Archive -Path ${{env.ARTIFACTS_PATH}}/ -Destination TheForceEngineVR.zip
@@ -101,4 +111,14 @@ jobs:
           asset_path: ./TheForceEngineVR.zip  # Path to your artifact file(s)
           asset_name: TheForceEngineVR.zip  # Custom name for the artifact file
           asset_content_type: application/zip  # Adjust based on file type
+          
+      - name: Upload Release installer
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
+        with:
+          upload_url: ${{steps.create_release.outputs.upload_url}}
+          asset_path: ./${{env.ARTIFACTS_PATH}}/"TheForceEngineVR Installer.exe"  # Path to your artifact file(s)
+          asset_name: "TheForceEngineVR Installer.exe"  # Custom name for the artifact file
+          asset_content_type: application/application/vnd.microsoft.portable-executable  # Adjust based on file type
           
