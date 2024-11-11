@@ -74,18 +74,18 @@ jobs:
           name: my-artifact
           path: ${{env.ARTIFACTS_PATH}}
           
-      # - name: Download VC++ redistributables
+      - name: Download VC++ redistributables
+        run: wget https://aka.ms/vs/17/release/vc_redist.x64.exe -o ${{github.workspace}}/TheForceEngine/Installer/vc_redist.x64.exe
         # run: curl -o ${{github.workspace}}/TheForceEngine/Installer/vc_redist.x64.exe https://aka.ms/vs/17/release/vc_redist.x64.exe
           
       - name: Download Inno Setup
-        run: curl -o innosetup.exe https://jrsoftware.org/download.php/is.exe
+        run: wget https://jrsoftware.org/download.php/is.exe -o innosetup.exe
         
       - name: Install Inno Setup
         run: start innosetup.exe /silent
         
       - name: Build Installer
         run: |
-          curl -o ${{github.workspace}}/TheForceEngine/Installer/vc_redist.x64.exe https://aka.ms/vs/17/release/vc_redist.x64.exe
           ls ${{github.workspace}}/TheForceEngine/Installer
           & "c:/Program Files (x86)/Inno Setup 6/ISCC.exe" /Qp /DAppVersionNumber="${{github.ref_name}}" /DMSVCPath="${{github.workspace}}" /DProgramPath="${{env.ARTIFACTS_PATH}}" "${{github.workspace}}/TheForceEngine/Installer/Installer.iss"
               
