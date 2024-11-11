@@ -49,7 +49,7 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 
 [Files]
 Source: "{#ProgramPath}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs
-Source: "VC_redist.x64.exe"; DestDir: {tmp}; Flags: deleteafterinstall
+Source: "vc_redist.x64.exe"; DestDir: {tmp}; Flags: deleteafterinstall
 
 [Dirs]
 Name: {app}; Permissions: users-full
@@ -60,5 +60,5 @@ Name: "{group}\{#AppName}"; Filename: "{app}\{#DstExeName}";
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#DstExeName}"; Tasks: desktopicon
 
 [Run]
-Filename: "{tmp}\VC_redist.x64.exe"; Parameters: "/quiet /norestart"; Flags: waituntilterminated; StatusMsg: "Installing VC++ redistributables..."
+Filename: "{tmp}\vc_redist.x64.exe"; Parameters: "/quiet /norestart"; Flags: waituntilterminated; StatusMsg: "Installing VC++ redistributables..."
 Filename: "{app}\{#DstExeName}"; Description: "{cm:LaunchProgram,{#StringChange(AppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
