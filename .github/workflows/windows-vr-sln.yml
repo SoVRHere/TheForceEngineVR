@@ -35,12 +35,13 @@ jobs:
         with:
           msbuild-architecture: x64  
 
-      # - name: Build binaries
-        # run: MSBuild.exe /p:Configuration=${{env.BUILD_TYPE}} /p:OutDir=${{github.workspace}}/Build/ TheForceEngineVR.sln
+      - name: Build binaries
+        run: MSBuild.exe /p:Configuration=${{env.BUILD_TYPE}} /p:OutDir=${{github.workspace}}/Build/ TheForceEngineVR.sln
         
       - name: Build artifacts
         run: |
           mkdir ${{env.ARTIFACTS_PATH}}
+          robocopy ${{github.workspace}}/Build/ ${{env.ARTIFACTS_PATH}}/ "TheForceEngineVR.exe"
           robocopy ${{github.workspace}}/TheForceEngine/ ${{env.ARTIFACTS_PATH}}/ "SDL2.dll"
           robocopy ${{github.workspace}}/TheForceEngine/ ${{env.ARTIFACTS_PATH}}/ "SDL2_image.dll"
           robocopy ${{github.workspace}}/TheForceEngine/ ${{env.ARTIFACTS_PATH}}/ "VrWrapper.dll"
