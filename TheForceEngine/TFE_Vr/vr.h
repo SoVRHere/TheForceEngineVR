@@ -76,6 +76,7 @@ namespace vr
 	const Mat4& GetUnitedProj(bool yUp);
 	const std::array<Vec3f, 8>& GetUnitedFrustum();
 
-	//const Pose& GetHandPose(Side hand);
-	//const ControllerState& GetControllerState(Side hand);
+	const Pose& GetPointerPose(Side hand);
+	const Pose& GetControllerPose(Side hand);
+	const ControllerState& GetControllerState(Side hand);
 }

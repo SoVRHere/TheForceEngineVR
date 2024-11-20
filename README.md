@@ -1,5 +1,5 @@
 # The Force Engine VR (TFE VR)
-This is a VR port of the bellow, see our [Discord](https://discord.gg/8XuXVFzyNu) for more details.
+This is a VR port of the bellow, see our [Discord](https://discord.gg/8XuXVFzyNu) server for more details.
 
 # The Force Engine (TFE)
 * [Website](https://theforceengine.github.io/)

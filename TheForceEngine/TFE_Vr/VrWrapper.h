@@ -158,5 +158,9 @@ namespace vrw
 		virtual float GetEyesDistance() = 0;
 		virtual const Mat4f& GetUnitedProj(bool yUp) = 0;
 		virtual const Vec3f* GetUnitedFrustum() = 0;
+
+		virtual const Pose& GetPointerPose(Side side) = 0;
+		virtual const Pose& GetControllerPose(Side side) = 0;
+		virtual const ControllerState& GetControllerState(Side side) = 0;
 	};
 }

@@ -75,7 +75,7 @@ GLAD
   * License: MIT
 
 fmt
-  * [https://github.com/fmtlib/fmt)
+  * [https://github.com/fmtlib/fmt](https://github.com/fmtlib/fmt)
   * License: [Custom](https://github.com/fmtlib/fmt?tab=License-1-ov-file#readme)
 
 **UI**

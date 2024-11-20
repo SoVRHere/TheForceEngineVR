@@ -48,6 +48,9 @@ namespace TFE_RenderShared
 	static s32 s_dotColorId = -1;
 	static s32 s_ShiftId = -1;
 	static s32 s_LockToCameraId = -1;
+	static s32 s_ControllerId = -1;
+	static s32 s_CtrlGripTriggerId = -1;
+	static s32 s_CtrlIndexTriggerId = -1;
 	static s32 s_ClipRectId = -1;
 	//static const ShaderUniform* s_cameraPosUniforms{ nullptr };
 	//static const ShaderUniform* s_cameraViewUniforms{ nullptr };
@@ -92,6 +95,9 @@ namespace TFE_RenderShared
 		s_dotColorId = s_shader.getVariableId("DotColor");
 		s_ShiftId = s_shader.getVariableId("Shift");
 		s_LockToCameraId = s_shader.getVariableId("LockToCamera");
+		s_ControllerId = s_shader.getVariableId("Controller");
+		s_CtrlGripTriggerId = s_shader.getVariableId("CtrlGripTrigger");
+		s_CtrlIndexTriggerId = s_shader.getVariableId("CtrlIndexTrigger");
 		s_ClipRectId = s_shader.getVariableId("ClipRect");
 
 		//s_svScaleOffsetId = s_shader.getVariableId("ScaleOffset");
@@ -160,7 +166,17 @@ namespace TFE_RenderShared
 			}
 
 			const std::array<Vec3f, 8>& frustum = vr::GetUnitedFrustum();
-			Mat3 hmdMtx = TFE_Math::getMatrix3(vr::GetEyePose(vr::Side::Left).mTransformation);
+			const Mat4 eye[2] = {vr::GetEyePose(vr::Side::Left).mTransformation, vr::GetEyePose(vr::Side::Right).mTransformation};
+			const Mat3 hmdMtx = TFE_Math::getMatrix3(vr::GetEyePose(vr::Side::Left).mTransformation);
+
+			const vr::Pose& ctrlLeft = vr::GetPointerPose(vr::Side::Left);
+			const vr::Pose& ctrlRight = vr::GetPointerPose(vr::Side::Right);
+			const vr::ControllerState& ctrlStateLeft = vr::GetControllerState(vr::Side::Left);
+			const vr::ControllerState& ctrlStateRight = vr::GetControllerState(vr::Side::Right);
+			const bool ctrlsValid = ctrlLeft.mIsValid && ctrlRight.mIsValid;
+			Mat4 ctrlMtx[2] = { ctrlsValid ? ctrlLeft.mTransformation : TFE_Math::getIdentityMatrix4(), ctrlsValid ? ctrlRight.mTransformation : TFE_Math::getIdentityMatrix4() };
+			const float ctrlGripTrigger[2] = { ctrlsValid ? ctrlStateLeft.mHandTrigger : 0.0f, ctrlsValid ? ctrlStateRight.mHandTrigger : 0.0f };
+			const float ctrlIndexTrigger[2] = { ctrlsValid ? ctrlStateLeft.mIndexTrigger: 0.0f, ctrlsValid ? ctrlStateRight.mIndexTrigger : 0.0f };
 
 			const Vec2ui& targetSize = vr::GetRenderTargetSize();
 			const ImGuiIO& io = ImGui::GetIO();
@@ -170,6 +186,7 @@ namespace TFE_RenderShared
 			//	s_shader.setVariable(s_cameraProjId, SVT_MAT4x4, s_cameraProj.data);
 			s_shader.setVariable(s_screenSizePosId, SVT_VEC2, Vec2f{ f32(targetSize.x), f32(targetSize.y) }.m);
 			s_shader.setVariableArray(s_frustumId, SVT_VEC3, frustum.data()->m, (u32)frustum.size());
+			s_shader.setVariableArray(s_HmdViewId, SVT_MAT4x4, eye[0].data, 2);
 			s_shader.setVariable(s_HmdViewId, SVT_MAT3x3, hmdMtx.data);
 			s_shader.setVariable(s_mousePosId, SVT_VEC2, Vec2f{ f32(io.MousePos.x), f32(io.MousePos.y) }.m);
 			s_shader.setVariable(s_dotSizeId, SVT_SCALAR, &vrSettings->configDotSize);
@@ -179,6 +196,9 @@ namespace TFE_RenderShared
 			s_shader.setVariable(s_ShiftId, SVT_VEC4, Vec4f{ shift.x, shift.y, shift.z, vrSettings->configToVr.distance }.m);
 			s32 lock = vrSettings->configToVr.lockToCamera ? 1 : 0;
 			s_shader.setVariable(s_LockToCameraId, SVT_ISCALAR, &lock);
+			s_shader.setVariableArray(s_ControllerId, SVT_MAT4x4, ctrlMtx->data, 2);
+			s_shader.setVariableArray(s_CtrlGripTriggerId, SVT_SCALAR, ctrlGripTrigger, 2);
+			s_shader.setVariableArray(s_CtrlIndexTriggerId, SVT_SCALAR, ctrlIndexTrigger, 2);
 		}
 		else
 		{

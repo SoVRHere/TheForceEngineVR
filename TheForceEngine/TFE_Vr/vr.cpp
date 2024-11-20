@@ -9,9 +9,6 @@ namespace vr
 
 	Vec2ui			 									mTargetSize{ 0, 0 };
 
-	std::array<Pose, Side::Count>						mHandPose;
-	std::array<ControllerState, Side::Count>			mControllerState;
-
 	std::array<Mat4, Side::Count>						mProjection{ TFE_Math::getIdentityMatrix4(), TFE_Math::getIdentityMatrix4() };
 	std::array<Mat4, Side::Count>						mProjectionYDown{ TFE_Math::getIdentityMatrix4(), TFE_Math::getIdentityMatrix4() };
 	std::array<Pose, Side::Count>						mEyePose;
@@ -20,6 +17,10 @@ namespace vr
 	std::array<Vec3f, 8>								mUnitedFrustum;
 	Vec2f												mFov{ 0.0f, 0.0f };
 	float												mEyesDistance{ 0.0f };
+
+	std::array<Pose, Side::Count>						mPointerPose;
+	std::array<Pose, Side::Count>						mControllerPose;
+	std::array<ControllerState, Side::Count>			mControllerState;
 
 	std::array<std::vector<std::unique_ptr<RenderTarget>>, Side::Count>	mRenderTargets;
 	uint32_t											mSwapchainIndex{ 0 };
@@ -73,6 +74,21 @@ namespace vr
 	const std::array<Vec3f, 8>& GetUnitedFrustum()
 	{
 		return mUnitedFrustum;
+	}
+
+	const Pose& GetPointerPose(Side side)
+	{
+		return mPointerPose[side];
+	}
+
+	const Pose& GetControllerPose(Side side)
+	{
+		return mControllerPose[side];
+	}
+
+	const ControllerState& GetControllerState(Side side)
+	{
+		return mControllerState[side];
 	}
 
 	void MessageCallback(vrw::VrWrapper::MessageSeverity messageSeverity, const char* message)
@@ -196,6 +212,11 @@ namespace vr
 		return result;
 	}
 
+	Vec2f VrVec2fToTFEVec2f(const vrw::Vec2f& v)
+	{
+		return { v.x, v.y };
+	}
+
 	UpdateStatus UpdateFrame(float cameraNear, float cameraFar)
 	{
 		const UpdateStatus status = (UpdateStatus)g_VrWrapper->UpdateFrame(cameraNear, cameraFar);
@@ -206,10 +227,12 @@ namespace vr
 			mProjectionYDown[Side::Left] = VrMat4ToTFEMat4(g_VrWrapper->GetEyeProj(vrw::VrWrapper::Side::Left, false));
 			mProjectionYDown[Side::Right] = VrMat4ToTFEMat4(g_VrWrapper->GetEyeProj(vrw::VrWrapper::Side::Right, false));
 
-			const vrw::VrWrapper::Pose& eyePoseLeft = g_VrWrapper->GetEyePose(vrw::VrWrapper::Side::Left);
-			const vrw::VrWrapper::Pose& eyePoseRight = g_VrWrapper->GetEyePose(vrw::VrWrapper::Side::Right);
-			mEyePose[Side::Left] = { VrMat4ToTFEMat4(eyePoseLeft.mTransformation), VrMat4ToTFEMat4(eyePoseLeft.mTransformationYDown), eyePoseLeft.mIsValid };
-			mEyePose[Side::Right] = { VrMat4ToTFEMat4(eyePoseRight.mTransformation), VrMat4ToTFEMat4(eyePoseRight.mTransformationYDown), eyePoseRight.mIsValid };
+			{
+				const vrw::VrWrapper::Pose& eyePoseLeft = g_VrWrapper->GetEyePose(vrw::VrWrapper::Side::Left);
+				const vrw::VrWrapper::Pose& eyePoseRight = g_VrWrapper->GetEyePose(vrw::VrWrapper::Side::Right);
+				mEyePose[Side::Left] = { VrMat4ToTFEMat4(eyePoseLeft.mTransformation), VrMat4ToTFEMat4(eyePoseLeft.mTransformationYDown), eyePoseLeft.mIsValid };
+				mEyePose[Side::Right] = { VrMat4ToTFEMat4(eyePoseRight.mTransformation), VrMat4ToTFEMat4(eyePoseRight.mTransformationYDown), eyePoseRight.mIsValid };
+			}
 
 			mUnitedProjection = VrMat4ToTFEMat4(g_VrWrapper->GetUnitedProj(true));
 			mUnitedProjectionDown = VrMat4ToTFEMat4(g_VrWrapper->GetUnitedProj(false));
@@ -222,6 +245,30 @@ namespace vr
 
 			mFov = { g_VrWrapper->GetFov().x, g_VrWrapper->GetFov().y };
 			mEyesDistance = g_VrWrapper->GetEyesDistance();
+
+			{
+				const vrw::VrWrapper::Pose& pointerPoseLeft = g_VrWrapper->GetPointerPose(vrw::VrWrapper::Side::Left);
+				const vrw::VrWrapper::Pose& pointerPoseRight = g_VrWrapper->GetPointerPose(vrw::VrWrapper::Side::Right);
+				mPointerPose[Side::Left] = { VrMat4ToTFEMat4(pointerPoseLeft.mTransformation), VrMat4ToTFEMat4(pointerPoseLeft.mTransformationYDown), pointerPoseLeft.mIsValid };
+				mPointerPose[Side::Right] = { VrMat4ToTFEMat4(pointerPoseRight.mTransformation), VrMat4ToTFEMat4(pointerPoseRight.mTransformationYDown), pointerPoseRight.mIsValid };
+			}
+			//TFE_INFO("VR", "Pointer pose left: {} {} {}", mPointerPose[Side::Left].mTransformation.data[12], mPointerPose[Side::Left].mTransformation.data[13], mPointerPose[Side::Left].mTransformation.data[14]);
+
+			{
+				const vrw::VrWrapper::Pose& controllerPoseLeft = g_VrWrapper->GetControllerPose(vrw::VrWrapper::Side::Left);
+				const vrw::VrWrapper::Pose& controllerPoseRight = g_VrWrapper->GetControllerPose(vrw::VrWrapper::Side::Right);
+				mControllerPose[Side::Left] = { VrMat4ToTFEMat4(controllerPoseLeft.mTransformation), VrMat4ToTFEMat4(controllerPoseLeft.mTransformationYDown), controllerPoseLeft.mIsValid };
+				mControllerPose[Side::Right] = { VrMat4ToTFEMat4(controllerPoseRight.mTransformation), VrMat4ToTFEMat4(controllerPoseRight.mTransformationYDown), controllerPoseRight.mIsValid };
+
+				const vrw::VrWrapper::ControllerState& csl = g_VrWrapper->GetControllerState(vrw::VrWrapper::Side::Left);
+				const vrw::VrWrapper::ControllerState& csr = g_VrWrapper->GetControllerState(vrw::VrWrapper::Side::Right);
+				mControllerState[Side::Left] = { csl.mControllerButtons, csl.mHandTrigger, csl.mIndexTrigger, VrVec2fToTFEVec2f(csl.mThumbStick), VrVec2fToTFEVec2f(csl.mTrackpad) };
+				mControllerState[Side::Right] = { csr.mControllerButtons, csr.mHandTrigger, csr.mIndexTrigger, VrVec2fToTFEVec2f(csr.mThumbStick), VrVec2fToTFEVec2f(csr.mTrackpad) };
+			}
+		}
+		else
+		{
+			std::ignore = 5;
 		}
 
 		return status;

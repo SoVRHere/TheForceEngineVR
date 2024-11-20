@@ -26,15 +26,15 @@ PC version:
 - any x64 CPUs able to run the original, no ARM CPUs tested yet
 
 Standalone version (sooner or later):
-- Meta Quest 2/Quest 3/Quest Pro
+- Meta Quest 2/Quest 3(S)/Quest Pro
 
 ## Current Status of VR
 Perfectly playable in 3DoF with keyboard + mouse / gamepad.
 
 ## What's Next in VR
 - VR controllers support
-- installer (Windows)
-- porting to Meta Quest 2/Quest 3/Quest Pro
+- installer (Windows) (done, v0.8.23-vr)
+- porting to Meta Quest 2/Quest 3(S)/Quest Pro
 - 6DoF
 - mirroring to view your VR gameplay diretly in game window on desktop, meanwhile you can use Oculus Mirror or SteamVR View instead
 - editor support

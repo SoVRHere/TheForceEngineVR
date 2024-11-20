@@ -53,8 +53,7 @@ Custom fonts in TrueType (.ttf) format can be added to the **`Fonts`** directory
 ## VR
 You can start VR version by launching **TheForceEngineVR.exe**. If VR is not initialized for some reason the game is switched to non-VR mode, in that case see **`<Documents>\TheForceEngine\the_force_engine_log.txt`** for more details.
 ### VR version compatibility with the original
-The VR version is integrated into original source codes so all original features (including mods) are supported in VR version too (with small exception in rendering setting, see bellow).
-Both non-VR version(**TheForceEngine.exe**) & VR version(**TheForceEngineVR.exe**) share the same settings file, the VR version overrides some settings to VR compatible values so when you start non-VR version again after running VR version you may have to set some settings again - VR version always runs using hardware renderer in true color with cylinder sky mode.
+The VR version is integrated into original source codes so all original features (including mods) are supported.
 Save files are compatible so you can start playing in VR with your latest save.
 You can use **Enhanced Assets** from Dark Forces Remaster.
 ### Additional command line options
