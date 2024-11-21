@@ -241,7 +241,7 @@ namespace TFE_Editor
 	{
 		if (count == 0) { return; }
 		if (count < 0 && s_curPosInHistory <= 0) { return; }
-		if (count > 0 && s_curPosInHistory >= (s32)s_history.size() - 1) { return; }
+		if (count > 0 && (s32)s_curPosInHistory >= (s32)s_history.size() - 1) { return; }
 
 		s32 pos = s_curPosInHistory;
 		s32 curParent = pos;
