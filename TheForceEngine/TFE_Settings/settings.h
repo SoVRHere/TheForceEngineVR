@@ -328,26 +328,21 @@ struct TFE_Settings_Vr
 	f32 automapWidthMultiplier;
 	ScreenToVr overlayToVr;
 	float playerScale;
+	// debug
+	bool showLeftControllerInfo;
+	bool showRightControllerInfo;
 
-	void resetToDefaults()
+	enum class Preset
 	{
-		menuToVr = { 2.0f, { 0.0f, 0.0f, -4.0f }, false };
-		pdaToVr = { 2.0f, { 0.0f, 0.0f, -4.0f }, false };
-		hudToVr = { 1.0f, { 0.0f, -2.0f, -4.0f }, true };
-		messagesToVr = { 2.0f, { 0.0f, 0.0f, -4.0f }, true };
-		weaponToVr = { 2.0f, { -0.90f, -0.56f, -2.0f }, false };
+		Quest2,
+		Quest3,
+		HtcVivePro
+	};
 
-		configToVr = { 2.0f, { 0.0f, 0.0f, -4.0f }, true };
-		configDotSize = 25.0f;
-		configDotColor = RGBA::fromFloats(1.0f, 0.0f, 0.0f, 0.5f);
+	void resetToDefaults();
+	void setPreset(Preset preset);
 
-		automapToVr = { 2.0f, { 0.0f, 0.0f, -4.0f }, true };
-		automapWidthMultiplier = 2.0f;
-
-		overlayToVr = { 10.0f, { 0.0f, 2.15f, 0.0f }, false };
-
-		playerScale = 0.01f;
-	}
+	static const std::vector<std::string> presets;
 };
 
 namespace TFE_Settings

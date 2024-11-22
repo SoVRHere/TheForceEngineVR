@@ -20,7 +20,7 @@ namespace vr
 		bool	mIsValid{ false };
 	};
 
-	enum ControllerButtons
+	enum ControllerButton
 	{
 		A = 1 << 0, // X
 		B = 1 << 1, // Y
@@ -40,7 +40,7 @@ namespace vr
 
 	struct ControllerState
 	{
-		uint32_t	mControllerButtons{ 0 };
+		uint32_t	mButtons{ 0 };
 		float		mHandTrigger{ 0.0f };
 		float		mIndexTrigger{ 0.0f };
 		Vec2f		mThumbStick{ 0.0f, 0.0f };
@@ -66,6 +66,8 @@ namespace vr
 	void UpdateView(Side eye);
 	void Commit(Side eye);
 	void SubmitFrame();
+
+	void HandleControllerEvents();
 
 	void Reset();
 

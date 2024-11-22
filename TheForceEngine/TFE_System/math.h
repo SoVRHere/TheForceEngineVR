@@ -1,8 +1,9 @@
 #pragma once
 
 #include "types.h"
-#include <math.h>
+#include <cmath>
 #include <float.h>
+#include <limits>
 
 namespace TFE_Math
 {
@@ -70,14 +71,29 @@ namespace TFE_Math
 		return p0->x*p1->x + p0->z*p1->z;
 	}
 
+	inline f32 dot(const Vec2f& p0, const Vec2f& p1)
+	{
+		return p0.x * p1.x + p0.z * p1.z;
+	}
+
 	inline f32 dot(const Vec3f* p0, const Vec3f* p1)
 	{
 		return p0->x*p1->x + p0->y*p1->y + p0->z*p1->z;
 	}
 
+	inline f32 dot(const Vec3f& p0, const Vec3f& p1)
+	{
+		return p0.x * p1.x + p0.y * p1.y + p0.z * p1.z;
+	}
+
 	inline f32 dot(const Vec4f* p0, const Vec4f* p1)
 	{
 		return p0->x*p1->x + p0->y*p1->y + p0->z*p1->z + p0->w*p1->w;
+	}
+
+	inline f32 dot(const Vec4f& p0, const Vec4f& p1)
+	{
+		return p0.x * p1.x + p0.y * p1.y + p0.z * p1.z + p0.w * p1.w;
 	}
 
 	inline f32 distance(const Vec3f* p0, const Vec3f* p1)
@@ -151,14 +167,33 @@ namespace TFE_Math
 		return { a.x + b.x, a.y + b.y, a.z + b.z };
 	}
 
-	//inline Vec3f add(const Vec3f& a, const Vec3f& b, float scale)
-	//{
-	//	return { scale * (a.x + b.x), scale * (a.y + b.y), scale * (a.z + b.z) };
-	//}
-
 	inline Vec3f scale(const Vec3f& a, float scale)
 	{
 		return { scale * a.x, scale * a.y, scale * a.z };
+	}
+
+	inline f32 length(const Vec2f& v)
+	{
+		return std::sqrtf(dot(v, v));
+	}
+
+	inline f32 length(const Vec3f& v)
+	{
+		return std::sqrtf(dot(v, v));
+	}
+
+	template<typename T>
+	constexpr T radians(T degrees) noexcept
+	{
+		static_assert(std::numeric_limits<T>::is_iec559, "'radians' only accept floating-point input");
+		return degrees * static_cast<T>(0.01745329251994329576923690768489);
+	}
+
+	template<typename T>
+	constexpr T degrees(T radians) noexcept
+	{
+		static_assert(std::numeric_limits<T>::is_iec559, "'degrees' only accept floating-point input");
+		return radians * static_cast<T>(57.295779513082320876798154814105);
 	}
 
 	Mat3 computeViewMatrix(const Vec3f* lookDir, const Vec3f* upDir);

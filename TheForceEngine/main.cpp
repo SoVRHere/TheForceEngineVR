@@ -825,6 +825,8 @@ int main(int argc, char* argv[])
 		SDL_GetMouseState(&mouseAbsX, &mouseAbsY);
 		if (TFE_Settings::getTempSettings()->vr)
 		{
+			vr::HandleControllerEvents();
+
 			// absolute mouse position is returned for current window, not the VR window,
 			// we have to convert it to VR window coordinates
 			const Vec2ui& targetSize = vr::GetRenderTargetSize();
@@ -1026,6 +1028,14 @@ int main(int argc, char* argv[])
 			inputMapping_endFrame();
 		}
 		frame++;
+
+		if (TFE_Settings::getTempSettings()->vr)
+		{
+			if (TFE_RenderBackend::s_VRUpdateStatus == vr::UpdateStatus::ShouldQuit)
+			{
+				s_loop = false;
+			}
+		}
 
 		if (endInputFrame)
 		{

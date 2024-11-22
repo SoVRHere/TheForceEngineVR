@@ -589,6 +589,56 @@ namespace TFE_FrontEndUI
 		ImGui::End();
 		ImGui::PopFont();
 	}
+
+	void drawVrControllersInfo(s32 windowWidth)
+	{
+		if (TFE_Settings::getVrSettings()->showLeftControllerInfo)
+		{
+			const u32 windowFlags = ImGuiWindowFlags_AlwaysAutoResize;// ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoSavedSettings;
+			static f64 _fpsAve = 0.0;
+
+			// Calculate the window size.
+			ImFont* fpsFont = s_versionFont;
+			//ImVec2 size = fpsFont->CalcTextSizeA(fpsFont->FontSize, 1024.0f, 0.0f, "FPS: 99999");
+			//f32 width = 1.0f * size.x + 8.0f;
+			//f32 height = 1.0f * size.y + 8.0f;
+
+			// Get the raw delta time.
+			const f64 dt = TFE_System::getDeltaTimeRaw();
+			// Adjust the exponential average based on the frame time - this is because the standard of deviation is much higher as frame times get really small.
+			const f64 expAve = dt >= 1.0 / 144.0 ? 0.95 : 0.999;
+			// Compute the current fps from the delta time.
+			const f64 curFps = 1.0f / dt;
+			// Compute the exponential average based on the curFPS and the running average.
+			const f64 aveFps = _fpsAve != 0.0 ? curFps * (1.0 - expAve) + _fpsAve * expAve : curFps;
+			_fpsAve = aveFps;
+
+			auto drawPose = [](const char* label, const vr::Pose& pose) {
+				if (label) ImGui::Text("%s", label);
+				ImGui::Text("Valid: %s", pose.mIsValid ? "true" : "false");
+				ImGui::Text("%s", fmt::format("{}", pose.mTransformation.m[0]).c_str());
+				ImGui::Text("%s", fmt::format("{}", pose.mTransformation.m[1]).c_str());
+				ImGui::Text("%s", fmt::format("{}", pose.mTransformation.m[2]).c_str());
+				ImGui::Text("%s", fmt::format("{}", pose.mTransformation.m[3]).c_str());
+				};
+
+			ImGui::PushFont(fpsFont);
+			const vr::Pose& pointerPose = vr::GetPointerPose(vr::Side::Left);
+			const vr::Pose& controllerPose = vr::GetControllerPose(vr::Side::Left);
+			//ImGui::SetNextWindowSize(ImVec2(800, 1000));
+			//ImGui::SetNextWindowPos(ImVec2(windowWidth - width, 0.0f));
+			ImGui::Begin("##Controller", nullptr, windowFlags);
+			drawPose("Pointer", pointerPose);
+			drawPose("Controller", controllerPose);
+			const vr::ControllerState& controllerState = vr::GetControllerState(vr::Side::Left);
+			ImGui::Text("%s", fmt::format("Butons: {}", controllerState.mButtons).c_str());
+			ImGui::Text("%s", fmt::format("Hand trigger: {}", controllerState.mHandTrigger).c_str());
+			ImGui::Text("%s", fmt::format("Index trigger: {}", controllerState.mIndexTrigger).c_str());
+			ImGui::Text("%s", fmt::format("Thumb stick: {}", controllerState.mThumbStick).c_str());
+			ImGui::End();
+			ImGui::PopFont();
+		}
+	}
 		
 	void setCurrentGame(IGame* game)
 	{
@@ -630,6 +680,7 @@ namespace TFE_FrontEndUI
 		}
 		if (!drawFrontEnd)
 		{
+			drawVrControllersInfo(w);
 			if (showFps) { drawFps(w); }
 			return;
 		}
@@ -686,6 +737,8 @@ namespace TFE_FrontEndUI
 				if (TFE_Settings::getTempSettings()->vr)
 				{
 					setSettingsTemplate(TEMPLATE_MODERN);
+					TFE_Settings_Graphics* graphicsSettings = TFE_Settings::getGraphicsSettings();
+					graphicsSettings->reticleEnable = false;
 					s_appState = APP_STATE_MENU;
 				}
 				else
@@ -2782,7 +2835,7 @@ namespace TFE_FrontEndUI
 		hud->pixelOffset[2] = clamp(hud->pixelOffset[2], -maxOffset, maxOffset);
 	}
 
-	void ScreenToVR(const char* name, TFE_Settings_Vr::ScreenToVr& screenToVr, bool disableLockToCamera = false)
+	void ScreenToVR(const char* name, TFE_Settings_Vr::ScreenToVr& screenToVr, bool disableLockToCamera = false, const char* extraTip = nullptr)
 	{
 		ImGui::PushFont(s_dialogFont);
 		ImGui::LabelText("##ConfigLabel", name);
@@ -2795,7 +2848,12 @@ namespace TFE_FrontEndUI
 		Tooltip("Distance to the plane we are projecting to.");
 		ImGui::DragFloat3("Shift", screenToVr.shift.m, 0.01f, -10.0f /*-screenToVr.distance * 0.5f*/, 10.0f, "%.2f");
 		//ImGui::SliderFloat3("Shift2", screenToVr.shift.m, -10.0f, 10.0f, "%.2f");
-		Tooltip("Shift in 3D space (X,Y,Z) after projection, note that -Z points forward.");
+		std::string tip = "Shift in 3D space (X,Y,Z) after projection, note that -Z points forward.";
+		if (extraTip != nullptr)
+		{
+			tip = fmt::format("{}\n{}", tip, extraTip);
+		}
+		Tooltip(tip.c_str());
 		//	"  Z value is limited to 50% of Distance to avoid moving it behind the camera");
 		
 		//if (disableLockToCamera)
@@ -2870,8 +2928,30 @@ namespace TFE_FrontEndUI
 		ScreenToVR("Messages", vrSettings->messagesToVr);
 		ImGui::Separator();
 
-		ScreenToVR("Weapon", vrSettings->weaponToVr, true);
+		ScreenToVR("Weapon", vrSettings->weaponToVr, true);//, "Quest 3 setting [-0.9, -0.6, -2.0]\nQuest 2 settings [-0.9, 0.0, -2.0]");
 		ImGui::Separator();
+
+		const std::vector<std::string>& presets = TFE_Settings_Vr::presets;
+		static const char* currentPreset = nullptr;
+		if (ImGui::BeginCombo("Preset", currentPreset))
+		{
+			for (size_t n = 0; n < presets.size(); n++)
+			{
+				bool is_selected = (currentPreset == presets[n].c_str()); // You can store your selection however you want, outside or inside your objects
+				if (ImGui::Selectable(presets[n].c_str(), is_selected))
+				{
+					currentPreset = presets[n].c_str();
+					vrSettings->setPreset((TFE_Settings_Vr::Preset)n);
+				}
+
+				if (is_selected)
+				{
+					ImGui::SetItemDefaultFocus();
+				}
+			}
+			ImGui::EndCombo();
+		}
+		Tooltip("Set predefined setting for various VR headsets, may affect other than just Vr settings.");
 
 		ScreenToVR("Config (ImGui)", vrSettings->configToVr);
 		if (vrSettings->configToVr.shift.z > 0.5f * vrSettings->configToVr.distance)
@@ -2895,6 +2975,26 @@ namespace TFE_FrontEndUI
 		ImGui::SliderFloat("Scale (Experimental)", &vrSettings->playerScale, 0.01f, 100.0f, "%.2f");
 		Tooltip("Scale distance between eyes, so when it's big number the world looks small "
 		"but it introduces some rendering artifacts as engine assumes looking from point between eyes.");
+
+#if defined(_DEBUG)
+		ImGui::PushFont(s_dialogFont);
+		ImGui::LabelText("##ConfigLabel", "Debug");
+		ImGui::PopFont();
+		{
+			bool show = vrSettings->showLeftControllerInfo;
+			if (ImGui::Checkbox("Show left controller info", &show))
+			{
+				vrSettings->showLeftControllerInfo = show;
+			}
+		}
+		{
+			bool show = vrSettings->showRightControllerInfo;
+			if (ImGui::Checkbox("Show right controller info", &show))
+			{
+				vrSettings->showRightControllerInfo = show;
+			}
+		}
+#endif
 	}
 
 	// Uses a percentage slider (0 - 100%) to adjust a floating point value (0.0 - 1.0).

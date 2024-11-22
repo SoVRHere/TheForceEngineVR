@@ -1,5 +1,6 @@
 #include "vr.h"
 #include <TFE_System/system.h>
+#include <TFE_Input/input.h>
 #include <vector>
 #include "VrWrapper.h"
 
@@ -25,19 +26,37 @@ namespace vr
 	std::array<std::vector<std::unique_ptr<RenderTarget>>, Side::Count>	mRenderTargets;
 	uint32_t											mSwapchainIndex{ 0 };
 
+	// controllers
+	std::array<bool, CONTROLLER_BUTTON_COUNT>			mControllerButtonPressed;
+
 	void UpdateView(Side eye)
 	{
+		if (!IsInitialized())
+		{
+			return;
+		}
+
 		g_VrWrapper->UpdateView((vrw::VrWrapper::Side)eye);
 		mSwapchainIndex = g_VrWrapper->GetSwapchainIndex();
 	}
 
 	void Commit(Side eye)
 	{
+		if (!IsInitialized())
+		{
+			return;
+		}
+
 		g_VrWrapper->Commit((vrw::VrWrapper::Side)eye);
 	}
 
 	void SubmitFrame()
 	{
+		if (!IsInitialized())
+		{
+			return;
+		}
+
 		return g_VrWrapper->SubmitFrame();
 	}
 
@@ -169,6 +188,9 @@ namespace vr
 					mRenderTargets[eye].push_back(std::move(renderTarget));
 				}
 			}
+
+			// controllers
+			mControllerButtonPressed.fill(false);
 		}
 
 		return g_VrWrapper != nullptr;
@@ -219,6 +241,11 @@ namespace vr
 
 	UpdateStatus UpdateFrame(float cameraNear, float cameraFar)
 	{
+		if (!IsInitialized())
+		{
+			return UpdateStatus::ShouldQuit;
+		}
+
 		const UpdateStatus status = (UpdateStatus)g_VrWrapper->UpdateFrame(cameraNear, cameraFar);
 		if (status != UpdateStatus::ShouldQuit)
 		{
@@ -262,8 +289,8 @@ namespace vr
 
 				const vrw::VrWrapper::ControllerState& csl = g_VrWrapper->GetControllerState(vrw::VrWrapper::Side::Left);
 				const vrw::VrWrapper::ControllerState& csr = g_VrWrapper->GetControllerState(vrw::VrWrapper::Side::Right);
-				mControllerState[Side::Left] = { csl.mControllerButtons, csl.mHandTrigger, csl.mIndexTrigger, VrVec2fToTFEVec2f(csl.mThumbStick), VrVec2fToTFEVec2f(csl.mTrackpad) };
-				mControllerState[Side::Right] = { csr.mControllerButtons, csr.mHandTrigger, csr.mIndexTrigger, VrVec2fToTFEVec2f(csr.mThumbStick), VrVec2fToTFEVec2f(csr.mTrackpad) };
+				mControllerState[Side::Left] = { csl.mButtons, csl.mHandTrigger, csl.mIndexTrigger, VrVec2fToTFEVec2f(csl.mThumbStick), VrVec2fToTFEVec2f(csl.mTrackpad) };
+				mControllerState[Side::Right] = { csr.mButtons, csr.mHandTrigger, csr.mIndexTrigger, VrVec2fToTFEVec2f(csr.mThumbStick), VrVec2fToTFEVec2f(csr.mTrackpad) };
 			}
 		}
 		else
@@ -272,5 +299,162 @@ namespace vr
 		}
 
 		return status;
+	}
+
+	void HandleControllerEvents()
+	{
+		if (!IsInitialized())
+		{
+			return;
+		}
+
+		const vr::ControllerState& controllerLeft = vr::GetControllerState(vr::Side::Left);
+		const vr::ControllerState& controllerRight = vr::GetControllerState(vr::Side::Right);
+
+		// axis
+		if ((controllerLeft.mButtons & ControllerButton::Thumb) == 0)
+		{
+			TFE_Input::setAxis(AXIS_LEFT_X, controllerLeft.mThumbStick.x);
+			TFE_Input::setAxis(AXIS_LEFT_Y, controllerLeft.mThumbStick.y);
+		}
+		else
+		{
+			TFE_Input::setAxis(AXIS_LEFT_X, 0.0f);
+			TFE_Input::setAxis(AXIS_LEFT_Y, 0.0f);
+		}
+
+		if ((controllerRight.mButtons & ControllerButton::Thumb) == 0)
+		{
+			TFE_Input::setAxis(AXIS_RIGHT_X, -controllerRight.mThumbStick.x);
+			TFE_Input::setAxis(AXIS_RIGHT_Y, -controllerRight.mThumbStick.y);
+		}
+		else
+		{
+			TFE_Input::setAxis(AXIS_RIGHT_X, 0.0f);
+			TFE_Input::setAxis(AXIS_RIGHT_Y, 0.0f);
+		}
+
+		const float deadzone = 0.1f;
+		if ((controllerLeft.mIndexTrigger < -deadzone) || (controllerLeft.mIndexTrigger > deadzone))
+		{
+			TFE_Input::setAxis(AXIS_LEFT_TRIGGER, controllerLeft.mIndexTrigger);
+		}
+		else
+		{
+			TFE_Input::setAxis(AXIS_LEFT_TRIGGER, 0.0f);
+		}
+
+		if ((controllerRight.mIndexTrigger < -deadzone) || (controllerRight.mIndexTrigger > deadzone))
+		{
+			TFE_Input::setAxis(AXIS_RIGHT_TRIGGER, controllerRight.mIndexTrigger);
+		}
+		else
+		{
+			TFE_Input::setAxis(AXIS_RIGHT_TRIGGER, 0.0f);
+		}
+
+		// buttons
+		auto UpdateButton = [](uint32_t buttons, ControllerButton vrButton, Button tfeButton) {
+			const bool pressed = (buttons & vrButton) != 0;
+			if (pressed)
+			{
+				if (!mControllerButtonPressed[tfeButton])
+				{
+					TFE_Input::setButtonDown(tfeButton);
+					//TFE_INFO("VR", "Button down : {}", (int)tfeButton);
+				}
+				mControllerButtonPressed[tfeButton] = true;
+			}
+			else
+			{
+				if (mControllerButtonPressed[tfeButton])
+				{
+					TFE_Input::setButtonUp(tfeButton);
+					//TFE_INFO("VR", "Button up : {}", (int)tfeButton);
+				}
+				mControllerButtonPressed[tfeButton] = false;
+			}
+		};
+
+		UpdateButton(controllerLeft.mButtons, ControllerButton::A, Button::CONTROLLER_BUTTON_X);
+		UpdateButton(controllerLeft.mButtons, ControllerButton::B, Button::CONTROLLER_BUTTON_Y);
+		UpdateButton(controllerLeft.mButtons, ControllerButton::Menu, Button::CONTROLLER_BUTTON_GUIDE);
+		UpdateButton(controllerLeft.mButtons, ControllerButton::Thumb, Button::CONTROLLER_BUTTON_LEFTSTICK);
+
+		UpdateButton(controllerRight.mButtons, ControllerButton::A, Button::CONTROLLER_BUTTON_A);
+		UpdateButton(controllerRight.mButtons, ControllerButton::B, Button::CONTROLLER_BUTTON_B);
+		UpdateButton(controllerRight.mButtons, ControllerButton::Thumb, Button::CONTROLLER_BUTTON_RIGHTSTICK);
+
+		// dpad
+		auto UpdateDpad = [](bool pressed, Button tfeButton) {
+			//bool pressed = TFE_Input::buttonPressed(Button::CONTROLLER_BUTTON_LEFTSTICK);
+			if (pressed)
+			{
+				if (!mControllerButtonPressed[tfeButton])
+				{
+					TFE_Input::setButtonDown(tfeButton);
+					TFE_INFO("VR", "Button down : {}", (int)tfeButton);
+				}
+				mControllerButtonPressed[tfeButton] = true;
+			}
+			else
+			{
+				if (mControllerButtonPressed[tfeButton])
+				{
+					TFE_Input::setButtonUp(tfeButton);
+					TFE_INFO("VR", "Button up : {}", (int)tfeButton);
+				}
+				mControllerButtonPressed[tfeButton] = false;
+			}
+		};
+
+		const Vec2f& thumb = controllerLeft.mThumbStick;
+		const float len = TFE_Math::length(thumb);
+		//TFE_INFO("VR", "len: {}", len);
+		if (len > 0.5f && TFE_Input::buttonPressed(Button::CONTROLLER_BUTTON_LEFTSTICK))
+		{
+			//TFE_INFO("VR", "Left thumb down");
+			//const Vec2f v = VrVec2fToTFEVec2f(controllerLeft.mThumbStick);
+			Vec2f vv{ 0.0f, 1.0f };
+			const float cosa = TFE_Math::dot(controllerLeft.mThumbStick, vv);
+			const float angle = TFE_Math::degrees(std::acosf(cosa));
+			//TFE_INFO("VR", "cosa: {}", angle);
+			if (thumb.y > 0.0f && angle < 45.0f)
+			{
+				//TFE_INFO("VR", "dpad up");
+				UpdateDpad(true, Button::CONTROLLER_BUTTON_DPAD_UP);
+			}
+			else if (thumb.y < 0.0f && angle > 135.0f)
+			{
+				//TFE_INFO("VR", "dpad down");
+				UpdateDpad(true, Button::CONTROLLER_BUTTON_DPAD_DOWN);
+			}
+			else if (thumb.x < 0.0f && (angle >= 45.0f && angle <= 135.0f))
+			{
+				//TFE_INFO("VR", "dpad left");
+				UpdateDpad(true, Button::CONTROLLER_BUTTON_DPAD_LEFT);
+			}
+			else if (thumb.x > 0.0f && (angle >= 45.0f && angle <= 135.0f))
+			{
+				//TFE_INFO("VR", "dpad right");
+				UpdateDpad(true, Button::CONTROLLER_BUTTON_DPAD_RIGHT);
+			}
+		}
+		else
+		{
+			UpdateDpad(false, Button::CONTROLLER_BUTTON_DPAD_UP);
+			UpdateDpad(false, Button::CONTROLLER_BUTTON_DPAD_DOWN);
+			UpdateDpad(false, Button::CONTROLLER_BUTTON_DPAD_LEFT);
+			UpdateDpad(false, Button::CONTROLLER_BUTTON_DPAD_RIGHT);
+		}
+
+		// emulate mouse wheel
+		// not needed as Imgui handles SDL events directly see TFE_Ui::setUiInput(&Event);
+		//s32 mouseWheelX = 0;
+		//s32 mouseWheelY = 0;
+		//mouseWheelX = (s32)(controllerRight.mThumbStick.x * 8.0f);
+		//mouseWheelY = (s32)(controllerRight.mThumbStick.y * 8.0f);
+		////TFE_INFO("VR", "mouseWheel = [{}, {}]", mouseWheelX, mouseWheelY);
+		//TFE_Input::setMouseWheel(mouseWheelX, mouseWheelY);
 	}
 }

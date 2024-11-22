@@ -116,7 +116,7 @@ namespace vrw
 			bool	mIsValid{ false };
 		};
 
-		enum class ControllerButtons : uint32_t
+		enum class ControllerButton : uint32_t
 		{
 			A = 1 << 0, // X
 			B = 1 << 1, // Y
@@ -127,7 +127,7 @@ namespace vrw
 
 		struct ControllerState
 		{
-			uint32_t	mControllerButtons{ 0 };
+			uint32_t	mButtons{ 0 };
 			float		mHandTrigger{ 0.0f };
 			float		mIndexTrigger{ 0.0f };
 			Vec2f		mThumbStick{ 0.0f, 0.0f };

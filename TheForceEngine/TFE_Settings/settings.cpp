@@ -21,6 +21,56 @@
 
 using namespace TFE_IniParser;
 
+const std::vector<std::string> TFE_Settings_Vr::presets = { "Quest 2", "Quest 3", "HTC Vive Pro" };
+
+void TFE_Settings_Vr::resetToDefaults()
+{
+	menuToVr = { 2.0f, { 0.0f, 0.0f, -4.0f }, false };
+	pdaToVr = { 2.0f, { 0.0f, 0.0f, -4.0f }, false };
+	hudToVr = { 1.0f, { 0.0f, -2.0f, -4.0f }, true };
+	messagesToVr = { 2.0f, { 0.0f, 0.0f, -4.0f }, true };
+	weaponToVr = { 2.0f, { -0.90f, -0.5f, -2.0f }, false };
+
+	configToVr = { 2.0f, { 0.0f, 0.0f, -4.0f }, true };
+	configDotSize = 25.0f;
+	configDotColor = RGBA::fromFloats(1.0f, 0.0f, 0.0f, 0.5f);
+
+	automapToVr = { 2.0f, { 0.0f, 0.0f, -4.0f }, true };
+	automapWidthMultiplier = 2.0f;
+
+	overlayToVr = { 10.0f, { 0.0f, 2.15f, 0.0f }, false };
+
+	playerScale = 0.01f;
+
+	showLeftControllerInfo = false;
+	showRightControllerInfo = false;
+
+	// non Vr settings:
+	TFE_Settings_Graphics* graphicsSettings = TFE_Settings::getGraphicsSettings();
+	graphicsSettings->reticleEnable = false;
+}
+
+void TFE_Settings_Vr::setPreset(Preset preset)
+{
+	resetToDefaults();
+	switch (preset)
+	{
+	case TFE_Settings_Vr::Preset::Quest2:
+		messagesToVr = { 2.0f, { 0.0f, -0.25f, -4.0f }, true };
+		weaponToVr = { 2.0f, { -0.90f, 0.0f, -2.0f }, false };
+		configToVr = { 2.0f, { 1.0f, 0.0f, -2.0f }, true };
+		configDotSize = 18.0f;
+		break;
+	case TFE_Settings_Vr::Preset::Quest3:
+		break;
+	case TFE_Settings_Vr::Preset::HtcVivePro:
+		// TODO:
+		break;
+	default:
+		break;
+	}
+}
+
 namespace TFE_Settings
 {
 	//////////////////////////////////////////////////////////////////////////////////
@@ -489,6 +539,8 @@ namespace TFE_Settings
 		writeKeyValue_Float(settings, "automapWidthMultiplier", s_vrSettings.automapWidthMultiplier);
 		writeScreenToVr("overlayToVr", s_vrSettings.overlayToVr);
 		writeKeyValue_Float(settings, "playerScale", s_vrSettings.playerScale);
+		writeKeyValue_Bool(settings, "showLeftControllerInfo", s_vrSettings.showLeftControllerInfo);
+		writeKeyValue_Bool(settings, "showRightControllerInfo", s_vrSettings.showRightControllerInfo);
 	}
 
 	void writeSoundSettings(FileStream& settings)
@@ -985,6 +1037,10 @@ namespace TFE_Settings
 		else if (parseScreenToVr("overlayToVr", s_vrSettings.overlayToVr)) {}
 		else if (strcasecmp("playerScale", key) == 0)
 			s_vrSettings.playerScale = parseFloat(value);
+		else if (strcasecmp("showLeftControllerInfo", key) == 0)
+			s_vrSettings.showLeftControllerInfo = parseBool(value);
+		else if (strcasecmp("showRightControllerInfo", key) == 0)
+			s_vrSettings.showRightControllerInfo = parseBool(value);
 	}
 
 	void parseSoundSettings(const char* key, const char* value)
