@@ -27,9 +27,9 @@ void TFE_Settings_Vr::resetToDefaults()
 {
 	menuToVr = { 2.0f, { 0.0f, 0.0f, -4.0f }, false };
 	pdaToVr = { 2.0f, { 0.0f, 0.0f, -4.0f }, false };
-	hudToVr = { 1.0f, { 0.0f, -2.0f, -4.0f }, true };
+	hudToVr = { 2.0f, { 0.0f, -2.0f, -4.0f }, true };
 	messagesToVr = { 2.0f, { 0.0f, 0.0f, -4.0f }, true };
-	weaponToVr = { 2.0f, { -0.90f, -0.5f, -2.0f }, false };
+	weaponToVr = { 2.0f, { -1.0f, 0.0f, -2.0f }, false };
 
 	configToVr = { 2.0f, { 0.0f, 0.0f, -4.0f }, true };
 	configDotSize = 25.0f;
@@ -38,12 +38,17 @@ void TFE_Settings_Vr::resetToDefaults()
 	automapToVr = { 2.0f, { 0.0f, 0.0f, -4.0f }, true };
 	automapWidthMultiplier = 2.0f;
 
-	overlayToVr = { 10.0f, { 0.0f, 2.15f, 0.0f }, false };
+	overlayToVr = { 2.0f, { 0.0f, 0.0f, 0.0f }, false };
 
 	playerScale = 0.01f;
 
-	showLeftControllerInfo = false;
-	showRightControllerInfo = false;
+	rightControllerRotationInvertVertical = false;
+	rightControllerRotationInvertHorizontal = false;
+	rightControllerRotationSensitivityVertical = 8.0f;
+	rightControllerRotationSensitivityHorizontal = 8.0f;
+
+	viewLeftControllerInfo = false;
+	viewRightControllerInfo = false;
 
 	// non Vr settings:
 	TFE_Settings_Graphics* graphicsSettings = TFE_Settings::getGraphicsSettings();
@@ -56,6 +61,7 @@ void TFE_Settings_Vr::setPreset(Preset preset)
 	switch (preset)
 	{
 	case TFE_Settings_Vr::Preset::Quest2:
+		// TODO: update with new frustum
 		messagesToVr = { 2.0f, { 0.0f, -0.25f, -4.0f }, true };
 		weaponToVr = { 2.0f, { -0.90f, 0.0f, -2.0f }, false };
 		configToVr = { 2.0f, { 1.0f, 0.0f, -2.0f }, true };
@@ -539,8 +545,12 @@ namespace TFE_Settings
 		writeKeyValue_Float(settings, "automapWidthMultiplier", s_vrSettings.automapWidthMultiplier);
 		writeScreenToVr("overlayToVr", s_vrSettings.overlayToVr);
 		writeKeyValue_Float(settings, "playerScale", s_vrSettings.playerScale);
-		writeKeyValue_Bool(settings, "showLeftControllerInfo", s_vrSettings.showLeftControllerInfo);
-		writeKeyValue_Bool(settings, "showRightControllerInfo", s_vrSettings.showRightControllerInfo);
+		writeKeyValue_Bool(settings, "rightControllerRotationInvertVertical", s_vrSettings.rightControllerRotationInvertVertical);
+		writeKeyValue_Bool(settings, "rightControllerRotationInvertHorizontal", s_vrSettings.rightControllerRotationInvertHorizontal);
+		writeKeyValue_Float(settings, "rightControllerRotationSensitivityVertical", s_vrSettings.rightControllerRotationSensitivityVertical);
+		writeKeyValue_Float(settings, "rightControllerRotationSensitivityHorizontal", s_vrSettings.rightControllerRotationSensitivityHorizontal);
+		writeKeyValue_Bool(settings, "viewLeftControllerInfo", s_vrSettings.viewLeftControllerInfo);
+		writeKeyValue_Bool(settings, "viewRightControllerInfo", s_vrSettings.viewRightControllerInfo);
 	}
 
 	void writeSoundSettings(FileStream& settings)
@@ -1037,10 +1047,18 @@ namespace TFE_Settings
 		else if (parseScreenToVr("overlayToVr", s_vrSettings.overlayToVr)) {}
 		else if (strcasecmp("playerScale", key) == 0)
 			s_vrSettings.playerScale = parseFloat(value);
-		else if (strcasecmp("showLeftControllerInfo", key) == 0)
-			s_vrSettings.showLeftControllerInfo = parseBool(value);
-		else if (strcasecmp("showRightControllerInfo", key) == 0)
-			s_vrSettings.showRightControllerInfo = parseBool(value);
+		else if (strcasecmp("rightControllerRotationInvertVertical", key) == 0)
+			s_vrSettings.rightControllerRotationInvertVertical = parseBool(value);
+		else if (strcasecmp("rightControllerRotationInvertHorizontal", key) == 0)
+			s_vrSettings.rightControllerRotationInvertHorizontal = parseBool(value);
+		else if (strcasecmp("rightControllerRotationSensitivityVertical", key) == 0)
+			s_vrSettings.rightControllerRotationSensitivityVertical = parseFloat(value);
+		else if (strcasecmp("rightControllerRotationSensitivityHorizontal", key) == 0)
+			s_vrSettings.rightControllerRotationSensitivityHorizontal = parseFloat(value);
+		else if (strcasecmp("viewLeftControllerInfo", key) == 0)
+			s_vrSettings.viewLeftControllerInfo = parseBool(value);
+		else if (strcasecmp("viewRightControllerInfo", key) == 0)
+			s_vrSettings.viewRightControllerInfo = parseBool(value);
 	}
 
 	void parseSoundSettings(const char* key, const char* value)

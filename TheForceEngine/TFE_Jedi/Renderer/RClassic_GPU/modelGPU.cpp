@@ -853,7 +853,7 @@ namespace TFE_Jedi
 				shader->setVariable(s_shaderInputs[s].cameraProjId, SVT_MAT4x4, s_cameraProj.data);
 			if (inVr)
 			{
-				shader->setVariable(s_shaderInputs[s].cameraDirId, SVT_VEC3, TFE_Math::scale(s_cameraMtxVR_YDown[0].m2, -1.0f).m);
+				shader->setVariable(s_shaderInputs[s].cameraDirId, SVT_VEC3, (-s_cameraMtxVR_YDown[0].m2).m);
 				shader->setVariable(s_shaderInputs[s].cameraRightId, SVT_VEC3, s_cameraMtxVR_YDown[0].m0.m);
 			}
 			else

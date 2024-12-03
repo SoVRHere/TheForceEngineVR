@@ -42,8 +42,8 @@ void main()
 	vec3 shift = vec3(Shift.x, Shift.y, (1.0 - CtrlGripTrigger[0]) * Shift.z);
 	vec3 pos = ProjectTo3D(vec2(vtx_pos.x, ScreenSize.y - vtx_pos.y), ScreenSize, Shift.w, Frustum) + shift;
 	mat4 ctrl = mat4(Controller[0]);
-	ctrl[3] = vec4(0, 0, 0, 1);
-	vec4 cc = vec4(pos, 1.0) * ctrl;
+	//ctrl[3] = vec4(0, 0, 0, 1);
+	vec4 cc = ctrl * vec4(pos, 1.0);
 	if (LockToCamera == 0)
 	{
 		mat4 hmdView4 = mat4(HmdView);

@@ -1328,14 +1328,14 @@ namespace TFE_RenderBackend
 			cameraMtx[1] = TFE_Math::getMatrix3(cameraMtx4[1]);
 			Vec3f right0_ = TFE_Math::getVec3(cameraMtx4[0].m0);
 			Vec3f right1_ = TFE_Math::getVec3(cameraMtx4[1].m0);
-			Vec3f right0 = TFE_Math::scale(TFE_Math::normalize(&right0_), 0.5f * eyeDist);
-			Vec3f left0 = TFE_Math::scale(right0, -1.0f);
-			Vec3f right1 = TFE_Math::scale(TFE_Math::normalize(&right0_), 0.5f * eyeDist);
-			Vec3f left1 = TFE_Math::scale(right1, -1.0f);
+			Vec3f right0 = (0.5f * eyeDist) * TFE_Math::normalize(right0_);
+			Vec3f left0 = -right0;
+			Vec3f right1 = (0.5f * eyeDist) * TFE_Math::normalize(right0_);
+			Vec3f left1 = -right1;
 			//Vec3f s_cameraPos_[2] = { TFE_Math::add(TFE_Math::getTranslation(s_cameraMtxVr[0]), pos[0]), TFE_Math::add(TFE_Math::getTranslation(s_cameraMtxVr[1]), pos[1]) };
 			//Vec3f s_cameraPos_[2] = { TFE_Math::add(TFE_Math::getTranslation(s_cameraMtxVr[0]), s_cameraPos), TFE_Math::add(TFE_Math::getTranslation(s_cameraMtxVr[1]), s_cameraPos) };
-			cameraPos[0] = TFE_Math::add(TFE_Math::getTranslation(cameraMtx4[0]), left0);
-			cameraPos[1] = TFE_Math::add(TFE_Math::getTranslation(cameraMtx4[1]), right0);
+			cameraPos[0] = TFE_Math::getTranslation(cameraMtx4[0]) + left0;
+			cameraPos[1] = TFE_Math::getTranslation(cameraMtx4[1]) + right0;
 		};
 
 		UpdateCameraProj(s_cameraProjVR, true);

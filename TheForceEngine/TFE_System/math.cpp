@@ -109,6 +109,21 @@ namespace TFE_Math
 		return mtxOut;
 	}
 
+	Vec4f multiply(const Mat4& mtx, const Vec4f& vec)
+	{
+		Vec4f result;
+		//result.x = mtx.m0.x * vec.x + mtx.m0.y * vec.y + mtx.m0.z * vec.z + mtx.m0.w * vec.w;
+		//result.y = mtx.m1.x * vec.x + mtx.m1.y * vec.y + mtx.m1.z * vec.z + mtx.m1.w * vec.w;
+		//result.z = mtx.m2.x * vec.x + mtx.m2.y * vec.y + mtx.m2.z * vec.z + mtx.m2.w * vec.w;
+		//result.w = mtx.m3.x * vec.x + mtx.m3.y * vec.y + mtx.m3.z * vec.z + mtx.m3.w * vec.w;
+		result.x = mtx.m0.x * vec.x + mtx.m1.x * vec.y + mtx.m2.x * vec.z + mtx.m3.x * vec.w;
+		result.y = mtx.m0.y * vec.x + mtx.m1.y * vec.y + mtx.m2.y * vec.z + mtx.m3.y * vec.w;
+		result.z = mtx.m0.z * vec.x + mtx.m1.z * vec.y + mtx.m2.z * vec.z + mtx.m3.z * vec.w;
+		result.w = mtx.m0.w * vec.x + mtx.m1.w * vec.y + mtx.m2.w * vec.z + mtx.m3.w * vec.w;
+
+		return result;
+	}
+
 	Mat4 buildMatrix4(const Mat3& mtx, const Vec3f& pos)
 	{
 		Mat4 r;

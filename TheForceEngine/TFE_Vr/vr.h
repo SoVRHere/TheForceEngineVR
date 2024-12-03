@@ -67,7 +67,7 @@ namespace vr
 	void Commit(Side eye);
 	void SubmitFrame();
 
-	void HandleControllerEvents();
+	void HandleControllerEvents(bool inGame, s32& mouseRelX, s32& mouseRelY);
 
 	void Reset();
 

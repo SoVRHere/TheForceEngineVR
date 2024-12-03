@@ -1,5 +1,6 @@
 #include "vr.h"
 #include <TFE_System/system.h>
+#include <TFE_Settings/settings.h>
 #include <TFE_Input/input.h>
 #include <vector>
 #include "VrWrapper.h"
@@ -26,8 +27,8 @@ namespace vr
 	std::array<std::vector<std::unique_ptr<RenderTarget>>, Side::Count>	mRenderTargets;
 	uint32_t											mSwapchainIndex{ 0 };
 
-	// controllers
 	std::array<bool, CONTROLLER_BUTTON_COUNT>			mControllerButtonPressed;
+	std::array<Pose, Side::Count>						mLastPointerPose;
 
 	void UpdateView(Side eye)
 	{
@@ -269,6 +270,17 @@ namespace vr
 			{
 				mUnitedFrustum[i] = { frustumPoints[i].x, frustumPoints[i].y, frustumPoints[i].z };
 			}
+			// make sure frustum is symmetrical, Quest 3 returns non-symmetrical frustum
+			const float nearHeightHalf = (mUnitedFrustum[2].y - mUnitedFrustum[0].y) / 2.0f;
+			mUnitedFrustum[0].y = -nearHeightHalf;
+			mUnitedFrustum[1].y = -nearHeightHalf;
+			mUnitedFrustum[2].y = nearHeightHalf;
+			mUnitedFrustum[3].y = nearHeightHalf;
+			const float farHeightHalf = (mUnitedFrustum[6].y - mUnitedFrustum[4].y) / 2.0f;
+			mUnitedFrustum[4].y = -farHeightHalf;
+			mUnitedFrustum[5].y = -farHeightHalf;
+			mUnitedFrustum[6].y = farHeightHalf;
+			mUnitedFrustum[7].y = farHeightHalf;
 
 			mFov = { g_VrWrapper->GetFov().x, g_VrWrapper->GetFov().y };
 			mEyesDistance = g_VrWrapper->GetEyesDistance();
@@ -301,61 +313,14 @@ namespace vr
 		return status;
 	}
 
-	void HandleControllerEvents()
+	void HandleControllerEvents(bool inGame, s32& mouseRelX, s32& mouseRelY)
 	{
 		if (!IsInitialized())
 		{
 			return;
 		}
 
-		const vr::ControllerState& controllerLeft = vr::GetControllerState(vr::Side::Left);
-		const vr::ControllerState& controllerRight = vr::GetControllerState(vr::Side::Right);
-
-		// axis
-		if ((controllerLeft.mButtons & ControllerButton::Thumb) == 0)
-		{
-			TFE_Input::setAxis(AXIS_LEFT_X, controllerLeft.mThumbStick.x);
-			TFE_Input::setAxis(AXIS_LEFT_Y, controllerLeft.mThumbStick.y);
-		}
-		else
-		{
-			TFE_Input::setAxis(AXIS_LEFT_X, 0.0f);
-			TFE_Input::setAxis(AXIS_LEFT_Y, 0.0f);
-		}
-
-		if ((controllerRight.mButtons & ControllerButton::Thumb) == 0)
-		{
-			TFE_Input::setAxis(AXIS_RIGHT_X, -controllerRight.mThumbStick.x);
-			TFE_Input::setAxis(AXIS_RIGHT_Y, -controllerRight.mThumbStick.y);
-		}
-		else
-		{
-			TFE_Input::setAxis(AXIS_RIGHT_X, 0.0f);
-			TFE_Input::setAxis(AXIS_RIGHT_Y, 0.0f);
-		}
-
-		const float deadzone = 0.1f;
-		if ((controllerLeft.mIndexTrigger < -deadzone) || (controllerLeft.mIndexTrigger > deadzone))
-		{
-			TFE_Input::setAxis(AXIS_LEFT_TRIGGER, controllerLeft.mIndexTrigger);
-		}
-		else
-		{
-			TFE_Input::setAxis(AXIS_LEFT_TRIGGER, 0.0f);
-		}
-
-		if ((controllerRight.mIndexTrigger < -deadzone) || (controllerRight.mIndexTrigger > deadzone))
-		{
-			TFE_Input::setAxis(AXIS_RIGHT_TRIGGER, controllerRight.mIndexTrigger);
-		}
-		else
-		{
-			TFE_Input::setAxis(AXIS_RIGHT_TRIGGER, 0.0f);
-		}
-
-		// buttons
-		auto UpdateButton = [](uint32_t buttons, ControllerButton vrButton, Button tfeButton) {
-			const bool pressed = (buttons & vrButton) != 0;
+		auto UpdateButton = [](bool pressed, Button tfeButton) {
 			if (pressed)
 			{
 				if (!mControllerButtonPressed[tfeButton])
@@ -376,76 +341,169 @@ namespace vr
 			}
 		};
 
-		UpdateButton(controllerLeft.mButtons, ControllerButton::A, Button::CONTROLLER_BUTTON_X);
-		UpdateButton(controllerLeft.mButtons, ControllerButton::B, Button::CONTROLLER_BUTTON_Y);
-		UpdateButton(controllerLeft.mButtons, ControllerButton::Menu, Button::CONTROLLER_BUTTON_GUIDE);
-		UpdateButton(controllerLeft.mButtons, ControllerButton::Thumb, Button::CONTROLLER_BUTTON_LEFTSTICK);
-
-		UpdateButton(controllerRight.mButtons, ControllerButton::A, Button::CONTROLLER_BUTTON_A);
-		UpdateButton(controllerRight.mButtons, ControllerButton::B, Button::CONTROLLER_BUTTON_B);
-		UpdateButton(controllerRight.mButtons, ControllerButton::Thumb, Button::CONTROLLER_BUTTON_RIGHTSTICK);
-
-		// dpad
-		auto UpdateDpad = [](bool pressed, Button tfeButton) {
-			//bool pressed = TFE_Input::buttonPressed(Button::CONTROLLER_BUTTON_LEFTSTICK);
-			if (pressed)
-			{
-				if (!mControllerButtonPressed[tfeButton])
-				{
-					TFE_Input::setButtonDown(tfeButton);
-					TFE_INFO("VR", "Button down : {}", (int)tfeButton);
-				}
-				mControllerButtonPressed[tfeButton] = true;
-			}
-			else
-			{
-				if (mControllerButtonPressed[tfeButton])
-				{
-					TFE_Input::setButtonUp(tfeButton);
-					TFE_INFO("VR", "Button up : {}", (int)tfeButton);
-				}
-				mControllerButtonPressed[tfeButton] = false;
-			}
+		enum class Section
+		{
+			Unknown,
+			Up,
+			Down,
+			Left,
+			Right
 		};
 
-		const Vec2f& thumb = controllerLeft.mThumbStick;
-		const float len = TFE_Math::length(thumb);
-		//TFE_INFO("VR", "len: {}", len);
-		if (len > 0.5f && TFE_Input::buttonPressed(Button::CONTROLLER_BUTTON_LEFTSTICK))
-		{
-			//TFE_INFO("VR", "Left thumb down");
-			//const Vec2f v = VrVec2fToTFEVec2f(controllerLeft.mThumbStick);
-			Vec2f vv{ 0.0f, 1.0f };
-			const float cosa = TFE_Math::dot(controllerLeft.mThumbStick, vv);
+		auto GetThumbSection = [](const Vec2f& thumb) {
+			const float cosa = TFE_Math::dot(thumb, { 0.0f, 1.0f });
 			const float angle = TFE_Math::degrees(std::acosf(cosa));
 			//TFE_INFO("VR", "cosa: {}", angle);
 			if (thumb.y > 0.0f && angle < 45.0f)
 			{
-				//TFE_INFO("VR", "dpad up");
-				UpdateDpad(true, Button::CONTROLLER_BUTTON_DPAD_UP);
+				return Section::Up;
 			}
 			else if (thumb.y < 0.0f && angle > 135.0f)
 			{
-				//TFE_INFO("VR", "dpad down");
-				UpdateDpad(true, Button::CONTROLLER_BUTTON_DPAD_DOWN);
+				return Section::Down;
 			}
 			else if (thumb.x < 0.0f && (angle >= 45.0f && angle <= 135.0f))
 			{
-				//TFE_INFO("VR", "dpad left");
-				UpdateDpad(true, Button::CONTROLLER_BUTTON_DPAD_LEFT);
+				return Section::Left;
 			}
 			else if (thumb.x > 0.0f && (angle >= 45.0f && angle <= 135.0f))
 			{
-				//TFE_INFO("VR", "dpad right");
-				UpdateDpad(true, Button::CONTROLLER_BUTTON_DPAD_RIGHT);
+				return Section::Right;
+			}
+			return Section::Unknown;
+		};
+
+		TFE_Settings_Vr* vrSettings = TFE_Settings::getVrSettings();
+		const vr::ControllerState& controllerLeft = vr::GetControllerState(vr::Side::Left);
+		const vr::ControllerState& controllerRight = vr::GetControllerState(vr::Side::Right);
+		const float deadzone = 0.1f;
+
+		// buttons
+		UpdateButton(controllerLeft.mButtons& ControllerButton::A, Button::CONTROLLER_BUTTON_X);
+		UpdateButton(controllerLeft.mButtons& ControllerButton::B, Button::CONTROLLER_BUTTON_Y);
+		UpdateButton(controllerLeft.mButtons& ControllerButton::Menu, Button::CONTROLLER_BUTTON_GUIDE);
+		UpdateButton(controllerLeft.mButtons& ControllerButton::Thumb, Button::CONTROLLER_BUTTON_LEFTSTICK);
+
+		UpdateButton(controllerRight.mButtons& ControllerButton::A, Button::CONTROLLER_BUTTON_A);
+		UpdateButton(controllerRight.mButtons& ControllerButton::B, Button::CONTROLLER_BUTTON_B);
+		UpdateButton(controllerRight.mButtons& ControllerButton::Thumb, Button::CONTROLLER_BUTTON_RIGHTSTICK);
+
+		// triggers
+		float indexTriggerLeft = 0.0f;
+		float indexTriggerRight = 0.0f;
+		if ((controllerLeft.mIndexTrigger < -deadzone) || (controllerLeft.mIndexTrigger > deadzone))
+		{
+			indexTriggerLeft = controllerLeft.mIndexTrigger;
+			TFE_Input::setAxis(AXIS_LEFT_TRIGGER, controllerLeft.mIndexTrigger);
+		}
+		else
+		{
+			TFE_Input::setAxis(AXIS_LEFT_TRIGGER, 0.0f);
+		}
+
+		if ((controllerRight.mIndexTrigger < -deadzone) || (controllerRight.mIndexTrigger > deadzone))
+		{
+			indexTriggerRight = controllerRight.mIndexTrigger;
+			TFE_Input::setAxis(AXIS_RIGHT_TRIGGER, controllerRight.mIndexTrigger);
+		}
+		else
+		{
+			TFE_Input::setAxis(AXIS_RIGHT_TRIGGER, 0.0f);
+		}
+
+		float handTriggerLeft = 0.0f;
+		float handTriggerRight = 0.0f;
+		if ((controllerLeft.mHandTrigger < -deadzone) || (controllerLeft.mHandTrigger > deadzone))
+		{
+			handTriggerLeft = controllerLeft.mHandTrigger;
+		}
+
+		if ((controllerRight.mHandTrigger < -deadzone) || (controllerRight.mHandTrigger > deadzone))
+		{
+			handTriggerRight = controllerRight.mHandTrigger;
+		}
+
+		// axis
+		if ((controllerLeft.mButtons & ControllerButton::Thumb) == 0)
+		{
+			TFE_Input::setAxis(AXIS_LEFT_X, controllerLeft.mThumbStick.x);
+			TFE_Input::setAxis(AXIS_LEFT_Y, controllerLeft.mThumbStick.y);
+		}
+		else
+		{
+			TFE_Input::setAxis(AXIS_LEFT_X, 0.0f);
+			TFE_Input::setAxis(AXIS_LEFT_Y, 0.0f);
+		}
+
+		if (handTriggerLeft == 0.0f && (controllerRight.mButtons & ControllerButton::Thumb) == 0)
+		{
+			TFE_Input::setAxis(AXIS_RIGHT_X, -controllerRight.mThumbStick.x);
+			TFE_Input::setAxis(AXIS_RIGHT_Y, -controllerRight.mThumbStick.y);
+		}
+		else
+		{
+			TFE_Input::setAxis(AXIS_RIGHT_X, 0.0f);
+			TFE_Input::setAxis(AXIS_RIGHT_Y, 0.0f);
+		}
+
+		// shoulders
+		if (TFE_Math::length(controllerRight.mThumbStick) > 0.5f && handTriggerLeft > 0.5f)// && inGame)
+		{
+			const Section section = GetThumbSection(controllerRight.mThumbStick);
+			switch (section)
+			{
+			//case Section::Up:
+			//	UpdateDpad(true, Button::CONTROLLER_BUTTON_LEFTSHOULDER);
+			//	break;
+			//case Section::Down:
+			//	UpdateDpad(true, Button::CONTROLLER_BUTTON_RIGHTSHOULDER);
+			//	break;
+			case Section::Left:
+				UpdateButton(true, Button::CONTROLLER_BUTTON_LEFTSHOULDER);
+				break;
+			case Section::Right:
+				UpdateButton(true, Button::CONTROLLER_BUTTON_RIGHTSHOULDER);
+				break;
+			case Section::Unknown:
+			default:
+				break;
 			}
 		}
 		else
 		{
-			UpdateDpad(false, Button::CONTROLLER_BUTTON_DPAD_UP);
-			UpdateDpad(false, Button::CONTROLLER_BUTTON_DPAD_DOWN);
-			UpdateDpad(false, Button::CONTROLLER_BUTTON_DPAD_LEFT);
-			UpdateDpad(false, Button::CONTROLLER_BUTTON_DPAD_RIGHT);
+			UpdateButton(false, Button::CONTROLLER_BUTTON_LEFTSHOULDER);
+			UpdateButton(false, Button::CONTROLLER_BUTTON_RIGHTSHOULDER);
+		}
+
+		// dpad
+		if (TFE_Math::length(controllerLeft.mThumbStick) > 0.5f && TFE_Input::buttonPressed(Button::CONTROLLER_BUTTON_LEFTSTICK))
+		{
+			const Section section = GetThumbSection(controllerLeft.mThumbStick);
+			switch (section)
+			{
+			case Section::Up:
+				UpdateButton(true, Button::CONTROLLER_BUTTON_DPAD_UP);
+				break;
+			case Section::Down:
+				UpdateButton(true, Button::CONTROLLER_BUTTON_DPAD_DOWN);
+				break;
+			case Section::Left:
+				UpdateButton(true, Button::CONTROLLER_BUTTON_DPAD_LEFT);
+				break;
+			case Section::Right:
+				UpdateButton(true, Button::CONTROLLER_BUTTON_DPAD_RIGHT);
+				break;
+			case Section::Unknown:
+			default:
+				break;
+			}
+		}
+		else
+		{
+			UpdateButton(false, Button::CONTROLLER_BUTTON_DPAD_UP);
+			UpdateButton(false, Button::CONTROLLER_BUTTON_DPAD_DOWN);
+			UpdateButton(false, Button::CONTROLLER_BUTTON_DPAD_LEFT);
+			UpdateButton(false, Button::CONTROLLER_BUTTON_DPAD_RIGHT);
 		}
 
 		// emulate mouse wheel
@@ -456,5 +514,30 @@ namespace vr
 		//mouseWheelY = (s32)(controllerRight.mThumbStick.y * 8.0f);
 		////TFE_INFO("VR", "mouseWheel = [{}, {}]", mouseWheelX, mouseWheelY);
 		//TFE_Input::setMouseWheel(mouseWheelX, mouseWheelY);
+
+		// emulate mouse movement by controller rotation
+		const float sensitivityVertical = (vrSettings->rightControllerRotationInvertVertical ? -1.0f : 1.0f) * (vrSettings->rightControllerRotationSensitivityVertical * (1.0f + handTriggerRight));
+		const float sensitivityHorizontal = (vrSettings->rightControllerRotationInvertHorizontal ? -1.0f : 1.0f) * (vrSettings->rightControllerRotationSensitivityHorizontal * (1.0f + handTriggerRight));
+
+		//s32 mmx, mmy;
+		//TFE_Input::getMouseMove(&mmx, &mmy);
+		if (handTriggerRight > 0.0f && mouseRelX == 0 && mouseRelY == 0 && mLastPointerPose[Side::Right].mIsValid && mPointerPose[Side::Right].mIsValid)
+		{
+			const Mat4& pointerLast = mLastPointerPose[Side::Right].mTransformation;
+			const Mat4& pointer = mPointerPose[Side::Right].mTransformation;
+			const Mat3 deltaRot = TFE_Math::getMatrix3(TFE_Math::mulMatrix4(pointer, TFE_Math::transpose4(pointerLast)));
+
+			const float roll = std::atan2(deltaRot.m1.x, deltaRot.m0.x);
+			const float pitch = std::atan2(deltaRot.m2.y, deltaRot.m2.z);
+			const float yaw = std::asin(-deltaRot.m2.x);
+			//TFE_INFO("VR", "[{}, {}, {}]", TFE_Math::degrees(yaw), TFE_Math::degrees(pitch), TFE_Math::degrees(roll));
+			TFE_Input::setRelativeMousePos((s32)(TFE_Math::degrees(yaw) * sensitivityHorizontal), (s32)(TFE_Math::degrees(pitch) * sensitivityVertical));
+		}
+
+		//if (handTriggerRight == 0.0f)
+		{
+			mLastPointerPose[Side::Left] = mPointerPose[Side::Left];
+			mLastPointerPose[Side::Right] = mPointerPose[Side::Right];
+		}
 	}
 }

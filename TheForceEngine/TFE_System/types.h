@@ -31,6 +31,8 @@ struct Vec2f
 		f32 m[2];
 	};
 };
+constexpr Vec2f operator-(const Vec2f& v) { return { -v.x, -v.y }; }
+constexpr Vec2f operator*(const Vec2f& a, const Vec2f& b) { return { a.x * b.x, a.y * b.y }; }
 
 struct Vec3f
 {
@@ -40,6 +42,14 @@ struct Vec3f
 		f32 m[3];
 	};
 };
+constexpr Vec3f operator-(const Vec3f& v) { return { -v.x, -v.y, -v.z }; }
+constexpr Vec3f operator^(const Vec3f& a, const Vec3f& b) { return { a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x }; } // cross product
+constexpr float operator|(const Vec3f& a, const Vec3f& b) { return { a.x * b.x + a.y * b.y + a.z * b.z }; } // dot product
+constexpr Vec3f operator+(const Vec3f& a, const Vec3f& b) { return { a.x + b.x, a.y + b.y, a.z + b.z }; }
+constexpr Vec3f operator-(const Vec3f& a, const Vec3f& b) { return { a.x - b.x, a.y - b.y, a.z - b.z }; }
+constexpr Vec3f operator*(const Vec3f& a, const Vec3f& b) { return { a.x * b.x, a.y * b.y, a.z * b.z }; }
+constexpr Vec3f operator*(const Vec3f& a, float b) { return { a.x * b, a.y * b, a.z * b }; }
+constexpr Vec3f operator*(float a, const Vec3f& b) { return { a * b.x, a * b.y, a * b.z }; }
 
 struct Vec4f
 {
@@ -49,6 +59,7 @@ struct Vec4f
 		f32 m[4];
 	};
 };
+constexpr Vec4f operator-(const Vec4f& v) { return { -v.x, -v.y, -v.z, -v.w }; }
 
 struct Vec2i
 {

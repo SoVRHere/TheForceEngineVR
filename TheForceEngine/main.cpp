@@ -825,7 +825,7 @@ int main(int argc, char* argv[])
 		SDL_GetMouseState(&mouseAbsX, &mouseAbsY);
 		if (TFE_Settings::getTempSettings()->vr)
 		{
-			vr::HandleControllerEvents();
+			vr::HandleControllerEvents(s_curState == APP_STATE_GAME, mouseX, mouseY);
 
 			// absolute mouse position is returned for current window, not the VR window,
 			// we have to convert it to VR window coordinates
@@ -1156,6 +1156,10 @@ void parseOption(const char* name, const std::vector<const char*>& values, bool 
 		else if (strcasecmp(name, "vrResetSettings") == 0)
 		{
 			TFE_Settings::getTempSettings()->vrResetSettings = true;
+		}
+		else if (strcasecmp(name, "vrViewDebugInfo") == 0)
+		{
+			TFE_Settings::getTempSettings()->vrViewDebugInfo = true;
 		}
 	}
 }

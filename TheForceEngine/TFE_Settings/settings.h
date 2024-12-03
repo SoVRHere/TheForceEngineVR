@@ -47,6 +47,7 @@ struct TFE_Settings_Temp
 #endif
 	bool vrMultiview = false;
 	bool vrResetSettings = false;
+	bool vrViewDebugInfo = false;
 };
 
 struct TFE_Settings_Window
@@ -316,6 +317,20 @@ struct TFE_Settings_Vr
 		bool lockToCamera;
 	};
 
+	struct Debug
+	{
+		Vec3f handAt{ 0.0f, 0.0f, 0.0f };
+		Vec3f handPos{ 0.0f, 0.0f, 0.0f };
+		Vec3f intersection{ 0.0f, 0.0f, 0.0f };
+		float dx = 0.0f;
+		float dy = 0.0f;
+		float dLeft = 0.0f;
+		float dTop = 0.0f;
+		float sidePlaneX = 0.0f;
+		float sidePlaneY = 0.0f;
+		Vec2f screenPos{ 0.0f, 0.0f };
+	};
+
 	ScreenToVr menuToVr;
 	ScreenToVr pdaToVr;
 	ScreenToVr hudToVr;
@@ -328,9 +343,14 @@ struct TFE_Settings_Vr
 	f32 automapWidthMultiplier;
 	ScreenToVr overlayToVr;
 	float playerScale;
+	bool rightControllerRotationInvertVertical;
+	bool rightControllerRotationInvertHorizontal;
+	float rightControllerRotationSensitivityVertical;
+	float rightControllerRotationSensitivityHorizontal;
 	// debug
-	bool showLeftControllerInfo;
-	bool showRightControllerInfo;
+	bool viewLeftControllerInfo;
+	bool viewRightControllerInfo;
+	Debug debug; // run-time only
 
 	enum class Preset
 	{

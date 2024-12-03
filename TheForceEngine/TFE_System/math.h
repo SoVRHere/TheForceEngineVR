@@ -4,6 +4,7 @@
 #include <cmath>
 #include <float.h>
 #include <limits>
+#include <optional>
 
 namespace TFE_Math
 {
@@ -136,6 +137,11 @@ namespace TFE_Math
 		return nrm;
 	}
 
+	inline Vec3f normalize(const Vec3f& vec)
+	{
+		return normalize(&vec);
+	}
+
 	inline Vec2f normalize(const Vec2f* vec)
 	{
 		const f32 lenSq = dot(vec, vec);
@@ -152,9 +158,19 @@ namespace TFE_Math
 		return nrm;
 	}
 
+	inline Vec2f normalize(const Vec2f& vec)
+	{
+		return normalize(&vec);
+	}
+
 	inline Vec3f cross(const Vec3f* a, const Vec3f* b)
 	{
 		return { a->y*b->z - a->z*b->y, a->z*b->x - a->x*b->z, a->x*b->y - a->y*b->x };
+	}
+
+	inline Vec3f cross(const Vec3f& a, const Vec3f& b)
+	{
+		return cross(&a, &b);
 	}
 
 	inline f32 planeDist(const Vec4f* plane, const Vec3f* pos)
@@ -165,6 +181,11 @@ namespace TFE_Math
 	inline Vec3f add(const Vec3f& a, const Vec3f& b)
 	{
 		return { a.x + b.x, a.y + b.y, a.z + b.z };
+	}
+
+	inline Vec3f sub(const Vec3f& a, const Vec3f& b)
+	{
+		return { a.x - b.x, a.y - b.y, a.z - b.z };
 	}
 
 	inline Vec3f scale(const Vec3f& a, float scale)
@@ -203,6 +224,7 @@ namespace TFE_Math
 	Mat4 computeProjMatrixExplicit(f32 xScale, f32 yScale, f32 zNear, f32 zFar);
 	Mat4 computeInvProjMatrix(const Mat4& mtx);
 	Mat4 mulMatrix4(const Mat4& mtx0, const Mat4& mtx1);
+	Vec4f multiply(const Mat4& mtx, const Vec4f& vec);
 	Mat4 buildMatrix4(const Mat3& mtx, const Vec3f& pos);
 	Mat3 getMatrix3(const Mat4& mtx);
 	Vec3f getVec3(const Vec4f& v);
@@ -218,4 +240,50 @@ namespace TFE_Math
 	// Closest point between two lines (p0, p1) and (p2, p3).
 	// Returns false if no closest point can be found.
 	bool closestPointBetweenLines(const Vec3f* p1, const Vec3f* p2, const Vec3f* p3, const Vec3f* p4, f32* u, f32* v);
+
+	inline float getLinePointDistance(
+		const Vec3f& linePoint0, const Vec3f& linePoint1,
+		const Vec3f& point)
+	{
+		return length(cross(linePoint1 - linePoint0, linePoint0 - point)) / length(linePoint1 - linePoint0);
+	}
+
+	inline Vec3f getClosestPointOnLine(const Vec3f& linePoint0, const Vec3f& linePoint1, const Vec3f& point)
+	{
+		const Vec3f ab = linePoint1 - linePoint0;
+		const Vec3f ap = point - linePoint0;
+		float t = dot(ap, ab) / dot(ab, ab);
+		return linePoint0 + t * ab;
+	}
+
+	struct RayPlaneIntersection
+	{
+		Vec3f point;
+		float t;
+	};
+	inline std::optional<RayPlaneIntersection> getRayPlaneIntersection(
+		const Vec3f& rayPoint, const Vec3f& rayVector,
+		const Vec3f& planeNormal, float d)			// plane: ax + by + cz + d = 0, planeNormal = [a, b, c]
+	{
+		const float denom = dot(planeNormal, rayVector);
+		if (std::abs(denom) <= 1e-4f)
+			return std::nullopt; // ~ parallel
+
+		const float t = -(dot(planeNormal, rayPoint) + d) / denom;
+
+		return RayPlaneIntersection{ rayPoint + t * rayVector, t };
+	}
+
+	inline std::optional<RayPlaneIntersection> getRayPlaneIntersection(
+		const Vec3f& rayPoint, const Vec3f& rayVector,
+		const Vec3f& planePoint, const Vec3f& planeNormal)
+	{
+		const float denom = dot(planeNormal, rayVector);
+		if (std::abs(denom) <= 1e-4f)
+			return std::nullopt; // ~ parallel
+
+		const float t = (dot(planePoint, planeNormal) - dot(planeNormal, rayPoint)) / denom;
+
+		return RayPlaneIntersection{ rayPoint + t * rayVector, t };
+	}
 }
