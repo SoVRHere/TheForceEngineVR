@@ -356,13 +356,14 @@ struct TFE_Settings_Vr
 	{
 		Quest2,
 		Quest3,
-		HtcVivePro
+		HtcVivePro,
+		PSVR2
 	};
 
 	void resetToDefaults();
 	void setPreset(Preset preset);
 
-	static const std::vector<std::string> presets;
+	static const std::vector<std::string> presets; // must match TFE_Settings_Vr::Preset
 };
 
 namespace TFE_Settings

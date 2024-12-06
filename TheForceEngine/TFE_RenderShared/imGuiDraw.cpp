@@ -258,15 +258,23 @@ namespace TFE_RenderShared
 			};
 
 			// must fit shader imGui.vert computation:
-			// vec3 shift = vec3(Shift.x, Shift.y, (1.0 - CtrlGripTrigger[0]) * Shift.z);
+			// float leftTrigger = CtrlIndexTrigger[0] > 0.0 ? CtrlIndexTrigger[0] : CtrlGripTrigger[0];
+			// vec3 shift = vec3(Shift.x, Shift.y, (1.0 - leftTrigger) * Shift.z);
 			// vec3 pos = ProjectTo3D(vec2(vtx_pos.x, ScreenSize.y - vtx_pos.y), ScreenSize, Shift.w, Frustum) + shift;
-			const Vec3f shift = { vrSettings->configToVr.shift.x, vrSettings->configToVr.shift.y, (1.0f - ctrlGripTrigger[0]) * vrSettings->configToVr.shift.z };
+			const float leftTrigger = ctrlIndexTrigger[vr::Side::Left] > 0.0f ? ctrlIndexTrigger[vr::Side::Left] : ctrlGripTrigger[vr::Side::Left];
+			const Vec3f shift = { vrSettings->configToVr.shift.x, vrSettings->configToVr.shift.y, (1.0f - leftTrigger) * vrSettings->configToVr.shift.z };
 			const float distance = vrSettings->configToVr.distance;
 			const Vec3f at = -TFE_Math::normalize(TFE_Math::getVec3(ctrlRight.mTransformation.m2));
 			auto [intersection, screenPos] = GetUIPlaneIntersection(vr::GetUnitedFrustum(), ctrlMtx[vr::Side::Left], shift, distance, { 0.0f, 0.0f, 0.0f }, at, targetSize);
 			if (intersection)
 			{
 				//TFE_INFO("VR", "mouse [{}, {}], pointer [{}, {}]", io.MousePos.x, io.MousePos.y, screenPos.x, screenPos.y);
+				screenPos.x = std::clamp(screenPos.x, 0.0f, f32(targetSize.x - 1));
+				screenPos.y = std::clamp(screenPos.y, 0.0f, f32(targetSize.y - 1));
+			}
+			else
+			{
+				screenPos = { -100.0f, -100.0f };
 			}
 
 			const std::array<Vec3f, 8>& frustum = vr::GetUnitedFrustum();

@@ -21,7 +21,7 @@
 
 using namespace TFE_IniParser;
 
-const std::vector<std::string> TFE_Settings_Vr::presets = { "Quest 2", "Quest 3", "HTC Vive Pro" };
+const std::vector<std::string> TFE_Settings_Vr::presets = { "Quest 2", "Quest 3", "HTC Vive Pro", "PS VR2" };
 
 void TFE_Settings_Vr::resetToDefaults()
 {
@@ -31,7 +31,7 @@ void TFE_Settings_Vr::resetToDefaults()
 	messagesToVr = { 2.0f, { 0.0f, 0.0f, -4.0f }, true };
 	weaponToVr = { 2.0f, { -1.0f, 0.0f, -2.0f }, false };
 
-	configToVr = { 2.0f, { 0.0f, 0.0f, -4.0f }, true };
+	configToVr = { 2.0f, { 0.0f, 0.0f, -4.0f }, false };
 	configDotSize = 25.0f;
 	configDotColor = RGBA::fromFloats(1.0f, 0.0f, 0.0f, 0.5f);
 
@@ -50,9 +50,9 @@ void TFE_Settings_Vr::resetToDefaults()
 	viewLeftControllerInfo = false;
 	viewRightControllerInfo = false;
 
-	// non Vr settings:
-	TFE_Settings_Graphics* graphicsSettings = TFE_Settings::getGraphicsSettings();
-	graphicsSettings->reticleEnable = false;
+	//// non Vr settings:
+	//TFE_Settings_Graphics* graphicsSettings = TFE_Settings::getGraphicsSettings();
+	//graphicsSettings->reticleEnable = false;
 }
 
 void TFE_Settings_Vr::setPreset(Preset preset)
@@ -71,6 +71,12 @@ void TFE_Settings_Vr::setPreset(Preset preset)
 		break;
 	case TFE_Settings_Vr::Preset::HtcVivePro:
 		// TODO:
+		break;
+	case TFE_Settings_Vr::Preset::PSVR2:
+		pdaToVr = { 2.0f, { 0.0f, -1.0f, -4.0f }, false };
+		hudToVr = { 2.0f, { 0.0f, -1.0f, -4.0f }, true };
+		messagesToVr = { 2.0f, { 0.0f, 1.0f, -4.0f }, true };
+		automapToVr = { 2.0f, { 0.0f, 1.0f, -4.0f }, true };
 		break;
 	default:
 		break;

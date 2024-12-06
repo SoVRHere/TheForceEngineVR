@@ -2,7 +2,6 @@
 #include <TFE_System/system.h>
 #include <TFE_Settings/settings.h>
 #include <TFE_Input/input.h>
-#include <vector>
 #include "VrWrapper.h"
 
 namespace vr
@@ -29,6 +28,8 @@ namespace vr
 
 	std::array<bool, CONTROLLER_BUTTON_COUNT>			mControllerButtonPressed;
 	std::array<Pose, Side::Count>						mLastPointerPose;
+
+	std::vector<SDL_Event>								mEmulatedEvents;
 
 	void UpdateView(Side eye)
 	{
@@ -446,18 +447,20 @@ namespace vr
 			TFE_Input::setAxis(AXIS_RIGHT_Y, 0.0f);
 		}
 
-		// shoulders
+		// shoulders & F1
 		if (TFE_Math::length(controllerRight.mThumbStick) > 0.5f && handTriggerLeft > 0.5f)// && inGame)
 		{
 			const Section section = GetThumbSection(controllerRight.mThumbStick);
 			switch (section)
 			{
-			//case Section::Up:
-			//	UpdateDpad(true, Button::CONTROLLER_BUTTON_LEFTSHOULDER);
-			//	break;
-			//case Section::Down:
-			//	UpdateDpad(true, Button::CONTROLLER_BUTTON_RIGHTSHOULDER);
-			//	break;
+			case Section::Up:
+				TFE_Input::setKeyDown(KeyboardCode::KEY_F1, false);
+				TFE_Input::setBufferedKey(KeyboardCode::KEY_F1);
+				break;
+			case Section::Down:
+				TFE_Input::setKeyDown(KeyboardCode::KEY_ESCAPE, false);
+				TFE_Input::setBufferedKey(KeyboardCode::KEY_ESCAPE);
+				break;
 			case Section::Left:
 				UpdateButton(true, Button::CONTROLLER_BUTTON_LEFTSHOULDER);
 				break;
@@ -473,6 +476,8 @@ namespace vr
 		{
 			UpdateButton(false, Button::CONTROLLER_BUTTON_LEFTSHOULDER);
 			UpdateButton(false, Button::CONTROLLER_BUTTON_RIGHTSHOULDER);
+			TFE_Input::setKeyUp(KeyboardCode::KEY_F1);
+			TFE_Input::setKeyUp(KeyboardCode::KEY_ESCAPE);
 		}
 
 		// dpad
@@ -539,5 +544,16 @@ namespace vr
 			mLastPointerPose[Side::Left] = mPointerPose[Side::Left];
 			mLastPointerPose[Side::Right] = mPointerPose[Side::Right];
 		}
+	}
+
+	void AddSDLEvent(const SDL_Event& event)
+	{
+		mEmulatedEvents.push_back(event);
+	}
+
+	std::vector<SDL_Event> GetSDLEvent()
+	{
+		std::vector<SDL_Event> events = std::move(mEmulatedEvents);
+		return events;
 	}
 }

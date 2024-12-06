@@ -2,7 +2,9 @@
 
 #include <TFE_System/math.h>
 #include <TFE_RenderBackend/Win32OpenGL/renderTarget.h>
+#include <SDL.h>
 #include <array>
+#include <vector>
 
 namespace vr
 {
@@ -81,4 +83,7 @@ namespace vr
 	const Pose& GetPointerPose(Side hand);
 	const Pose& GetControllerPose(Side hand);
 	const ControllerState& GetControllerState(Side hand);
+
+	void AddSDLEvent(const SDL_Event& event);
+	std::vector<SDL_Event> GetSDLEvent();
 }

@@ -39,7 +39,8 @@ void main()
 
 #ifdef OPT_VR
 	Frag_ScreenCoord = vtx_pos;
-	vec3 shift = vec3(Shift.x, Shift.y, (1.0 - CtrlGripTrigger[0]) * Shift.z);
+	float leftTrigger = CtrlIndexTrigger[0] > 0.0 ? CtrlIndexTrigger[0] : CtrlGripTrigger[0];
+	vec3 shift = vec3(Shift.x, Shift.y, (1.0 - leftTrigger) * Shift.z);
 	vec3 pos = ProjectTo3D(vec2(vtx_pos.x, ScreenSize.y - vtx_pos.y), ScreenSize, Shift.w, Frustum) + shift;
 	mat4 ctrl = mat4(Controller[0]);
 	//ctrl[3] = vec4(0, 0, 0, 1);

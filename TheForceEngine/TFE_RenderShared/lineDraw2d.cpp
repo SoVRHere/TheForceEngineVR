@@ -428,7 +428,7 @@ namespace TFE_RenderShared
 				shaderParam.shader.setVariableArray(s_frustumId, SVT_VEC3, frustum.data()->m, (u32)frustum.size());
 				shaderParam.shader.setVariable(s_HmdViewId, SVT_MAT3x3, hmdMtx.data);
 				const Vec3f& shift = vrSettings->automapToVr.shift;
-				shaderParam.shader.setVariable(s_ShiftId, SVT_VEC4, Vec4f{ shift.x, shift.y, shift.z, vrSettings->automapToVr.distance }.m);
+				shaderParam.shader.setVariable(s_ShiftId, SVT_VEC4, Vec4f{ shift.x, -shift.y, shift.z, vrSettings->automapToVr.distance }.m);
 				s32 lock = vrSettings->automapToVr.lockToCamera ? 1 : 0;
 				shaderParam.shader.setVariable(s_LockToCameraId, SVT_ISCALAR, &lock);
 				shaderParam.shader.setVariable(s_WidthMultiplierId, SVT_SCALAR, &vrSettings->automapWidthMultiplier);

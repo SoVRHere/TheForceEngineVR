@@ -2912,7 +2912,9 @@ namespace TFE_FrontEndUI
 		TFE_Settings_Vr* vrSettings = TFE_Settings::getVrSettings();
 
 		ImGui::TextWrapped("VR runtime: %s", vr::GetRuntimeInfo());
+
 		ImGui::Separator();
+		ImGui::NewLine();
 
 		if (TFE_Settings::getTempSettings()->vrViewDebugInfo)
 		{
@@ -2928,13 +2930,19 @@ namespace TFE_FrontEndUI
 			ImGui::Text("screenPos: [%.2f, %.2f]", vrSettings->debug.screenPos.x, vrSettings->debug.screenPos.y);
 
 			ImGui::Separator();
+			ImGui::NewLine();
 		}
-		if (ImGui::Button("Reset To Defaults"))
+
+		ImGui::TextWrapped("You can move this dialog closer by left index/grip trigger.");
+		if (ImGui::Button("Reset Vr To Defaults"))
 		{
 			vrSettings->resetToDefaults();
 		}
 		Tooltip("you can use --vrResetSettings CLI command to do it on start up, do not forget to remove it next time you want to run"
 			" the game as it will reset all your VR setting changes again.");
+		
+		ImGui::Separator();
+		ImGui::NewLine();
 
 		ImGui::PushFont(s_dialogFont);
 		ImGui::LabelText("##ConfigLabel", "Controllers");
@@ -2950,9 +2958,45 @@ namespace TFE_FrontEndUI
 		ImGui::SliderFloat("Vertical", &vrSettings->rightControllerRotationSensitivityVertical, 0.1f, 10.0f);
 		ImGui::Separator();
 
+		ImGui::LabelText("##ConfigLabel", "Emulated buttons & key:");
+		ImGui::TextWrapped("Dpad - click left stick in desired direction.");
+		ImGui::TextWrapped("Left Shoulder - left grip trigger + move right stick left.");
+		ImGui::TextWrapped("Right Shoulder - left grip trigger + move right stick right.");
+		ImGui::TextWrapped("Esc - left grip trigger + move right stick up.");
+		ImGui::TextWrapped("F1 - left grip trigger + move right stick down.");
+
+		ImGui::Separator();
+		ImGui::NewLine();
+
+		ImGui::PushFont(s_dialogFont);
+		ImGui::LabelText("##ConfigLabel", "2D");
+		ImGui::PopFont();
+
 		ImGui::TextWrapped("To view screen game items (Menu, Pda, Hud, Messages, Weapon, Config, Automap, Crosshair) correctly "
 			"we have to project them from screen space to 3D plane in front of the player at specified Distance."
 			"Then we can adjust its position in space by Shift.");
+
+		const std::vector<std::string>& presets = TFE_Settings_Vr::presets;
+		static const char* currentPreset = nullptr;
+		if (ImGui::BeginCombo("Preset", currentPreset))
+		{
+			for (size_t n = 0; n < presets.size(); n++)
+			{
+				bool is_selected = (currentPreset == presets[n].c_str());
+				if (ImGui::Selectable(presets[n].c_str(), is_selected))
+				{
+					currentPreset = presets[n].c_str();
+					vrSettings->setPreset((TFE_Settings_Vr::Preset)n);
+				}
+
+				if (is_selected)
+				{
+					ImGui::SetItemDefaultFocus();
+				}
+			}
+			ImGui::EndCombo();
+		}
+		Tooltip("Set predefined setting for various VR headsets.");//, may affect other than just Vr settings.");
 
 		ScreenToVR("Menu", vrSettings->menuToVr);
 		ImGui::Separator();
@@ -2970,28 +3014,6 @@ namespace TFE_FrontEndUI
 		ScreenToVR("Weapon", vrSettings->weaponToVr, true);
 		ImGui::Separator();
 
-		const std::vector<std::string>& presets = TFE_Settings_Vr::presets;
-		static const char* currentPreset = nullptr;
-		if (ImGui::BeginCombo("Preset", currentPreset))
-		{
-			for (size_t n = 0; n < presets.size(); n++)
-			{
-				bool is_selected = (currentPreset == presets[n].c_str()); // You can store your selection however you want, outside or inside your objects
-				if (ImGui::Selectable(presets[n].c_str(), is_selected))
-				{
-					currentPreset = presets[n].c_str();
-					vrSettings->setPreset((TFE_Settings_Vr::Preset)n);
-				}
-
-				if (is_selected)
-				{
-					ImGui::SetItemDefaultFocus();
-				}
-			}
-			ImGui::EndCombo();
-		}
-		Tooltip("Set predefined setting for various VR headsets, may affect other than just Vr settings.");
-
 		ScreenToVR("Config (ImGui)", vrSettings->configToVr);
 		if (vrSettings->configToVr.shift.z > 0.5f * vrSettings->configToVr.distance)
 		{
@@ -3007,6 +3029,7 @@ namespace TFE_FrontEndUI
 
 		ScreenToVR("Crosshair", vrSettings->overlayToVr, true);
 		ImGui::Separator();
+		ImGui::NewLine();
 
 		ImGui::PushFont(s_dialogFont);
 		ImGui::LabelText("##ConfigLabel", "Player");
@@ -3014,27 +3037,29 @@ namespace TFE_FrontEndUI
 		ImGui::SliderFloat("Scale (Experimental)", &vrSettings->playerScale, 0.01f, 100.0f, "%.2f");
 		Tooltip("Scale distance between eyes, so when it's big number the world looks small "
 			"but it introduces some rendering artifacts as engine assumes looking from point between eyes.");
-		ImGui::Separator();
 
-#if defined(_DEBUG)
-		ImGui::PushFont(s_dialogFont);
-		ImGui::LabelText("##ConfigLabel", "Debug");
-		ImGui::PopFont();
+		if (TFE_Settings::getTempSettings()->vrViewDebugInfo)
 		{
-			bool show = vrSettings->viewLeftControllerInfo;
-			if (ImGui::Checkbox("View Left Controller Info", &show))
+			ImGui::Separator();
+			ImGui::NewLine();
+			ImGui::PushFont(s_dialogFont);
+			ImGui::LabelText("##ConfigLabel", "Debug");
+			ImGui::PopFont();
 			{
-				vrSettings->viewLeftControllerInfo = show;
+				bool show = vrSettings->viewLeftControllerInfo;
+				if (ImGui::Checkbox("View Left Controller Info", &show))
+				{
+					vrSettings->viewLeftControllerInfo = show;
+				}
+			}
+			{
+				bool show = vrSettings->viewRightControllerInfo;
+				if (ImGui::Checkbox("View Right Controller Info", &show))
+				{
+					vrSettings->viewRightControllerInfo = show;
+				}
 			}
 		}
-		{
-			bool show = vrSettings->viewRightControllerInfo;
-			if (ImGui::Checkbox("View Right Controller Info", &show))
-			{
-				vrSettings->viewRightControllerInfo = show;
-			}
-		}
-#endif
 	}
 
 	// Uses a percentage slider (0 - 100%) to adjust a floating point value (0.0 - 1.0).
