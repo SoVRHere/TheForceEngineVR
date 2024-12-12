@@ -2,6 +2,10 @@
 #include <TFE_System/system.h>
 #include <TFE_Settings/settings.h>
 #include <TFE_Input/input.h>
+#include <TFE_DarkForces/GameUI/escapeMenu.h>
+#include <TFE_DarkForces/GameUI/pda.h>
+#include <TFE_FrontEndUI/frontEndUi.h>
+
 #include "VrWrapper.h"
 
 namespace vr
@@ -27,9 +31,37 @@ namespace vr
 	uint32_t											mSwapchainIndex{ 0 };
 
 	std::array<bool, CONTROLLER_BUTTON_COUNT>			mControllerButtonPressed;
+
+	enum class ThumbSection
+	{
+		LeftThumbUp = 0,
+		LeftThumbDown,
+		LeftThumbLeft,
+		LeftThumbRight,
+		RightThumbUp,
+		RightThumbDown,
+		RightThumbLeft,
+		RightThumbRight,
+		Count
+	};
+
+	enum class ThumbSectionState
+	{
+		None,
+		Down,
+		Up,
+		Pressed,
+		Count
+	};
+
+	std::array<ThumbSectionState, (size_t)ThumbSection::Count>	mThumbSectionState;
+
 	std::array<Pose, Side::Count>						mLastPointerPose;
 
 	std::vector<SDL_Event>								mEmulatedEvents;
+	uint32_t											mMouseButtonsPressed{ 0 };
+	Vec2i												mPointerMousePos{ -10, -10 };
+	Vec2i												mLastPointerMousePos = { -10, -10 };
 
 	void UpdateView(Side eye)
 	{
@@ -193,6 +225,7 @@ namespace vr
 
 			// controllers
 			mControllerButtonPressed.fill(false);
+			mThumbSectionState.fill(ThumbSectionState::None);
 		}
 
 		return g_VrWrapper != nullptr;
@@ -314,12 +347,129 @@ namespace vr
 		return status;
 	}
 
-	void HandleControllerEvents(bool inGame, s32& mouseRelX, s32& mouseRelY)
+	Vec2i GetMousePosByPointer(const TFE_Settings_Vr::ScreenToVr* screenToVr)
+	{
+		Vec2i pointerMousePos = { -10, -10 };
+		if (!screenToVr || !vr::GetPointerPose(vr::Side::Right).mIsValid)
+		{
+			return pointerMousePos;
+		}
+
+		const Vec2ui& targetSize = vr::GetRenderTargetSize();
+		/*const */TFE_Settings_Vr* vrSettings = TFE_Settings::getVrSettings();
+
+		const vr::Pose& ctrlLeft = vr::GetPointerPose(vr::Side::Left);
+		const vr::Pose& ctrlRight = vr::GetPointerPose(vr::Side::Right);
+		const vr::ControllerState& ctrlStateLeft = vr::GetControllerState(vr::Side::Left);
+		const vr::ControllerState& ctrlStateRight = vr::GetControllerState(vr::Side::Right);
+
+		const bool ctrlLeftValid = ctrlLeft.mIsValid;
+		const bool ctrlRightValid = ctrlRight.mIsValid;
+		Mat4 ctrlMtx[2] = { ctrlLeftValid ? ctrlLeft.mTransformation : TFE_Math::getIdentityMatrix4(), ctrlRightValid ? ctrlRight.mTransformation : TFE_Math::getIdentityMatrix4() };
+		// no translation
+		ctrlMtx[0].m3 = Vec4f{ 0.0f, 0.0f, 0.0f, 1.0f };
+		ctrlMtx[1].m3 = Vec4f{ 0.0f, 0.0f, 0.0f, 1.0f };
+		const float ctrlGripTrigger[2] = { ctrlLeftValid ? ctrlStateLeft.mHandTrigger : 0.0f, ctrlRightValid ? ctrlStateRight.mHandTrigger : 0.0f };
+		const float ctrlIndexTrigger[2] = { ctrlLeftValid ? ctrlStateLeft.mIndexTrigger : 0.0f, ctrlRightValid ? ctrlStateRight.mIndexTrigger : 0.0f };
+
+		using UIPlaneIntersection = std::pair<std::optional<TFE_Math::RayPlaneIntersection>, Vec2f>;
+		auto GetUIPlaneIntersection = [&](const std::array<Vec3f, 8>& frustum, const Mat4& ltw, const Vec3f& shift, float planeDistance, const Vec3f& handPos, const Vec3f& handAt, const Vec2ui& displaySize) -> UIPlaneIntersection {
+			enum Point
+			{
+				NearLeftBottom = 0,
+				NearRightBottom = 1,
+				NearLeftTop = 2,
+				NearRightTop = 3,
+				FarLeftBottom = 4,
+				FarRightBottom = 5,
+				FarLeftTop = 6,
+				FarRightTop = 7,
+				NearAt = 8,
+				FarAt = 9
+			};
+
+			// to world space
+			std::array<Vec3f, 10> points;
+			for (size_t i = 0; i < frustum.size(); i++)
+			{
+				points[i] = frustum[i];
+				if (i >= 4) // far plane points
+				{
+					points[i].z = -planeDistance;
+				}
+
+				Vec3f c = points[i] + shift;
+				Mat4 m = ltw;
+				Vec4f wc = TFE_Math::multiply(m, Vec4f{ c.x, c.y, c.z, 1.0f });
+				points[i] = Vec3f{ wc.x, wc.y, wc.z };
+			}
+			points[NearAt] = 0.5f * (points[Point::NearLeftBottom] + points[Point::NearRightTop]);
+			points[FarAt] = 0.5f * (points[Point::FarLeftBottom] + points[Point::FarRightTop]);
+
+			const Vec3f& planePoint = points[FarAt];
+			const Vec3f planeNormal = TFE_Math::normalize(points[FarAt] - points[NearAt]);
+
+			// compute intersection between projected UI plane & hand pointer then compute screen pos
+			Vec2f screenPos;
+			const std::optional<TFE_Math::RayPlaneIntersection> intersection = TFE_Math::getRayPlaneIntersection(handPos, handAt, planePoint, planeNormal);
+			if (intersection && intersection->t > 0.001f)
+			{
+				const Vec3f& p = intersection->point;
+				// ax + by + cz + d = 0
+				float dx = -(points[FarLeftTop] | (points[FarRightTop] - points[FarLeftTop]));
+				float sidePlaneX = (p | (points[FarRightTop] - points[FarLeftTop])) + dx;
+				float dy = -(points[FarLeftTop] | (points[FarLeftBottom] - points[FarLeftTop]));
+				float sidePlaneY = (p | (points[FarLeftBottom] - points[FarLeftTop])) + dy;
+				const Vec2f signs{ TFE_Math::sign(sidePlaneX), TFE_Math::sign(sidePlaneY) };
+
+				const float dLeft = TFE_Math::getLinePointDistance(points[FarLeftBottom], points[FarLeftTop], p);
+				const float dTop = TFE_Math::getLinePointDistance(points[FarLeftTop], points[FarRightTop], p);
+				const Vec2f screenRelPos{ dLeft / TFE_Math::length(points[FarRightTop] - points[FarLeftTop]), dTop / TFE_Math::length(points[FarLeftTop] - points[FarLeftBottom]) };
+				screenPos = Vec2f{ screenRelPos.x * displaySize.x, screenRelPos.y * displaySize.y } *signs;
+
+				vrSettings->debug.handPos = handPos;
+				vrSettings->debug.handAt = handAt;
+				vrSettings->debug.intersection = intersection->point;
+				vrSettings->debug.dx = dx;
+				vrSettings->debug.dy = dy;
+				vrSettings->debug.dLeft = dLeft;
+				vrSettings->debug.dTop = dTop;
+				vrSettings->debug.sidePlaneX = sidePlaneX;
+				vrSettings->debug.sidePlaneY = sidePlaneY;
+				vrSettings->debug.screenPos = screenPos;
+			}
+
+			return { intersection, screenPos };
+		};
+
+		// must fit shader imGui.vert computation:
+		// float leftTrigger = CtrlIndexTrigger[0] > 0.0 ? CtrlIndexTrigger[0] : CtrlGripTrigger[0];
+		// vec3 shift = vec3(Shift.x, Shift.y, (1.0 - leftTrigger) * Shift.z);
+		// vec3 pos = ProjectTo3D(vec2(vtx_pos.x, ScreenSize.y - vtx_pos.y), ScreenSize, Shift.w, Frustum) + shift;
+		const float leftTrigger = screenToVr->allowZoomToCamera ? ctrlIndexTrigger[vr::Side::Left] : 0.0f;
+		const Vec3f shift = { screenToVr->shift.x, screenToVr->shift.y, (1.0f - leftTrigger) * screenToVr->shift.z };
+		const float distance = screenToVr->distance;
+		const Vec3f at = -TFE_Math::normalize(TFE_Math::getVec3(ctrlRight.mTransformation.m2));
+		auto [intersection, screenPos] = GetUIPlaneIntersection(vr::GetUnitedFrustum(), screenToVr->lockToCamera ? TFE_Math::getIdentityMatrix4() : ctrlMtx[vr::Side::Left], shift, distance, { 0.0f, 0.0f, 0.0f }, at, targetSize);
+		if (intersection)
+		{
+			//TFE_INFO("VR", "mouse [{}, {}], pointer [{}, {}]", io.MousePos.x, io.MousePos.y, screenPos.x, screenPos.y);
+			screenPos.x = std::clamp(screenPos.x, 0.0f, f32(targetSize.x - 1));
+			screenPos.y = std::clamp(screenPos.y, 0.0f, f32(targetSize.y - 1));
+			pointerMousePos = { (s32)screenPos.x, (s32)screenPos.y };
+		}
+
+		return pointerMousePos;
+	}
+
+	bool HandleControllerEvents(IGame::State gameState, s32& mouseRelX, s32& mouseRelY)
 	{
 		if (!IsInitialized())
 		{
-			return;
+			return false;
 		}
+
+		bool mouseMoveEmulated = mPointerPose[Side::Right].mIsValid;
 
 		auto UpdateButton = [](bool pressed, Button tfeButton) {
 			if (pressed)
@@ -351,25 +501,63 @@ namespace vr
 			Right
 		};
 
-		auto GetThumbSection = [](const Vec2f& thumb) {
-			const float cosa = TFE_Math::dot(thumb, { 0.0f, 1.0f });
+		auto UpdateThumbSection = [](bool pressed, ThumbSection thumbSection) {
+			ThumbSectionState& state = mThumbSectionState[(size_t)thumbSection];
+			if (pressed)
+			{
+				if (state == ThumbSectionState::None || state == ThumbSectionState::Up)
+				{
+					state = ThumbSectionState::Down;
+					//TFE_INFO("VR", "Thumb section down: {}", (int)thumbSection);
+				}
+				else if (state == ThumbSectionState::Down)
+				{
+					state = ThumbSectionState::Pressed;
+					//TFE_INFO("VR", "Thumb section pressed: {}", (int)thumbSection);
+				}
+			}
+			else
+			{
+				if (state == ThumbSectionState::Down || state == ThumbSectionState::Pressed)
+				{
+					state = ThumbSectionState::Up;
+					//TFE_INFO("VR", "Thumb section up: {}", (int)thumbSection);
+				}
+				else if (state == ThumbSectionState::Up)
+				{
+					state = ThumbSectionState::None;
+					//TFE_INFO("VR", "Thumb section none: {}", (int)thumbSection);
+				}
+			}
+		};
+
+		auto GetThumbSection = [](const Vec2f& thumb, float minLength = 0.5f) {
+			const float cosa = TFE_Math::dot(TFE_Math::normalize(thumb), { 0.0f, 1.0f });
 			const float angle = TFE_Math::degrees(std::acosf(cosa));
-			//TFE_INFO("VR", "cosa: {}", angle);
-			if (thumb.y > 0.0f && angle < 45.0f)
+			const float len = TFE_Math::length(thumb);
+			//TFE_INFO("VR", "thumb: {}, angle: {}", thumb, angle);
+			if (len >= minLength)
 			{
-				return Section::Up;
-			}
-			else if (thumb.y < 0.0f && angle > 135.0f)
-			{
-				return Section::Down;
-			}
-			else if (thumb.x < 0.0f && (angle >= 45.0f && angle <= 135.0f))
-			{
-				return Section::Left;
-			}
-			else if (thumb.x > 0.0f && (angle >= 45.0f && angle <= 135.0f))
-			{
-				return Section::Right;
+				if (thumb.y > 0.0f && angle < 45.0f)
+				{
+					//TFE_INFO("VR", "Section::Up - thumb: {}, len: {}, angle: {}", thumb, len, angle);
+					return Section::Up;
+				}
+				else if (thumb.y < 0.0f && angle > 135.0f)
+				{
+					//TFE_INFO("VR", "Section::Down - thumb: {}, len: {}, angle: {}", thumb, len, angle);
+					return Section::Down;
+				}
+				else if (thumb.x < 0.0f && (angle >= 45.0f && angle <= 135.0f))
+				{
+					//TFE_INFO("VR", "Section::Left - thumb: {}, len: {}, angle: {}", thumb, len, angle);
+					return Section::Left;
+				}
+				else if (thumb.x > 0.0f && (angle >= 45.0f && angle <= 135.0f))
+				{
+					//TFE_INFO("VR", "Section::Right - thumb: {}, len: {}, angle: {}", thumb, len, angle);
+					return Section::Right;
+				}
 			}
 			return Section::Unknown;
 		};
@@ -388,6 +576,32 @@ namespace vr
 		UpdateButton(controllerRight.mButtons& ControllerButton::A, Button::CONTROLLER_BUTTON_A);
 		UpdateButton(controllerRight.mButtons& ControllerButton::B, Button::CONTROLLER_BUTTON_B);
 		UpdateButton(controllerRight.mButtons& ControllerButton::Thumb, Button::CONTROLLER_BUTTON_RIGHTSTICK);
+
+		// thumb sections
+		const Section thumbSectionLeft = GetThumbSection(controllerLeft.mThumbStick);
+		const Section thumbSectionRight = GetThumbSection(controllerRight.mThumbStick);
+		UpdateThumbSection(thumbSectionLeft == Section::Up, ThumbSection::LeftThumbUp);
+		UpdateThumbSection(thumbSectionLeft == Section::Down, ThumbSection::LeftThumbDown);
+		UpdateThumbSection(thumbSectionLeft == Section::Left, ThumbSection::LeftThumbLeft);
+		UpdateThumbSection(thumbSectionLeft == Section::Right, ThumbSection::LeftThumbRight);
+		if (thumbSectionLeft == Section::Unknown)
+		{
+			UpdateThumbSection(false, ThumbSection::LeftThumbUp);
+			UpdateThumbSection(false, ThumbSection::LeftThumbDown);
+			UpdateThumbSection(false, ThumbSection::LeftThumbLeft);
+			UpdateThumbSection(false, ThumbSection::LeftThumbRight);
+		}
+		UpdateThumbSection(thumbSectionRight == Section::Up, ThumbSection::RightThumbUp);
+		UpdateThumbSection(thumbSectionRight == Section::Down, ThumbSection::RightThumbDown);
+		UpdateThumbSection(thumbSectionRight == Section::Left, ThumbSection::RightThumbLeft);
+		UpdateThumbSection(thumbSectionRight == Section::Right, ThumbSection::RightThumbRight);
+		if (thumbSectionRight == Section::Unknown)
+		{
+			UpdateThumbSection(false, ThumbSection::RightThumbUp);
+			UpdateThumbSection(false, ThumbSection::RightThumbDown);
+			UpdateThumbSection(false, ThumbSection::RightThumbLeft);
+			UpdateThumbSection(false, ThumbSection::RightThumbRight);
+		}
 
 		// triggers
 		float indexTriggerLeft = 0.0f;
@@ -438,8 +652,8 @@ namespace vr
 
 		if (handTriggerLeft == 0.0f && (controllerRight.mButtons & ControllerButton::Thumb) == 0)
 		{
-			TFE_Input::setAxis(AXIS_RIGHT_X, -controllerRight.mThumbStick.x);
-			TFE_Input::setAxis(AXIS_RIGHT_Y, -controllerRight.mThumbStick.y);
+			TFE_Input::setAxis(AXIS_RIGHT_X, controllerRight.mThumbStick.x);
+			TFE_Input::setAxis(AXIS_RIGHT_Y, controllerRight.mThumbStick.y);
 		}
 		else
 		{
@@ -447,8 +661,9 @@ namespace vr
 			TFE_Input::setAxis(AXIS_RIGHT_Y, 0.0f);
 		}
 
+		bool escapeDown = false;
 		// shoulders & F1
-		if (TFE_Math::length(controllerRight.mThumbStick) > 0.5f && handTriggerLeft > 0.5f)// && inGame)
+		if (TFE_Math::length(controllerRight.mThumbStick) > 0.5f && handTriggerLeft > 0.5f)
 		{
 			const Section section = GetThumbSection(controllerRight.mThumbStick);
 			switch (section)
@@ -460,6 +675,7 @@ namespace vr
 			case Section::Down:
 				TFE_Input::setKeyDown(KeyboardCode::KEY_ESCAPE, false);
 				TFE_Input::setBufferedKey(KeyboardCode::KEY_ESCAPE);
+				escapeDown = true;
 				break;
 			case Section::Left:
 				UpdateButton(true, Button::CONTROLLER_BUTTON_LEFTSHOULDER);
@@ -511,32 +727,154 @@ namespace vr
 			UpdateButton(false, Button::CONTROLLER_BUTTON_DPAD_RIGHT);
 		}
 
-		// emulate mouse wheel
-		// not needed as Imgui handles SDL events directly see TFE_Ui::setUiInput(&Event);
-		//s32 mouseWheelX = 0;
-		//s32 mouseWheelY = 0;
-		//mouseWheelX = (s32)(controllerRight.mThumbStick.x * 8.0f);
-		//mouseWheelY = (s32)(controllerRight.mThumbStick.y * 8.0f);
-		////TFE_INFO("VR", "mouseWheel = [{}, {}]", mouseWheelX, mouseWheelY);
-		//TFE_Input::setMouseWheel(mouseWheelX, mouseWheelY);
+		const bool inMenu = gameState != IGame::State::Mission || TFE_FrontEndUI::isConfigMenuOpen() || TFE_DarkForces::escapeMenu_isOpen() || TFE_DarkForces::pda_isOpen();
 
-		// emulate mouse movement by controller rotation
-		const float sensitivityVertical = (vrSettings->rightControllerRotationInvertVertical ? -1.0f : 1.0f) * (vrSettings->rightControllerRotationSensitivityVertical * (1.0f + handTriggerRight));
-		const float sensitivityHorizontal = (vrSettings->rightControllerRotationInvertHorizontal ? -1.0f : 1.0f) * (vrSettings->rightControllerRotationSensitivityHorizontal * (1.0f + handTriggerRight));
-
-		//s32 mmx, mmy;
-		//TFE_Input::getMouseMove(&mmx, &mmy);
-		if (handTriggerRight > 0.0f && mouseRelX == 0 && mouseRelY == 0 && mLastPointerPose[Side::Right].mIsValid && mPointerPose[Side::Right].mIsValid)
+		if (mouseRelX == 0 && mouseRelY == 0) // ignore if mouse is currently moving
 		{
-			const Mat4& pointerLast = mLastPointerPose[Side::Right].mTransformation;
-			const Mat4& pointer = mPointerPose[Side::Right].mTransformation;
-			const Mat3 deltaRot = TFE_Math::getMatrix3(TFE_Math::mulMatrix4(pointer, TFE_Math::transpose4(pointerLast)));
+			// emulate mouse move & left mouse click if in any menu
+			if (inMenu)
+			{
+				TFE_Settings_Vr::ScreenToVr* screenToVr = nullptr;
 
-			const float roll = std::atan2(deltaRot.m1.x, deltaRot.m0.x);
-			const float pitch = std::atan2(deltaRot.m2.y, deltaRot.m2.z);
-			const float yaw = std::asin(-deltaRot.m2.x);
-			//TFE_INFO("VR", "[{}, {}, {}]", TFE_Math::degrees(yaw), TFE_Math::degrees(pitch), TFE_Math::degrees(roll));
-			TFE_Input::setRelativeMousePos((s32)(TFE_Math::degrees(yaw) * sensitivityHorizontal), (s32)(TFE_Math::degrees(pitch) * sensitivityVertical));
+				if (TFE_FrontEndUI::isConfigMenuOpen())
+				{
+					screenToVr = &vrSettings->configToVr;
+				}
+				else if (TFE_DarkForces::escapeMenu_isOpen())
+				{
+					screenToVr = &vrSettings->menuToVr;
+				}
+				else if (TFE_DarkForces::pda_isOpen())
+				{
+					screenToVr = &vrSettings->pdaToVr;
+				}
+				else if (gameState == IGame::State::Cutscene || gameState == IGame::State::AgentMenu || gameState == IGame::State::Briefing)
+				{
+					screenToVr = &vrSettings->pdaToVr;
+				}
+				else if (gameState == IGame::State::Unknown)
+				{
+					screenToVr = &vrSettings->configToVr;
+				}
+				else
+				{
+					TFE_WARN("VR", "Unknown game state");
+				}
+
+				mPointerMousePos = GetMousePosByPointer(screenToVr);
+
+				if (mPointerMousePos.x >= 0 && mPointerMousePos.y >= 0)
+				{
+					// ImGui UI needs mouse move events to update UI
+					if (mPointerMousePos != mLastPointerMousePos)
+					{
+						SDL_Event event;
+						event.type = SDL_MOUSEMOTION;
+						event.motion.which = 0;
+						event.motion.x = mPointerMousePos.x;
+						event.motion.y = mPointerMousePos.y;
+						mEmulatedEvents.push_back(event);
+						mLastPointerMousePos = mPointerMousePos;
+					}
+
+					// emulate mouse wheel by right thumb stick
+					if (!escapeDown)
+					{
+						const ThumbSectionState rightThumbUpSectionState = mThumbSectionState[(size_t)ThumbSection::RightThumbUp];
+						const ThumbSectionState rightThumbDownSectionState = mThumbSectionState[(size_t)ThumbSection::RightThumbDown];
+						const ThumbSectionState rightThumbRightSectionState = mThumbSectionState[(size_t)ThumbSection::RightThumbRight];
+						const ThumbSectionState rightThumbLeftSectionState = mThumbSectionState[(size_t)ThumbSection::RightThumbLeft];
+						if (rightThumbUpSectionState == ThumbSectionState::Down || rightThumbDownSectionState == ThumbSectionState::Down ||
+							rightThumbRightSectionState == ThumbSectionState::Down || rightThumbLeftSectionState == ThumbSectionState::Down)
+						{
+							const float len = 3.0f * TFE_Math::length(controllerRight.mThumbStick);
+
+							SDL_Event event;
+							event.motion.which = 0;
+							event.type = SDL_MOUSEWHEEL;
+
+							event.wheel.preciseX = 0.0f;
+							if (rightThumbRightSectionState == ThumbSectionState::Down)
+							{
+								event.wheel.preciseX = len;
+							}
+							else if (rightThumbLeftSectionState == ThumbSectionState::Down)
+							{
+								event.wheel.preciseX = -len;
+							}
+							event.wheel.x = (Sint32)event.wheel.preciseX;
+
+							event.wheel.preciseY = 0;
+							if (rightThumbUpSectionState == ThumbSectionState::Down)
+							{
+								event.wheel.preciseY = len;
+							}
+							else if (rightThumbDownSectionState == ThumbSectionState::Down)
+							{
+								event.wheel.preciseY = -len;
+							}
+							event.wheel.y = (Sint32)event.wheel.preciseY;
+
+							mEmulatedEvents.push_back(event);
+						}
+
+						// other UIs need mouse position
+						TFE_Input::setMousePos(mPointerMousePos.x, mPointerMousePos.y);
+					}
+				}
+
+				// emulate left mouse click
+				if (TFE_Input::buttonDown(Button::CONTROLLER_BUTTON_A) || TFE_Input::getAxis(AXIS_RIGHT_TRIGGER) >= 0.25f)
+				{
+					if (!mMouseButtonsPressed)
+					{
+						SDL_Event event;
+						event.type = SDL_MOUSEBUTTONDOWN;
+						event.button.which = 0;
+						event.button.button = SDL_BUTTON_LEFT;
+						mMouseButtonsPressed = 1;
+						mEmulatedEvents.push_back(event);
+
+						//mouseMoveEmulated = true;
+
+						//TFE_INFO("VR", "emulated SDL_MOUSEBUTTONDOWN");
+					}
+				}
+				else
+				{
+					if (mMouseButtonsPressed)
+					{
+						SDL_Event event;
+						event.button.button = SDL_BUTTON_LEFT;
+						event.button.which = 0;
+						event.type = SDL_MOUSEBUTTONUP;
+						mMouseButtonsPressed = 0;
+						mEmulatedEvents.push_back(event);
+
+						//TFE_INFO("VR", "emulated SDL_MOUSEBUTTONUP");
+					}
+				}
+			}
+			else
+			{	// in game, to rotate player emulate mouse movement by controller rotation
+				const float sensitivityVertical = (vrSettings->rightControllerRotationInvertVertical ? -1.0f : 1.0f) * (vrSettings->rightControllerRotationSensitivityVertical * (1.0f + handTriggerRight));
+				const float sensitivityHorizontal = (vrSettings->rightControllerRotationInvertHorizontal ? -1.0f : 1.0f) * (vrSettings->rightControllerRotationSensitivityHorizontal * (1.0f + handTriggerRight));
+
+				if (handTriggerRight > 0.0f && mLastPointerPose[Side::Right].mIsValid && mPointerPose[Side::Right].mIsValid)
+				{
+					const Mat4& pointerLast = mLastPointerPose[Side::Right].mTransformation;
+					const Mat4& pointer = mPointerPose[Side::Right].mTransformation;
+					const Mat3 deltaRot = TFE_Math::getMatrix3(TFE_Math::mulMatrix4(pointer, TFE_Math::transpose4(pointerLast)));
+
+					const float roll = std::atan2(deltaRot.m1.x, deltaRot.m0.x);
+					const float pitch = std::atan2(deltaRot.m2.y, deltaRot.m2.z);
+					const float yaw = std::asin(-deltaRot.m2.x);
+					//TFE_INFO("VR", "[{}, {}, {}]", TFE_Math::degrees(yaw), TFE_Math::degrees(pitch), TFE_Math::degrees(roll));
+					TFE_Input::setRelativeMousePos((s32)(TFE_Math::degrees(yaw) * sensitivityHorizontal), (s32)(TFE_Math::degrees(pitch) * sensitivityVertical));
+
+					//mouseMoveEmulated = true;
+				}
+			}
 		}
 
 		//if (handTriggerRight == 0.0f)
@@ -544,14 +882,16 @@ namespace vr
 			mLastPointerPose[Side::Left] = mPointerPose[Side::Left];
 			mLastPointerPose[Side::Right] = mPointerPose[Side::Right];
 		}
+
+		return mouseMoveEmulated;
 	}
 
-	void AddSDLEvent(const SDL_Event& event)
+	Vec2i GetPointerMousePos()
 	{
-		mEmulatedEvents.push_back(event);
+		return mPointerMousePos;
 	}
 
-	std::vector<SDL_Event> GetSDLEvent()
+	std::vector<SDL_Event> GetGeneratedSDLEvents()
 	{
 		std::vector<SDL_Event> events = std::move(mEmulatedEvents);
 		return events;

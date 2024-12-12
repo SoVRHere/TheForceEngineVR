@@ -315,6 +315,7 @@ struct TFE_Settings_Vr
 		f32 distance;
 		Vec3f shift;
 		bool lockToCamera;
+		bool allowZoomToCamera;
 	};
 
 	struct Debug
@@ -338,7 +339,8 @@ struct TFE_Settings_Vr
 	ScreenToVr weaponToVr;
 	ScreenToVr configToVr;
 	f32 configDotSize;
-	RGBA configDotColor;
+	RGBA configDotColorMouse;
+	RGBA configDotColorPointer;
 	ScreenToVr automapToVr;
 	f32 automapWidthMultiplier;
 	ScreenToVr overlayToVr;

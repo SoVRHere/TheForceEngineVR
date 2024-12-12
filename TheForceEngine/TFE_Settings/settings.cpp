@@ -25,20 +25,21 @@ const std::vector<std::string> TFE_Settings_Vr::presets = { "Quest 2", "Quest 3"
 
 void TFE_Settings_Vr::resetToDefaults()
 {
-	menuToVr = { 2.0f, { 0.0f, 0.0f, -4.0f }, false };
-	pdaToVr = { 2.0f, { 0.0f, 0.0f, -4.0f }, false };
-	hudToVr = { 2.0f, { 0.0f, -2.0f, -4.0f }, true };
-	messagesToVr = { 2.0f, { 0.0f, 0.0f, -4.0f }, true };
-	weaponToVr = { 2.0f, { -1.0f, 0.0f, -2.0f }, false };
+	menuToVr = { 2.0f, { 0.0f, 0.0f, -4.0f }, false, false };
+	pdaToVr = { 2.0f, { 0.0f, 0.0f, -4.0f }, false, false };
+	hudToVr = { 2.0f, { 0.0f, -2.0f, -4.0f }, true, false };
+	messagesToVr = { 2.0f, { 0.0f, 0.0f, -4.0f }, true, false };
+	weaponToVr = { 2.0f, { -1.0f, 0.0f, -2.0f }, false, false };
 
-	configToVr = { 2.0f, { 0.0f, 0.0f, -4.0f }, false };
+	configToVr = { 2.0f, { 0.0f, 0.0f, -4.0f }, false, true };
 	configDotSize = 25.0f;
-	configDotColor = RGBA::fromFloats(1.0f, 0.0f, 0.0f, 0.5f);
+	configDotColorMouse = RGBA::fromFloats(1.0f, 0.0f, 0.0f, 0.5f);
+	configDotColorPointer = RGBA::fromFloats(1.0f, 0.0f, 0.0f, 0.5f);
 
-	automapToVr = { 2.0f, { 0.0f, 0.0f, -4.0f }, true };
+	automapToVr = { 2.0f, { 0.0f, 0.0f, -4.0f }, true, false };
 	automapWidthMultiplier = 2.0f;
 
-	overlayToVr = { 2.0f, { 0.0f, 0.0f, 0.0f }, false };
+	overlayToVr = { 2.0f, { 0.0f, 0.0f, 0.0f }, false, false };
 
 	playerScale = 0.01f;
 
@@ -537,6 +538,7 @@ namespace TFE_Settings
 			writeKeyValue_Float(settings, fmt::format("{}ShiftY", name).c_str(), screenToVr.shift.y);
 			writeKeyValue_Float(settings, fmt::format("{}ShiftZ", name).c_str(), screenToVr.shift.z);
 			writeKeyValue_Bool(settings, fmt::format("{}LockToCamera", name).c_str(), screenToVr.lockToCamera);
+			writeKeyValue_Bool(settings, fmt::format("{}AllowZoomToCamera", name).c_str(), screenToVr.allowZoomToCamera);
 		};
 
 		writeScreenToVr("menuToVr", s_vrSettings.menuToVr);
@@ -546,7 +548,8 @@ namespace TFE_Settings
 		writeScreenToVr("weaponToVr", s_vrSettings.weaponToVr);
 		writeScreenToVr("configToVr", s_vrSettings.configToVr);
 		writeKeyValue_Float(settings, "configDotSize", s_vrSettings.configDotSize);
-		writeKeyValue_RGBA(settings, "configDotColor", s_vrSettings.configDotColor);
+		writeKeyValue_RGBA(settings, "configDotColorMouse", s_vrSettings.configDotColorMouse);
+		writeKeyValue_RGBA(settings, "configDotColorPointer", s_vrSettings.configDotColorPointer);
 		writeScreenToVr("automapToVr", s_vrSettings.automapToVr);
 		writeKeyValue_Float(settings, "automapWidthMultiplier", s_vrSettings.automapWidthMultiplier);
 		writeScreenToVr("overlayToVr", s_vrSettings.overlayToVr);
@@ -1030,6 +1033,10 @@ namespace TFE_Settings
 			{
 				screenToVr.lockToCamera = parseBool(value);
 			}
+			else if (strcasecmp(fmt::format("{}AllowZoomToCamera", name).c_str(), key) == 0)
+			{
+				screenToVr.allowZoomToCamera = parseBool(value);
+			}
 			else
 			{
 				found = false;
@@ -1045,8 +1052,10 @@ namespace TFE_Settings
 		else if (parseScreenToVr("configToVr", s_vrSettings.configToVr)) {}
 		else if (strcasecmp("configDotSize", key) == 0)
 			s_vrSettings.configDotSize = parseFloat(value);
-		else if (strcasecmp("configDotColor", key) == 0)
-			s_vrSettings.configDotColor = parseColor(value);
+		else if (strcasecmp("configDotColorMouse", key) == 0)
+			s_vrSettings.configDotColorMouse = parseColor(value);
+		else if (strcasecmp("configDotColorPointer", key) == 0)
+			s_vrSettings.configDotColorPointer = parseColor(value);
 		else if (parseScreenToVr("automapToVr", s_vrSettings.automapToVr)) {}
 		else if (strcasecmp("automapWidthMultiplier", key) == 0)
 			s_vrSettings.automapWidthMultiplier = parseFloat(value);

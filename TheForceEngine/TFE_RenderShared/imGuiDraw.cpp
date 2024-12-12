@@ -45,7 +45,6 @@ namespace TFE_RenderShared
 	static s32 s_EyeId = -1;
 	static s32 s_HmdViewId = -1;
 	static s32 s_mousePosId = -1;
-	static s32 s_mousePosId2 = -1;
 	static s32 s_dotSizeId = -1;
 	static s32 s_dotColorId = -1;
 	static s32 s_ShiftId = -1;
@@ -94,7 +93,6 @@ namespace TFE_RenderShared
 		s_EyeId = s_shader.getVariableId("Eye");
 		s_HmdViewId = s_shader.getVariableId("HmdView");
 		s_mousePosId = s_shader.getVariableId("MousePos");
-		s_mousePosId2 = s_shader.getVariableId("MousePos2");
 		s_dotSizeId = s_shader.getVariableId("DotSize");
 		s_dotColorId = s_shader.getVariableId("DotColor");
 		s_ShiftId = s_shader.getVariableId("Shift");
@@ -171,7 +169,7 @@ namespace TFE_RenderShared
 
 			const Vec2ui& targetSize = vr::GetRenderTargetSize();
 			const ImGuiIO& io = ImGui::GetIO();
-			/*const */TFE_Settings_Vr* vrSettings = TFE_Settings::getVrSettings();
+			const TFE_Settings_Vr* vrSettings = TFE_Settings::getVrSettings();
 
 			const vr::Pose& ctrlLeft = vr::GetPointerPose(vr::Side::Left);
 			const vr::Pose& ctrlRight = vr::GetPointerPose(vr::Side::Right);
@@ -187,95 +185,8 @@ namespace TFE_RenderShared
 			const float ctrlGripTrigger[2] = { ctrlLeftValid ? ctrlStateLeft.mHandTrigger : 0.0f, ctrlRightValid ? ctrlStateRight.mHandTrigger : 0.0f };
 			const float ctrlIndexTrigger[2] = { ctrlLeftValid ? ctrlStateLeft.mIndexTrigger : 0.0f, ctrlRightValid ? ctrlStateRight.mIndexTrigger : 0.0f };
 
-			using UIPlaneIntersection = std::pair<std::optional<TFE_Math::RayPlaneIntersection>, Vec2f>;
-			auto GetUIPlaneIntersection = [&](const std::array<Vec3f, 8>& frustum, const Mat4& ltw, const Vec3f& shift, float planeDistance, const Vec3f& handPos, const Vec3f& handAt, const Vec2ui& displaySize) -> UIPlaneIntersection {
-				enum Point
-				{
-					NearLeftBottom = 0,
-					NearRightBottom = 1,
-					NearLeftTop = 2,
-					NearRightTop = 3,
-					FarLeftBottom = 4,
-					FarRightBottom = 5,
-					FarLeftTop = 6,
-					FarRightTop = 7,
-					NearAt = 8,
-					FarAt = 9
-				};
-
-				// to world space
-				std::array<Vec3f, 10> points;
-				for (size_t i = 0; i < frustum.size(); i++)
-				{
-					points[i] = frustum[i];
-					if (i >= 4) // far plane points
-					{
-						points[i].z = -planeDistance;
-					}
-
-					Vec3f c = points[i] + shift;
-					Mat4 m = ltw;
-					Vec4f wc = TFE_Math::multiply(m, Vec4f{ c.x, c.y, c.z, 1.0f });
-					points[i] = Vec3f{ wc.x, wc.y, wc.z };
-				}
-				points[NearAt] = 0.5f * (points[Point::NearLeftBottom] + points[Point::NearRightTop]);
-				points[FarAt] = 0.5f * (points[Point::FarLeftBottom] + points[Point::FarRightTop]);
-
-				const Vec3f& planePoint = points[FarAt];
-				const Vec3f planeNormal = TFE_Math::normalize(points[FarAt] - points[NearAt]);
-
-				// compute intersection between projected UI plane & hand pointer then compute screen pos
-				Vec2f screenPos;
-				const std::optional<TFE_Math::RayPlaneIntersection> intersection = TFE_Math::getRayPlaneIntersection(handPos, handAt, planePoint, planeNormal);
-				if (intersection && intersection->t > 0.001f)
-				{
-					const Vec3f& p = intersection->point;
-					// ax + by + cz + d = 0
-					float dx = -(points[FarLeftTop] | (points[FarRightTop] - points[FarLeftTop]));
-					float sidePlaneX = (p | (points[FarRightTop] - points[FarLeftTop])) + dx;
-					float dy = -(points[FarLeftTop] | (points[FarLeftBottom] - points[FarLeftTop]));
-					float sidePlaneY = (p | (points[FarLeftBottom] - points[FarLeftTop])) + dy;
-					const Vec2f signs{ TFE_Math::sign(sidePlaneX), TFE_Math::sign(sidePlaneY) };
-
-					const float dLeft = TFE_Math::getLinePointDistance(points[FarLeftBottom], points[FarLeftTop], p);
-					const float dTop = TFE_Math::getLinePointDistance(points[FarLeftTop], points[FarRightTop], p);
-					const Vec2f screenRelPos{ dLeft / TFE_Math::length(points[FarRightTop] - points[FarLeftTop]), dTop / TFE_Math::length(points[FarLeftTop] - points[FarLeftBottom]) };
-					screenPos = Vec2f{ screenRelPos.x * displaySize.x, screenRelPos.y * displaySize.y } * signs;
-
-					vrSettings->debug.handPos = handPos;
-					vrSettings->debug.handAt = handAt;
-					vrSettings->debug.intersection = intersection->point;
-					vrSettings->debug.dx = dx;
-					vrSettings->debug.dy = dy;
-					vrSettings->debug.dLeft = dLeft;
-					vrSettings->debug.dTop = dTop;
-					vrSettings->debug.sidePlaneX = sidePlaneX;
-					vrSettings->debug.sidePlaneY = sidePlaneY;
-					vrSettings->debug.screenPos = screenPos;
-				}
-
-				return { intersection, screenPos };
-			};
-
-			// must fit shader imGui.vert computation:
-			// float leftTrigger = CtrlIndexTrigger[0] > 0.0 ? CtrlIndexTrigger[0] : CtrlGripTrigger[0];
-			// vec3 shift = vec3(Shift.x, Shift.y, (1.0 - leftTrigger) * Shift.z);
-			// vec3 pos = ProjectTo3D(vec2(vtx_pos.x, ScreenSize.y - vtx_pos.y), ScreenSize, Shift.w, Frustum) + shift;
-			const float leftTrigger = ctrlIndexTrigger[vr::Side::Left] > 0.0f ? ctrlIndexTrigger[vr::Side::Left] : ctrlGripTrigger[vr::Side::Left];
-			const Vec3f shift = { vrSettings->configToVr.shift.x, vrSettings->configToVr.shift.y, (1.0f - leftTrigger) * vrSettings->configToVr.shift.z };
-			const float distance = vrSettings->configToVr.distance;
-			const Vec3f at = -TFE_Math::normalize(TFE_Math::getVec3(ctrlRight.mTransformation.m2));
-			auto [intersection, screenPos] = GetUIPlaneIntersection(vr::GetUnitedFrustum(), ctrlMtx[vr::Side::Left], shift, distance, { 0.0f, 0.0f, 0.0f }, at, targetSize);
-			if (intersection)
-			{
-				//TFE_INFO("VR", "mouse [{}, {}], pointer [{}, {}]", io.MousePos.x, io.MousePos.y, screenPos.x, screenPos.y);
-				screenPos.x = std::clamp(screenPos.x, 0.0f, f32(targetSize.x - 1));
-				screenPos.y = std::clamp(screenPos.y, 0.0f, f32(targetSize.y - 1));
-			}
-			else
-			{
-				screenPos = { -100.0f, -100.0f };
-			}
+			Vec2i mp = vr::GetPointerMousePos();
+			Vec2f screenPos{ (float)mp.x, (float)mp.y };
 
 			const std::array<Vec3f, 8>& frustum = vr::GetUnitedFrustum();
 			const Mat4 eye[2] = {vr::GetEyePose(vr::Side::Left).mTransformation, vr::GetEyePose(vr::Side::Right).mTransformation};
@@ -287,11 +198,14 @@ namespace TFE_RenderShared
 			s_shader.setVariableArray(s_frustumId, SVT_VEC3, frustum.data()->m, (u32)frustum.size());
 			s_shader.setVariableArray(s_EyeId, SVT_MAT4x4, eye[0].data, 2);
 			s_shader.setVariable(s_HmdViewId, SVT_MAT3x3, hmdMtx.data);
-			s_shader.setVariable(s_mousePosId2, SVT_VEC2, Vec2f{ f32(io.MousePos.x), f32(io.MousePos.y) }.m);
-			s_shader.setVariable(s_mousePosId, SVT_VEC2, screenPos.m);
 			s_shader.setVariable(s_dotSizeId, SVT_SCALAR, &vrSettings->configDotSize);
-			const RGBA& col = vrSettings->configDotColor;
-			s_shader.setVariable(s_dotColorId, SVT_VEC4, Vec4f{ col.getRedF(), col.getGreenF(), col.getBlueF(), col.getAlphaF() }.m);
+			const Vec4f cols[2] = {
+				Vec4f{ vrSettings->configDotColorMouse.getRedF(), vrSettings->configDotColorMouse.getGreenF(), vrSettings->configDotColorMouse.getBlueF(), vrSettings->configDotColorMouse.getAlphaF() },
+				Vec4f{ vrSettings->configDotColorPointer.getRedF(), vrSettings->configDotColorPointer.getGreenF(), vrSettings->configDotColorPointer.getBlueF(), vrSettings->configDotColorPointer.getAlphaF() }
+			};
+			s_shader.setVariableArray(s_dotColorId, SVT_VEC4, cols[0].m, 2);
+			const Vec2f poss[2] = { Vec2f{f32(io.MousePos.x), f32(io.MousePos.y)}, screenPos };
+			s_shader.setVariableArray(s_mousePosId, SVT_VEC2, poss[0].m, 2);
 			s_shader.setVariable(s_ShiftId, SVT_VEC4, Vec4f{ vrSettings->configToVr.shift.x, vrSettings->configToVr.shift.y, vrSettings->configToVr.shift.z, vrSettings->configToVr.distance }.m);
 			s32 lock = vrSettings->configToVr.lockToCamera ? 1 : 0;
 			s_shader.setVariable(s_LockToCameraId, SVT_ISCALAR, &lock);

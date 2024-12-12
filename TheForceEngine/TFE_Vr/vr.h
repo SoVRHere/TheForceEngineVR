@@ -2,6 +2,7 @@
 
 #include <TFE_System/math.h>
 #include <TFE_RenderBackend/Win32OpenGL/renderTarget.h>
+#include <TFE_Game/igame.h>
 #include <SDL.h>
 #include <array>
 #include <vector>
@@ -69,8 +70,6 @@ namespace vr
 	void Commit(Side eye);
 	void SubmitFrame();
 
-	void HandleControllerEvents(bool inGame, s32& mouseRelX, s32& mouseRelY);
-
 	void Reset();
 
 	const Mat4& GetEyeProj(Side eye, bool yUp);
@@ -84,6 +83,11 @@ namespace vr
 	const Pose& GetControllerPose(Side hand);
 	const ControllerState& GetControllerState(Side hand);
 
-	void AddSDLEvent(const SDL_Event& event);
-	std::vector<SDL_Event> GetSDLEvent();
+	// functions for handling VR controllers:
+	// VR controller works as emulated TFE gamepad & mouse events,
+	// to make all the menus working we have to emulate SDL mouse events because ImGui events are 
+	// currently completely independent to game see TFE_Ui::setUiInput
+	bool HandleControllerEvents(IGame::State gameState, s32& mouseRelX, s32& mouseRelY);
+	Vec2i GetPointerMousePos();
+	std::vector<SDL_Event> GetGeneratedSDLEvents();
 }

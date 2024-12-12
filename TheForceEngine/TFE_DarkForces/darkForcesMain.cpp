@@ -475,6 +475,24 @@ namespace TFE_DarkForces
 		strcpy(modList, s_sharedState.customGobName);
 	}
 
+	IGame::State DarkForces::getState()
+	{
+		switch (s_runGameState.state)
+		{
+		case GSTATE_STARTUP_CUTSCENES:
+		case GSTATE_CUTSCENE:
+			return State::Cutscene;
+		case GSTATE_AGENT_MENU:
+			return State::AgentMenu;
+		case GSTATE_BRIEFING:
+			return State::Briefing;
+		case GSTATE_MISSION:
+			return State::Mission;
+		default:
+			return State::Unknown;
+		}
+	}
+
 	/**********The basic structure of the Dark Forces main loop is as follows:***************
 	while (1)  // <- This will be replaced by the function call from the main TFE loop.
 	{

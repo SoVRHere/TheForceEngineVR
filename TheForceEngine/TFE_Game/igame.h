@@ -20,6 +20,15 @@ extern MemoryRegion* s_levelRegion;
 
 struct IGame
 {
+	enum class State
+	{
+		Unknown,
+		Cutscene,
+		AgentMenu,
+		Briefing,
+		Mission
+	};
+
 	virtual bool runGame(s32 argCount, const char* argv[], Stream* stream) = 0;
 	virtual void exitGame() = 0;
 	virtual void pauseGame(bool pause) = 0;
@@ -31,6 +40,7 @@ struct IGame
 	virtual bool isPaused() { return false; }
 	virtual void getLevelName(char* name) {};
 	virtual void getModList(char* modList) {};
+	virtual State getState() { return State::Unknown; }
 
 	GameID id;
 };

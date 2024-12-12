@@ -6,6 +6,23 @@
 #include <limits>
 #include <optional>
 
+constexpr Vec2f operator-(const Vec2f& v) { return { -v.x, -v.y }; }
+constexpr Vec2f operator*(const Vec2f& a, const Vec2f& b) { return { a.x * b.x, a.y * b.y }; }
+
+constexpr Vec3f operator-(const Vec3f& v) { return { -v.x, -v.y, -v.z }; }
+constexpr Vec3f operator^(const Vec3f& a, const Vec3f& b) { return { a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x }; } // cross product
+constexpr float operator|(const Vec3f& a, const Vec3f& b) { return { a.x * b.x + a.y * b.y + a.z * b.z }; } // dot product
+constexpr Vec3f operator+(const Vec3f& a, const Vec3f& b) { return { a.x + b.x, a.y + b.y, a.z + b.z }; }
+constexpr Vec3f operator-(const Vec3f& a, const Vec3f& b) { return { a.x - b.x, a.y - b.y, a.z - b.z }; }
+constexpr Vec3f operator*(const Vec3f& a, const Vec3f& b) { return { a.x * b.x, a.y * b.y, a.z * b.z }; }
+constexpr Vec3f operator*(const Vec3f& a, float b) { return { a.x * b, a.y * b, a.z * b }; }
+constexpr Vec3f operator*(float a, const Vec3f& b) { return { a * b.x, a * b.y, a * b.z }; }
+
+constexpr Vec4f operator-(const Vec4f& v) { return { -v.x, -v.y, -v.z, -v.w }; }
+
+constexpr bool operator==(const Vec2i& a, const Vec2i& b) { return a.x == b.x && a.y == b.y; }
+constexpr bool operator!=(const Vec2i& a, const Vec2i& b) { return !operator==(a, b); }
+
 namespace TFE_Math
 {
 	inline f32 sign(f32 x)
@@ -245,14 +262,14 @@ namespace TFE_Math
 		const Vec3f& linePoint0, const Vec3f& linePoint1,
 		const Vec3f& point)
 	{
-		return length(cross(linePoint1 - linePoint0, linePoint0 - point)) / length(linePoint1 - linePoint0);
+		return length((linePoint1 - linePoint0) ^ (linePoint0 - point)) / length(linePoint1 - linePoint0);
 	}
 
 	inline Vec3f getClosestPointOnLine(const Vec3f& linePoint0, const Vec3f& linePoint1, const Vec3f& point)
 	{
 		const Vec3f ab = linePoint1 - linePoint0;
 		const Vec3f ap = point - linePoint0;
-		float t = dot(ap, ab) / dot(ab, ab);
+		float t = (ap | ab) / (ab | ab);
 		return linePoint0 + t * ab;
 	}
 
@@ -269,7 +286,7 @@ namespace TFE_Math
 		if (std::abs(denom) <= 1e-4f)
 			return std::nullopt; // ~ parallel
 
-		const float t = -(dot(planeNormal, rayPoint) + d) / denom;
+		const float t = -((planeNormal | rayPoint) + d) / denom;
 
 		return RayPlaneIntersection{ rayPoint + t * rayVector, t };
 	}
@@ -278,11 +295,11 @@ namespace TFE_Math
 		const Vec3f& rayPoint, const Vec3f& rayVector,
 		const Vec3f& planePoint, const Vec3f& planeNormal)
 	{
-		const float denom = dot(planeNormal, rayVector);
+		const float denom = planeNormal | rayVector;
 		if (std::abs(denom) <= 1e-4f)
 			return std::nullopt; // ~ parallel
 
-		const float t = (dot(planePoint, planeNormal) - dot(planeNormal, rayPoint)) / denom;
+		const float t = ((planePoint | planeNormal) - (planeNormal | rayPoint)) / denom;
 
 		return RayPlaneIntersection{ rayPoint + t * rayVector, t };
 	}

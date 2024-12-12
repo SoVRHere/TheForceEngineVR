@@ -91,7 +91,7 @@ namespace TFE_RenderBackend
 	extern vr::UpdateStatus s_VRUpdateStatus;
 }
 
-void handleEvent(SDL_Event& Event)
+void handleEvent(const SDL_Event& Event)
 {
 	TFE_Ui::setUiInput(&Event);
 	TFE_Settings_Window* windowSettings = TFE_Settings::getWindowSettings();
@@ -823,9 +823,15 @@ int main(int argc, char* argv[])
 		s32 mouseAbsX, mouseAbsY;
 		u32 state = SDL_GetRelativeMouseState(&mouseX, &mouseY);
 		SDL_GetMouseState(&mouseAbsX, &mouseAbsY);
+		bool mouseMoveEmulatedByVrController = false;
 		if (TFE_Settings::getTempSettings()->vr)
 		{
-			vr::HandleControllerEvents(s_curState == APP_STATE_GAME, mouseX, mouseY);
+			mouseMoveEmulatedByVrController = vr::HandleControllerEvents(s_curGame ? s_curGame->getState() : IGame::State::Unknown, mouseX, mouseY);
+			const std::vector<SDL_Event> generatedEvents = vr::GetGeneratedSDLEvents();
+			for (const SDL_Event& e : generatedEvents)
+			{
+				handleEvent(e);
+			}
 
 			// absolute mouse position is returned for current window, not the VR window,
 			// we have to convert it to VR window coordinates
@@ -833,8 +839,12 @@ int main(int argc, char* argv[])
 			mouseAbsX = (s32)((f32)mouseAbsX * (f32)targetSize.x / (f32)s_displayWidth);
 			mouseAbsY = (s32)((f32)mouseAbsY * (f32)targetSize.y / (f32)s_displayHeight);
 		}
-		TFE_Input::setRelativeMousePos(mouseX, mouseY);
-		TFE_Input::setMousePos(mouseAbsX, mouseAbsY);
+
+		if (!mouseMoveEmulatedByVrController && (mouseX != 0 || mouseY != 0))
+		{
+			TFE_Input::setRelativeMousePos(mouseX, mouseY);
+			TFE_Input::setMousePos(mouseAbsX, mouseAbsY);
+		}
 		inputMapping_updateInput();
 
 		// Can we save?

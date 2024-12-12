@@ -22,6 +22,7 @@ namespace TFE_DarkForces
 		bool isPaused() override;
 		void getLevelName(char* name) override;
 		void getModList(char* modList) override;
+		State getState() override;
 	};
 
 	extern void saveLevelStatus();

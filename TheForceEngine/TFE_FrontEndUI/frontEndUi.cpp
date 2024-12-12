@@ -2679,20 +2679,11 @@ namespace TFE_FrontEndUI
 			ImGui::Separator();
 
 			// Color Mode
+			ImGuiBeginDisabledInVR();
 			ImGui::LabelText("##ConfigLabel", "Color Mode"); ImGui::SameLine(90 * s_uiScale);
 			ImGui::SetNextItemWidth(196 * s_uiScale);
-			if (inVr)
-			{
-				int colorMode = graphics->colorMode - 1;
-				if (ImGui::Combo("##ColorMode", &colorMode, &c_colorMode[1], IM_ARRAYSIZE(c_colorMode) - 1))
-				{
-					graphics->colorMode = colorMode + 1;
-				}
-			}
-			else
-			{
-				ImGui::Combo("##ColorMode", &graphics->colorMode, c_colorMode, IM_ARRAYSIZE(c_colorMode));
-			}
+			ImGui::Combo("##ColorMode", &graphics->colorMode, c_colorMode, IM_ARRAYSIZE(c_colorMode));
+			ImGuiEndDisabledInVR();
 
 			if (graphics->colorMode == COLORMODE_8BIT || graphics->colorMode == COLORMODE_8BIT_INTERP)
 			{
@@ -2853,11 +2844,8 @@ namespace TFE_FrontEndUI
 
 		ImGui::PushID(name);
 		ImGui::DragFloat("Distance", &screenToVr.distance, 0.01f, 1.0f, 10.0f, "%.2f");
-		//ImGui::InputFloat("Distance2", &screenToVr.distance, 0.01f, 0.1f, "%.2f");
-		//ImGui::SliderFloat("Distance3", &screenToVr.distance, 1.0f, 10.0f, "%.2f");
 		Tooltip("Distance to the plane we are projecting to.");
 		ImGui::DragFloat3("Shift", screenToVr.shift.m, 0.01f, -10.0f /*-screenToVr.distance * 0.5f*/, 10.0f, "%.2f");
-		//ImGui::SliderFloat3("Shift2", screenToVr.shift.m, -10.0f, 10.0f, "%.2f");
 		std::string tip = "Shift in 3D space (X,Y,Z) after projection, note that -Z points forward.";
 		if (extraTip != nullptr)
 		{
@@ -2866,16 +2854,6 @@ namespace TFE_FrontEndUI
 		Tooltip(tip.c_str());
 		//	"  Z value is limited to 50% of Distance to avoid moving it behind the camera");
 		
-		//if (disableLockToCamera)
-		//{
-		//	ImGuiBeginDisabled();
-		//	screenToVr.lockToCamera = false;
-		//}
-		//ImGui::Checkbox("Lock to Camera", &screenToVr.lockToCamera);
-		//if (disableLockToCamera)
-		//{
-		//	ImGuiEndDisabled();
-		//}
 		if (disableLockToCamera)
 		{ 
 			screenToVr.lockToCamera = false;
@@ -2933,7 +2911,7 @@ namespace TFE_FrontEndUI
 			ImGui::NewLine();
 		}
 
-		ImGui::TextWrapped("You can move this dialog closer by left index/grip trigger.");
+		ImGui::TextWrapped("You can zoom this dialog by left index trigger.");
 		if (ImGui::Button("Reset Vr To Defaults"))
 		{
 			vrSettings->resetToDefaults();
@@ -2958,12 +2936,13 @@ namespace TFE_FrontEndUI
 		ImGui::SliderFloat("Vertical", &vrSettings->rightControllerRotationSensitivityVertical, 0.1f, 10.0f);
 		ImGui::Separator();
 
-		ImGui::LabelText("##ConfigLabel", "Emulated buttons & key:");
+		ImGui::LabelText("##ConfigLabel", "Emulated buttons & keys:");
 		ImGui::TextWrapped("Dpad - click left stick in desired direction.");
 		ImGui::TextWrapped("Left Shoulder - left grip trigger + move right stick left.");
 		ImGui::TextWrapped("Right Shoulder - left grip trigger + move right stick right.");
 		ImGui::TextWrapped("Esc - left grip trigger + move right stick up.");
 		ImGui::TextWrapped("F1 - left grip trigger + move right stick down.");
+		ImGui::TextWrapped("Left Mouse click (menus) - right A or right index trigger.");
 
 		ImGui::Separator();
 		ImGui::NewLine();
@@ -3020,7 +2999,9 @@ namespace TFE_FrontEndUI
 			vrSettings->configToVr.shift.z = 0.5f * vrSettings->configToVr.distance;
 		}
 		ImGui::SliderFloat("Dot size", &vrSettings->configDotSize, 2.0f, 50.0f, "%.2f");
-		RGBAFields("Dot color", &vrSettings->configDotColor);
+		RGBAFields("Dot color", &vrSettings->configDotColorMouse);
+		//RGBAFields("Dot color pointer", &vrSettings->configDotColorPointer);
+		vrSettings->configDotColorPointer = vrSettings->configDotColorMouse;
 		ImGui::Separator();
 
 		ScreenToVR("Automap", vrSettings->automapToVr);
