@@ -6,7 +6,6 @@
 uniform vec2 ScreenSize;
 uniform vec3 Frustum[8];
 uniform mat4 Eye[2];
-uniform mat3 HmdView;
 uniform vec4 Shift;
 uniform int LockToCamera;
 uniform mat4 Controller[2];
@@ -47,7 +46,7 @@ void main()
 	vec4 cc = ctrl * vec4(pos, 1.0);
 	if (LockToCamera == 0)
 	{
-		mat4 hmdView4 = mat4(HmdView);
+		mat4 hmdView4 = Eye[0];
 		hmdView4[3] = vec4(0, 0, 0, 1);
 		cc *= transpose(hmdView4); // not lock to camera
 	}

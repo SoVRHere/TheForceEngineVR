@@ -43,7 +43,6 @@ namespace TFE_RenderShared
 	static s32 s_screenSizePosId = -1;
 	static s32 s_frustumId = -1;
 	static s32 s_EyeId = -1;
-	static s32 s_HmdViewId = -1;
 	static s32 s_mousePosId = -1;
 	static s32 s_dotSizeId = -1;
 	static s32 s_dotColorId = -1;
@@ -91,7 +90,6 @@ namespace TFE_RenderShared
 		s_screenSizePosId = s_shader.getVariableId("ScreenSize");
 		s_frustumId = s_shader.getVariableId("Frustum");
 		s_EyeId = s_shader.getVariableId("Eye");
-		s_HmdViewId = s_shader.getVariableId("HmdView");
 		s_mousePosId = s_shader.getVariableId("MousePos");
 		s_dotSizeId = s_shader.getVariableId("DotSize");
 		s_dotColorId = s_shader.getVariableId("DotColor");
@@ -176,8 +174,8 @@ namespace TFE_RenderShared
 			const vr::ControllerState& ctrlStateLeft = vr::GetControllerState(vr::Side::Left);
 			const vr::ControllerState& ctrlStateRight = vr::GetControllerState(vr::Side::Right);
 
-			const bool ctrlLeftValid = ctrlLeft.mIsValid;
-			const bool ctrlRightValid = ctrlRight.mIsValid;
+			const bool ctrlLeftValid = ctrlLeft.mIsValid && !vrSettings->ignoreVrControllers;
+			const bool ctrlRightValid = ctrlRight.mIsValid && !vrSettings->ignoreVrControllers;
 			Mat4 ctrlMtx[2] = { ctrlLeftValid ? ctrlLeft.mTransformation : TFE_Math::getIdentityMatrix4(), ctrlRightValid ? ctrlRight.mTransformation : TFE_Math::getIdentityMatrix4() };
 			// no translation
 			ctrlMtx[0].m3 = Vec4f{ 0.0f, 0.0f, 0.0f, 1.0f };
@@ -186,6 +184,10 @@ namespace TFE_RenderShared
 			const float ctrlIndexTrigger[2] = { ctrlLeftValid ? ctrlStateLeft.mIndexTrigger : 0.0f, ctrlRightValid ? ctrlStateRight.mIndexTrigger : 0.0f };
 
 			Vec2i mp = vr::GetPointerMousePos();
+			if (vrSettings->ignoreVrControllers)
+			{
+				mp = { -100, -100 };
+			}
 			Vec2f screenPos{ (float)mp.x, (float)mp.y };
 
 			const std::array<Vec3f, 8>& frustum = vr::GetUnitedFrustum();
@@ -197,7 +199,6 @@ namespace TFE_RenderShared
 			s_shader.setVariable(s_screenSizePosId, SVT_VEC2, Vec2f{ f32(targetSize.x), f32(targetSize.y) }.m);
 			s_shader.setVariableArray(s_frustumId, SVT_VEC3, frustum.data()->m, (u32)frustum.size());
 			s_shader.setVariableArray(s_EyeId, SVT_MAT4x4, eye[0].data, 2);
-			s_shader.setVariable(s_HmdViewId, SVT_MAT3x3, hmdMtx.data);
 			s_shader.setVariable(s_dotSizeId, SVT_SCALAR, &vrSettings->configDotSize);
 			const Vec4f cols[2] = {
 				Vec4f{ vrSettings->configDotColorMouse.getRedF(), vrSettings->configDotColorMouse.getGreenF(), vrSettings->configDotColorMouse.getBlueF(), vrSettings->configDotColorMouse.getAlphaF() },

@@ -315,6 +315,7 @@ struct TFE_Settings_Vr
 		f32 distance;
 		Vec3f shift;
 		bool lockToCamera;
+		bool holdInLeftHand;
 		bool allowZoomToCamera;
 	};
 
@@ -332,6 +333,7 @@ struct TFE_Settings_Vr
 		Vec2f screenPos{ 0.0f, 0.0f };
 	};
 
+	// 2D
 	ScreenToVr menuToVr;
 	ScreenToVr pdaToVr;
 	ScreenToVr hudToVr;
@@ -344,7 +346,9 @@ struct TFE_Settings_Vr
 	ScreenToVr automapToVr;
 	f32 automapWidthMultiplier;
 	ScreenToVr overlayToVr;
+
 	float playerScale;
+	bool ignoreVrControllers;
 	bool rightControllerRotationInvertVertical;
 	bool rightControllerRotationInvertHorizontal;
 	float rightControllerRotationSensitivityVertical;
@@ -363,6 +367,7 @@ struct TFE_Settings_Vr
 	};
 
 	void resetToDefaults();
+	void reset2DToDefaults();
 	void setPreset(Preset preset);
 
 	static const std::vector<std::string> presets; // must match TFE_Settings_Vr::Preset

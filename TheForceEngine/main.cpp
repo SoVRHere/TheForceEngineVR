@@ -600,15 +600,7 @@ void overrideVRSettings(bool firstRun)
 		graphicsSettings->gameResolution = { (s32)vr::GetRenderTargetSize().x, (s32)vr::GetRenderTargetSize().y };
 		graphicsSettings->rendererIndex = RENDERER_HARDWARE;
 		graphicsSettings->skyMode = SKYMODE_CYLINDER;
-
-		if (!firstRun)
-		{
-			// on non first run it will be set elsewhere (see APP_STATE_SET_DEFAULTS)
-			if (graphicsSettings->colorMode == COLORMODE_8BIT) // not supported
-			{
-				graphicsSettings->colorMode = COLORMODE_TRUE_COLOR;
-			}
-		}
+		graphicsSettings->colorMode = COLORMODE_TRUE_COLOR;
 
 		// Quest 2: 2080/2096
 		// Quest 3: 2064/2272

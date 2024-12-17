@@ -25,23 +25,11 @@ const std::vector<std::string> TFE_Settings_Vr::presets = { "Quest 2", "Quest 3"
 
 void TFE_Settings_Vr::resetToDefaults()
 {
-	menuToVr = { 2.0f, { 0.0f, 0.0f, -4.0f }, false, false };
-	pdaToVr = { 2.0f, { 0.0f, 0.0f, -4.0f }, false, false };
-	hudToVr = { 2.0f, { 0.0f, -2.0f, -4.0f }, true, false };
-	messagesToVr = { 2.0f, { 0.0f, 0.0f, -4.0f }, true, false };
-	weaponToVr = { 2.0f, { -1.0f, 0.0f, -2.0f }, false, false };
-
-	configToVr = { 2.0f, { 0.0f, 0.0f, -4.0f }, false, true };
-	configDotSize = 25.0f;
-	configDotColorMouse = RGBA::fromFloats(1.0f, 0.0f, 0.0f, 0.5f);
-	configDotColorPointer = RGBA::fromFloats(1.0f, 0.0f, 0.0f, 0.5f);
-
-	automapToVr = { 2.0f, { 0.0f, 0.0f, -4.0f }, true, false };
-	automapWidthMultiplier = 2.0f;
-
-	overlayToVr = { 2.0f, { 0.0f, 0.0f, 0.0f }, false, false };
+	reset2DToDefaults();
 
 	playerScale = 0.01f;
+
+	ignoreVrControllers = false;
 
 	rightControllerRotationInvertVertical = false;
 	rightControllerRotationInvertHorizontal = false;
@@ -56,28 +44,43 @@ void TFE_Settings_Vr::resetToDefaults()
 	//graphicsSettings->reticleEnable = false;
 }
 
+void TFE_Settings_Vr::reset2DToDefaults()
+{
+	menuToVr = { 2.0f, { 0.0f, 0.0f, -4.0f }, false, false, false };
+	pdaToVr = { 2.0f, { 0.0f, 0.0f, -4.0f }, false, false, false };
+	hudToVr = { 2.0f, { 0.0f, -2.0f, -4.0f }, true, false, false };
+	messagesToVr = { 2.0f, { 0.0f, 0.0f, -4.0f }, true, false, false };
+	weaponToVr = { 2.0f, { -1.0f, 0.0f, -2.0f }, false, false, false };
+
+	configToVr = { 2.0f, { 0.0f, 0.0f, -4.0f }, false, true, true };
+	configDotSize = 35.0f;
+	configDotColorMouse = RGBA::fromFloats(1.0f, 0.0f, 0.0f, 0.5f);
+	configDotColorPointer = RGBA::fromFloats(1.0f, 0.0f, 0.0f, 0.5f);
+
+	automapToVr = { 2.0f, { 0.0f, 0.0f, -4.0f }, true, false, false };
+	automapWidthMultiplier = 2.0f;
+
+	overlayToVr = { 2.0f, { 0.0f, 0.0f, 0.0f }, false, false, false };
+}
+
 void TFE_Settings_Vr::setPreset(Preset preset)
 {
-	resetToDefaults();
+	reset2DToDefaults();
 	switch (preset)
 	{
 	case TFE_Settings_Vr::Preset::Quest2:
-		// TODO: update with new frustum
-		messagesToVr = { 2.0f, { 0.0f, -0.25f, -4.0f }, true };
-		weaponToVr = { 2.0f, { -0.90f, 0.0f, -2.0f }, false };
-		configToVr = { 2.0f, { 1.0f, 0.0f, -2.0f }, true };
-		configDotSize = 18.0f;
 		break;
 	case TFE_Settings_Vr::Preset::Quest3:
 		break;
 	case TFE_Settings_Vr::Preset::HtcVivePro:
-		// TODO:
+		hudToVr = { 2.0f, { 0.0f, -0.6f, -4.0f }, true, false, false };
+		weaponToVr = { 2.0f, { -1.2f, 0.0f, -2.0f }, false, false, false };
 		break;
 	case TFE_Settings_Vr::Preset::PSVR2:
-		pdaToVr = { 2.0f, { 0.0f, -1.0f, -4.0f }, false };
-		hudToVr = { 2.0f, { 0.0f, -1.0f, -4.0f }, true };
-		messagesToVr = { 2.0f, { 0.0f, 1.0f, -4.0f }, true };
-		automapToVr = { 2.0f, { 0.0f, 1.0f, -4.0f }, true };
+		pdaToVr = { 2.0f, { 0.0f, -0.5, -4.0f }, false, false, false };
+		hudToVr = { 2.0f, { 0.0f, -1.0f, -4.0f }, true, false, false };
+		messagesToVr = { 2.0f, { 0.0f, 1.0f, -4.0f }, true, false, false };
+		automapToVr = { 2.0f, { 0.0f, 1.0f, -4.0f }, true, false, false };
 		break;
 	default:
 		break;
@@ -538,6 +541,7 @@ namespace TFE_Settings
 			writeKeyValue_Float(settings, fmt::format("{}ShiftY", name).c_str(), screenToVr.shift.y);
 			writeKeyValue_Float(settings, fmt::format("{}ShiftZ", name).c_str(), screenToVr.shift.z);
 			writeKeyValue_Bool(settings, fmt::format("{}LockToCamera", name).c_str(), screenToVr.lockToCamera);
+			writeKeyValue_Bool(settings, fmt::format("{}HoldInLeftHand", name).c_str(), screenToVr.holdInLeftHand);
 			writeKeyValue_Bool(settings, fmt::format("{}AllowZoomToCamera", name).c_str(), screenToVr.allowZoomToCamera);
 		};
 
@@ -554,6 +558,7 @@ namespace TFE_Settings
 		writeKeyValue_Float(settings, "automapWidthMultiplier", s_vrSettings.automapWidthMultiplier);
 		writeScreenToVr("overlayToVr", s_vrSettings.overlayToVr);
 		writeKeyValue_Float(settings, "playerScale", s_vrSettings.playerScale);
+		writeKeyValue_Bool(settings, "ignoreVrControllers", s_vrSettings.ignoreVrControllers);
 		writeKeyValue_Bool(settings, "rightControllerRotationInvertVertical", s_vrSettings.rightControllerRotationInvertVertical);
 		writeKeyValue_Bool(settings, "rightControllerRotationInvertHorizontal", s_vrSettings.rightControllerRotationInvertHorizontal);
 		writeKeyValue_Float(settings, "rightControllerRotationSensitivityVertical", s_vrSettings.rightControllerRotationSensitivityVertical);
@@ -1033,6 +1038,10 @@ namespace TFE_Settings
 			{
 				screenToVr.lockToCamera = parseBool(value);
 			}
+			else if (strcasecmp(fmt::format("{}HoldInLeftHand", name).c_str(), key) == 0)
+			{
+				screenToVr.holdInLeftHand = parseBool(value);
+			}
 			else if (strcasecmp(fmt::format("{}AllowZoomToCamera", name).c_str(), key) == 0)
 			{
 				screenToVr.allowZoomToCamera = parseBool(value);
@@ -1062,6 +1071,8 @@ namespace TFE_Settings
 		else if (parseScreenToVr("overlayToVr", s_vrSettings.overlayToVr)) {}
 		else if (strcasecmp("playerScale", key) == 0)
 			s_vrSettings.playerScale = parseFloat(value);
+		else if (strcasecmp("ignoreVrControllers", key) == 0)
+			s_vrSettings.ignoreVrControllers = parseBool(value);
 		else if (strcasecmp("rightControllerRotationInvertVertical", key) == 0)
 			s_vrSettings.rightControllerRotationInvertVertical = parseBool(value);
 		else if (strcasecmp("rightControllerRotationInvertHorizontal", key) == 0)

@@ -744,11 +744,14 @@ namespace TFE_FrontEndUI
 
 			if (s_appState == APP_STATE_SET_DEFAULTS)
 			{
+				// auto set defaults in VR
 				if (TFE_Settings::getTempSettings()->vr)
 				{
 					setSettingsTemplate(TEMPLATE_MODERN);
 					TFE_Settings_Graphics* graphicsSettings = TFE_Settings::getGraphicsSettings();
 					graphicsSettings->reticleEnable = false;
+					TFE_Settings_Game* gameSettings = TFE_Settings::getGameSettings();
+					gameSettings->df_enableAutoaim = false;
 					s_appState = APP_STATE_MENU;
 				}
 				else
@@ -2863,6 +2866,10 @@ namespace TFE_FrontEndUI
 			ImGui::Checkbox("Lock to Camera", &screenToVr.lockToCamera);
 		}
 
+		// TODO: must update UI shaders first, only ImGui is currently supported
+		//ImGui::Checkbox("Hold in Left Hand", &screenToVr.holdInLeftHand);
+		//ImGui::Checkbox("Allow Zoom to Camera", &screenToVr.allowZoomToCamera);
+
 		ImGui::PopID();
 	}
 
@@ -2925,24 +2932,31 @@ namespace TFE_FrontEndUI
 		ImGui::PushFont(s_dialogFont);
 		ImGui::LabelText("##ConfigLabel", "Controllers");
 		ImGui::PopFont();
-		ImGui::LabelText("##ConfigLabel", "Invert Right Controller Rotation");
-		Tooltip("Right controller rotations (when right grip is pressed) work as emulated mouse move so if you play with inverted mouse "
-			"you probably want to invert it here as well.");
-		ImGui::Checkbox("Invert Horizontal", &vrSettings->rightControllerRotationInvertHorizontal); ImGui::SameLine();
-		ImGui::Checkbox("Invert Vertical", &vrSettings->rightControllerRotationInvertVertical);
-		ImGui::LabelText("##ConfigLabel", "Right Controller Rotation Sensitivity");
-		Tooltip("Changing mouse rotation sensitivity would work as well, however changing it here doesn't affect your mouse sensitivity.");
-		ImGui::SliderFloat("Horizontal", &vrSettings->rightControllerRotationSensitivityHorizontal, 0.1f, 10.0f);
-		ImGui::SliderFloat("Vertical", &vrSettings->rightControllerRotationSensitivityVertical, 0.1f, 10.0f);
-		ImGui::Separator();
+		ImGui::Checkbox("Ignore", &vrSettings->ignoreVrControllers);
+		Tooltip("ignore if you want to play with mouse + keyboard/gamepad");
 
-		ImGui::LabelText("##ConfigLabel", "Emulated buttons & keys:");
-		ImGui::TextWrapped("Dpad - click left stick in desired direction.");
-		ImGui::TextWrapped("Left Shoulder - left grip trigger + move right stick left.");
-		ImGui::TextWrapped("Right Shoulder - left grip trigger + move right stick right.");
-		ImGui::TextWrapped("Esc - left grip trigger + move right stick up.");
-		ImGui::TextWrapped("F1 - left grip trigger + move right stick down.");
-		ImGui::TextWrapped("Left Mouse click (menus) - right A or right index trigger.");
+		if (!vrSettings->ignoreVrControllers)
+		{
+			ImGui::LabelText("##ConfigLabel", "Invert Right Controller Rotation");
+			Tooltip("Right controller rotations (when right grip is pressed) work as emulated mouse move so if you play with inverted mouse "
+				"you probably want to invert it here as well.");
+			ImGui::Checkbox("Invert Horizontal", &vrSettings->rightControllerRotationInvertHorizontal); ImGui::SameLine();
+			ImGui::Checkbox("Invert Vertical", &vrSettings->rightControllerRotationInvertVertical);
+			ImGui::LabelText("##ConfigLabel", "Right Controller Rotation Sensitivity");
+			Tooltip("Changing mouse rotation sensitivity would work as well, however changing it here doesn't affect your mouse sensitivity.");
+			ImGui::SliderFloat("Horizontal", &vrSettings->rightControllerRotationSensitivityHorizontal, 0.1f, 10.0f);
+			ImGui::SliderFloat("Vertical", &vrSettings->rightControllerRotationSensitivityVertical, 0.1f, 10.0f);
+			ImGui::Separator();
+
+			ImGui::LabelText("##ConfigLabel", "Emulated buttons & keys:");
+			ImGui::TextWrapped("Dpad - click left stick in desired direction.");
+			ImGui::TextWrapped("Left Shoulder - left grip trigger + move right stick left.");
+			ImGui::TextWrapped("Right Shoulder - left grip trigger + move right stick right.");
+			ImGui::TextWrapped("Esc - left grip trigger + move right stick up.");
+			ImGui::TextWrapped("F1 - left grip trigger + move right stick down.");
+			ImGui::TextWrapped("Left Mouse click (menus) - right A or right index trigger.");
+			ImGui::TextWrapped("Mouse wheel (menus) - right stick.");
+		}
 
 		ImGui::Separator();
 		ImGui::NewLine();
