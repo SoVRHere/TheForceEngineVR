@@ -285,6 +285,7 @@ namespace TFE_Jedi
 			updateTexturePacking = true;
 		}
 
+#if defined(ENABLE_VR)
 		if (TFE_Settings::getTempSettings()->vr)
 		{
 			if (subRenderer != TSR_CLASSIC_GPU)
@@ -293,6 +294,7 @@ namespace TFE_Jedi
 				height = 240 * 2;
 			}
 		}
+#endif
 
 		if (!vfb_setResolution(width, height) && !fovChanged && !updateTexturePacking)
 		{

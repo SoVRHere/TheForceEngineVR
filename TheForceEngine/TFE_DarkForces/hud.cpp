@@ -522,6 +522,7 @@ namespace TFE_DarkForces
 		
 	void hud_drawMessage(u8* framebuffer)
 	{
+#if defined(ENABLE_VR)
 		ScopeFunctions scopeFuncs{
 			[]() {
 				if (TFE_Settings::getTempSettings()->vr)
@@ -537,6 +538,7 @@ namespace TFE_DarkForces
 				TFE_Jedi::ShiftVR = nullptr;
 			},
 		};
+#endif
 
 		if (s_missionMode == MISSION_MODE_MAIN && s_hudMessage[0])
 		{
@@ -609,6 +611,7 @@ namespace TFE_DarkForces
 			s_leftHudMove--;
 		}
 
+#if defined(ENABLE_VR)
 		ScopeFunctions scopeFuncs{ 
 			[]() {
 				if (TFE_Settings::getTempSettings()->vr)
@@ -624,6 +627,7 @@ namespace TFE_DarkForces
 				TFE_Jedi::ShiftVR = nullptr;
 			},
 		};
+#endif
 
 		// 1. Draw the base.
 		TFE_Settings_Hud* hudSettings = TFE_Settings::getHudSettings();

@@ -12,10 +12,6 @@
 #include <SDL_image.h>
 #include <SDL_rwops.h>
 
-#ifdef _WIN32
-#pragma comment( lib, "SDL2_image.lib" )
-#endif
-
 namespace TFE_Image
 {
 	typedef std::map<std::string, SDL_Surface*> ImageMap;

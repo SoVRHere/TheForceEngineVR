@@ -1,18 +1,28 @@
+project(TFE_FileSystem)
+set(SOURCES
+	filewriterAsync.cpp
+	filewriterAsync.h
+	memorystream.cpp
+	memorystream.h
+)
 if(WIN32)
-	target_sources(tfe PRIVATE
-		"${CMAKE_CURRENT_SOURCE_DIR}/filestream.cpp"
-		"${CMAKE_CURRENT_SOURCE_DIR}/fileutil.cpp"
-		"${CMAKE_CURRENT_SOURCE_DIR}/paths.cpp"
-        )
+	list(APPEND SOURCES
+		filestream.cpp
+		filestream.h
+		fileutil.cpp
+		fileutil.h
+		paths.cpp
+		paths.h
+	)
 elseif(LINUX)
-	target_sources(tfe PRIVATE
-		"${CMAKE_CURRENT_SOURCE_DIR}/filestream-posix.cpp"
-		"${CMAKE_CURRENT_SOURCE_DIR}/fileutil-posix.cpp"
-		"${CMAKE_CURRENT_SOURCE_DIR}/paths-posix.cpp"
+	list(APPEND SOURCES
+		filestream-posix.cpp
+		fileutil-posix.cpp
+		paths-posix.cpp
 	)
 endif()
-target_sources(tfe PRIVATE
-		"${CMAKE_CURRENT_SOURCE_DIR}/filewriterAsync.cpp"
-		"${CMAKE_CURRENT_SOURCE_DIR}/memorystream.cpp"
-		)
 
+#add_custom_target(${PROJECT_NAME} "" SOURCES ${SOURCES})
+add_library(${PROJECT_NAME} OBJECT ${SOURCES})
+target_sources(${PROJECT_NAME} PRIVATE ${SOURCES})
+source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} PREFIX Sources FILES ${SOURCES})

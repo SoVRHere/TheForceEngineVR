@@ -72,7 +72,9 @@ namespace TFE_FrontEndUI
 		CONFIG_INPUT,
 		CONFIG_GRAPHICS,
 		CONFIG_HUD,
+#if defined(ENABLE_VR)
 		CONFIG_VR,
+#endif
 		CONFIG_ENHANCEMENTS,
 		CONFIG_SOUND,
 		CONFIG_SYSTEM,
@@ -259,7 +261,9 @@ namespace TFE_FrontEndUI
 	void configInput();
 	void configGraphics();
 	void configHud();
+#if defined(ENABLE_VR)
 	void configVr();
+#endif
 	void configSound();
 	void configSystem();
 	void DrawLabelledIntSlider(float labelWidth, float valueWidth, const char* label, const char* tag, int* value, int min, int max);
@@ -501,18 +505,22 @@ namespace TFE_FrontEndUI
 
 	void ImGuiBeginDisabledInVR()
 	{
+#if defined(ENABLE_VR)
 		if (TFE_Settings::getTempSettings()->vr)
 		{
 			ImGuiBeginDisabled();
 		}
+#endif
 	}
 
 	void ImGuiEndDisabledInVR()
 	{
+#if defined(ENABLE_VR)
 		if (TFE_Settings::getTempSettings()->vr)
 		{
 			ImGuiEndDisabled();
 		}
+#endif
 	}
 
 	void showNoGameDataUI()
@@ -590,6 +598,7 @@ namespace TFE_FrontEndUI
 		ImGui::PopFont();
 	}
 
+#if defined(ENABLE_VR)
 	void drawVrControllersInfo(s32 windowWidth)
 	{
 		if (!TFE_Settings::getTempSettings()->vrViewDebugInfo)
@@ -649,6 +658,7 @@ namespace TFE_FrontEndUI
 			ImGui::End();
 		}
 	}
+#endif
 		
 	void setCurrentGame(IGame* game)
 	{
@@ -690,7 +700,9 @@ namespace TFE_FrontEndUI
 		}
 		if (!drawFrontEnd)
 		{
+#if defined(ENABLE_VR)
 			drawVrControllersInfo(w);
+#endif
 			if (showFps) { drawFps(w); }
 			return;
 		}
@@ -744,6 +756,7 @@ namespace TFE_FrontEndUI
 
 			if (s_appState == APP_STATE_SET_DEFAULTS)
 			{
+#if defined(ENABLE_VR)
 				// auto set defaults in VR
 				if (TFE_Settings::getTempSettings()->vr)
 				{
@@ -755,6 +768,7 @@ namespace TFE_FrontEndUI
 					s_appState = APP_STATE_MENU;
 				}
 				else
+#endif
 				{
 					DisplayInfo displayInfo;
 					TFE_RenderBackend::getDisplayInfo(&displayInfo);
@@ -823,7 +837,7 @@ namespace TFE_FrontEndUI
 				ImVec2 textSize = ImVec2(f32(textWidth), f32(textHeight));
 				for (s32 i = 0; i < s_menuItemCount; i++)
 				{
-				#if ENABLE_EDITOR == 0
+				#ifndef ENABLE_EDITOR
 					// Disable the editor for now when not running on Windows.
 					if (s_menuItemselected[i] == menuItem_Editor)
 					{
@@ -964,12 +978,14 @@ namespace TFE_FrontEndUI
 				TFE_Settings::writeToDisk();
 				inputMapping_serialize();
 			}
+#if defined(ENABLE_VR)
 			if (ImGui::Button("Vr", sideBarButtonSize))
 			{
 				s_configTab = CONFIG_VR;
 				TFE_Settings::writeToDisk();
 				inputMapping_serialize();
 			}
+#endif
 			if (ImGui::Button("Sound", sideBarButtonSize))
 			{
 				s_configTab = CONFIG_SOUND;
@@ -1062,9 +1078,11 @@ namespace TFE_FrontEndUI
 			case CONFIG_HUD:
 				configHud();
 				break;
+#if defined(ENABLE_VR)
 			case CONFIG_VR:
 				configVr();
 				break;
+#endif
 			case CONFIG_SOUND:
 				configSound();
 				break;
@@ -2892,6 +2910,7 @@ namespace TFE_FrontEndUI
 		ImGui::PopStyleColor();
 	}
 
+#if defined(ENABLE_VR)
 	void configVr()
 	{
 		TFE_Settings_Vr* vrSettings = TFE_Settings::getVrSettings();
@@ -2923,7 +2942,7 @@ namespace TFE_FrontEndUI
 		{
 			vrSettings->resetToDefaults();
 		}
-		Tooltip("you can use --vrResetSettings CLI command to do it on start up, do not forget to remove it next time you want to run"
+		Tooltip("You can use --vrResetSettings CLI command to do it on start up, do not forget to remove it next time you want to run"
 			" the game as it will reset all your VR setting changes again.");
 		
 		ImGui::Separator();
@@ -2933,7 +2952,7 @@ namespace TFE_FrontEndUI
 		ImGui::LabelText("##ConfigLabel", "Controllers");
 		ImGui::PopFont();
 		ImGui::Checkbox("Ignore", &vrSettings->ignoreVrControllers);
-		Tooltip("ignore if you want to play with mouse + keyboard/gamepad");
+		Tooltip("Ignore if you want to play with mouse + keyboard/gamepad");
 
 		if (!vrSettings->ignoreVrControllers)
 		{
@@ -3056,6 +3075,7 @@ namespace TFE_FrontEndUI
 			}
 		}
 	}
+#endif
 
 	// Uses a percentage slider (0 - 100%) to adjust a floating point value (0.0 - 1.0).
 	// TODO: Refactor UI code to use this and similar functionality.

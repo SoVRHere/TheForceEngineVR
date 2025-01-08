@@ -28,8 +28,7 @@
 #undef min
 #undef max
 
-#pragma comment(lib, "opengl32.lib")
-#pragma comment(lib, "sdl2.lib")
+//#pragma comment(lib, "opengl32.lib") // TODO: why linker is not complaining?
 #endif
 
 namespace TFE_Jedi
@@ -79,6 +78,7 @@ namespace TFE_RenderBackend
 	static BloomMerge* s_bloomMerge;
 	static std::vector<SDL_Rect> s_displayBounds;
 
+#if defined(ENABLE_VR)
 	vr::UpdateStatus s_VRUpdateStatus = vr::UpdateStatus::ShouldNotRender;
 	Mat4  s_cameraProjVR[2];
 	Mat4  s_cameraProjVR_YDown[2];
@@ -86,6 +86,7 @@ namespace TFE_RenderBackend
 	Mat3  s_cameraMtxVR_YDown[2];
 	Vec3f s_cameraPosVR[2];
 	Vec3f s_cameraPosVR_YDown[2];
+#endif
 
 	void drawVirtualDisplay();
 	void setupPostEffectChain(bool useDynamicTexture, bool useBloom);
@@ -201,6 +202,7 @@ namespace TFE_RenderBackend
 	bool initVR()
 	{
 		bool& inVr = TFE_Settings::getTempSettings()->vr;
+#if defined(ENABLE_VR)
 		if (inVr)
 		{
 			if (!vr::IsInitialized())
@@ -229,6 +231,7 @@ namespace TFE_RenderBackend
 				}
 			}
 		}
+#endif
 
 		return inVr;
 	}
@@ -266,11 +269,13 @@ namespace TFE_RenderBackend
 		s_palette->create(256, 1, 2);
 
 		s_screenCapture = new ScreenCapture();
+#if defined(ENABLE_VR)
 		if (TFE_Settings::getTempSettings()->vr)
 		{
 			s_screenCapture->create(vr::GetRenderTargetSize().x, vr::GetRenderTargetSize().y, 4);
 		}
 		else
+#endif
 		{
 			s_screenCapture->create(m_windowState.width, m_windowState.height, 4);
 		}
@@ -363,6 +368,7 @@ namespace TFE_RenderBackend
 		popGroup();
 		TFE_ZONE_END(systemUi);
 
+#if defined(ENABLE_VR)
 		if (TFE_Settings::getTempSettings()->vr && s_VRUpdateStatus == vr::UpdateStatus::Ok)
 		{
 			// in VR we have to make screenshot before vr::SubmitFrame to avoid getting glReadPixels error:
@@ -375,9 +381,11 @@ namespace TFE_RenderBackend
 			}
 			s_screenCapture->update();
 		}
+#endif
 
 		TFE_ZONE_BEGIN(swapGpu, "GPU Swap Buffers");
 		// Update the window.
+#if defined(ENABLE_VR)
 		if (TFE_Settings::getTempSettings()->vr)
 		{
 			if (s_VRUpdateStatus == vr::UpdateStatus::Ok)
@@ -388,6 +396,7 @@ namespace TFE_RenderBackend
 			}
 		}
 		else // to be able to capture frame in NVIDIA Nsight we have to swap buffers or change Frame Delimiter in Nsight settings
+#endif
 		{
 			SDL_GL_SwapWindow((SDL_Window*)m_window);
 		}
@@ -495,11 +504,13 @@ namespace TFE_RenderBackend
 		
 	bool getDisplayMonitorInfo(s32 displayIndex, MonitorInfo* monitorInfo)
 	{
+#if defined(ENABLE_VR)
 		if (TFE_Settings::getTempSettings()->vr)
 		{
 			*monitorInfo = { 0, 0, (s32)vr::GetRenderTargetSize().x, (s32)vr::GetRenderTargetSize().y };
 			return true;
 		}
+#endif
 
 		enumerateDisplays();
 		if (displayIndex >= (s32)s_displayBounds.size())
@@ -611,6 +622,7 @@ namespace TFE_RenderBackend
 	{
 		assert(displayInfo);
 
+#if defined(ENABLE_VR)
 		if (TFE_Settings::getTempSettings()->vr)
 		{
 			displayInfo->width = vr::GetRenderTargetSize().x;
@@ -618,6 +630,7 @@ namespace TFE_RenderBackend
 			displayInfo->refreshRate = 70.0f;
 		}
 		else
+#endif
 		{
 			displayInfo->width = m_windowState.width;
 			displayInfo->height = m_windowState.height;
@@ -659,6 +672,7 @@ namespace TFE_RenderBackend
 		bool result = false;
 		if (s_useRenderTarget)
 		{
+#if defined(ENABLE_VR)
 			if (inVr)
 			{
 				const bool useMultiview = TFE_Settings::getTempSettings()->vrMultiview;
@@ -703,6 +717,7 @@ namespace TFE_RenderBackend
 				result = true;
 			}
 			else
+#endif
 			{
 				s_virtualRenderTarget = new RenderTarget();
 				s_virtualRenderTexture = new TextureGpu();
@@ -975,7 +990,20 @@ namespace TFE_RenderBackend
 
 	void unbindRenderTarget()
 	{
-		if (!TFE_Settings::getTempSettings()->vr)
+#if defined(ENABLE_VR)
+		if (TFE_Settings::getTempSettings()->vr)
+		{
+			RenderTarget& renderTarget = vr::GetRenderTarget(vr::Side::Left);
+			renderTarget.bind();
+
+			if (s_copyTarget)
+			{
+				RenderTarget::copy(s_copyTarget, &renderTarget);
+				s_copyTarget = nullptr;
+			}
+		}
+		else
+#endif
 		{
 			RenderTarget::unbind();
 			glViewport(0, 0, m_windowState.width, m_windowState.height);
@@ -984,17 +1012,6 @@ namespace TFE_RenderBackend
 			if (s_copyTarget)
 			{
 				RenderTarget::copyBackbufferToTarget(s_copyTarget);
-				s_copyTarget = nullptr;
-			}
-		}
-		else
-		{
-			RenderTarget& renderTarget = vr::GetRenderTarget(vr::Side::Left);
-			renderTarget.bind();
-
-			if (s_copyTarget)
-			{
-				RenderTarget::copy(s_copyTarget, &renderTarget);
 				s_copyTarget = nullptr;
 			}
 		}
@@ -1229,6 +1246,7 @@ namespace TFE_RenderBackend
 		s32 h = m_windowState.height;
 		f32 aspect = f32(w) / f32(h);
 
+#if defined(ENABLE_VR)
 		if (TFE_Settings::getTempSettings()->vr)
 		{
 			w = vr::GetRenderTargetSize().x;
@@ -1239,6 +1257,7 @@ namespace TFE_RenderBackend
 			TFE_Settings::getGraphicsSettings()->widescreen = false;
 		}
 		else 
+#endif
 		if (s_displayMode == DMODE_ASPECT_CORRECT && aspect > c_tallScreenThreshold && !s_widescreen)
 		{
 			// Calculate width based on height.
@@ -1297,6 +1316,7 @@ namespace TFE_RenderBackend
 
 	void updateVRCamera()
 	{
+#if defined(ENABLE_VR)
 		if (!TFE_Settings::getTempSettings()->vr)
 		{
 			return;
@@ -1343,5 +1363,6 @@ namespace TFE_RenderBackend
 
 		UpdateCameraMtx(s_cameraMtxVR, s_cameraPosVR, true);
 		UpdateCameraMtx(s_cameraMtxVR_YDown, s_cameraPosVR_YDown, false);
+#endif
 	}
 }  // namespace

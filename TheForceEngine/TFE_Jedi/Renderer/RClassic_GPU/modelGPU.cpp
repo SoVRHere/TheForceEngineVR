@@ -34,6 +34,7 @@
 
 using namespace TFE_RenderBackend;
 
+#if defined(ENABLE_VR)
 namespace TFE_RenderBackend
 {
 	extern Mat4  s_cameraProjVR[2];
@@ -43,6 +44,7 @@ namespace TFE_RenderBackend
 	extern Vec3f s_cameraPosVR[2];
 	extern Vec3f s_cameraPosVR_YDown[2];
 }
+#endif
 
 namespace TFE_Jedi
 {
@@ -837,27 +839,24 @@ namespace TFE_Jedi
 			const ModelDraw* drawList = s_modelDrawList[s].data();
 			if (!listCount) { continue; }
 
-			const bool inVr = TFE_Settings::getTempSettings()->vr;
-
 			// Bind the shader and set per-frame shader variables.
 			shader->bind();
 
-			(s_shaderInputs[s].cameraPos && s_shaderInputs[s].cameraPos->size > 1) ?
-				shader->setVariableArray(s_shaderInputs[s].cameraPosId, SVT_VEC3, s_cameraPosVR_YDown[0].m, 2) :
-				shader->setVariable(s_shaderInputs[s].cameraPosId, SVT_VEC3, s_cameraPos.m);
-			(s_shaderInputs[s].cameraView && s_shaderInputs[s].cameraView->size > 1) ?
-				shader->setVariableArray(s_shaderInputs[s].cameraViewId, SVT_MAT3x3, s_cameraMtxVR_YDown[0].data, 2) :
-				shader->setVariable(s_shaderInputs[s].cameraViewId, SVT_MAT3x3, s_cameraMtx.data);
-			(s_shaderInputs[s].cameraProj && s_shaderInputs[s].cameraProj->size > 1) ?
-				shader->setVariableArray(s_shaderInputs[s].cameraProjId, SVT_MAT4x4, s_cameraProjVR_YDown[0].data, 2) :
-				shader->setVariable(s_shaderInputs[s].cameraProjId, SVT_MAT4x4, s_cameraProj.data);
-			if (inVr)
+#if defined(ENABLE_VR)
+			if (TFE_Settings::getTempSettings()->vr)
 			{
+				shader->setVariableArray(s_shaderInputs[s].cameraPosId, SVT_VEC3, s_cameraPosVR_YDown[0].m, 2);
+				shader->setVariableArray(s_shaderInputs[s].cameraViewId, SVT_MAT3x3, s_cameraMtxVR_YDown[0].data, 2);
+				shader->setVariableArray(s_shaderInputs[s].cameraProjId, SVT_MAT4x4, s_cameraProjVR_YDown[0].data, 2);
 				shader->setVariable(s_shaderInputs[s].cameraDirId, SVT_VEC3, (-s_cameraMtxVR_YDown[0].m2).m);
 				shader->setVariable(s_shaderInputs[s].cameraRightId, SVT_VEC3, s_cameraMtxVR_YDown[0].m0.m);
 			}
 			else
+#endif
 			{
+				shader->setVariable(s_shaderInputs[s].cameraPosId, SVT_VEC3, s_cameraPos.m);
+				shader->setVariable(s_shaderInputs[s].cameraViewId, SVT_MAT3x3, s_cameraMtx.data);
+				shader->setVariable(s_shaderInputs[s].cameraProjId, SVT_MAT4x4, s_cameraProj.data);
 				shader->setVariable(s_shaderInputs[s].cameraDirId, SVT_VEC3, s_cameraDir.m);
 				shader->setVariable(s_shaderInputs[s].cameraRightId, SVT_VEC3, s_cameraRight.m);
 			}

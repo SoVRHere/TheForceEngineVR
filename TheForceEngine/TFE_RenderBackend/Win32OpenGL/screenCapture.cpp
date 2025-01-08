@@ -119,13 +119,8 @@ static void flipVert32bpp(void* mem, u32 w, u32 h)
 
 void ScreenCapture::captureFrontBufferToMemory(u32* mem)
 {
-	if (!TFE_Settings::getTempSettings()->vr)
-	{
-		glReadBuffer(GL_FRONT);
-		glReadPixels(0, 0, m_width, m_height, GL_RGBA, GL_UNSIGNED_BYTE, mem);
-		TFE_ASSERT_GL;
-	}
-	else
+#if defined(ENABLE_VR)
+	if (TFE_Settings::getTempSettings()->vr)
 	{
 		glBindFramebuffer(GL_FRAMEBUFFER, m_fbo);
 		TFE_ASSERT_GL;
@@ -146,6 +141,13 @@ void ScreenCapture::captureFrontBufferToMemory(u32* mem)
 
 		glFramebufferTextureLayer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, 0, 0, 0);
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+		TFE_ASSERT_GL;
+	}
+	else
+#endif
+	{
+		glReadBuffer(GL_FRONT);
+		glReadPixels(0, 0, m_width, m_height, GL_RGBA, GL_UNSIGNED_BYTE, mem);
 		TFE_ASSERT_GL;
 	}
 
@@ -192,13 +194,8 @@ void ScreenCapture::update(bool flush)
 	bool popHead = false;
 	if (!OpenGL_Caps::supportsPbo())
 	{
-		if (!TFE_Settings::getTempSettings()->vr)
-		{
-			glReadBuffer(GL_BACK);
-			glReadPixels(0, 0, m_width, m_height, GL_RGBA, GL_UNSIGNED_BYTE, m_captures[m_captureHead].imageData.data());
-			TFE_ASSERT_GL;
-		}
-		else
+#if defined(ENABLE_VR)
+		if (TFE_Settings::getTempSettings()->vr)
 		{
 			glBindFramebuffer(GL_FRAMEBUFFER, m_fbo);
 			TFE_ASSERT_GL;
@@ -219,6 +216,13 @@ void ScreenCapture::update(bool flush)
 
 			glFramebufferTextureLayer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, 0, 0, 0);
 			glBindFramebuffer(GL_FRAMEBUFFER, 0);
+			TFE_ASSERT_GL;
+		}
+		else
+#endif
+		{
+			glReadBuffer(GL_BACK);
+			glReadPixels(0, 0, m_width, m_height, GL_RGBA, GL_UNSIGNED_BYTE, m_captures[m_captureHead].imageData.data());
 			TFE_ASSERT_GL;
 		}
 
@@ -264,13 +268,8 @@ void ScreenCapture::captureFrame(const char* outputPath)
 	{
 		// Async copy from GPU data to staging buffer [writeBuffer].
 		glBindBuffer(GL_PIXEL_PACK_BUFFER, m_stagingBuffers[m_writeBuffer]);
-		if (!TFE_Settings::getTempSettings()->vr)
-		{
-			glReadPixels(0, 0, m_width, m_height, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
-			glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
-			TFE_ASSERT_GL;
-		}
-		else
+#if defined(ENABLE_VR)
+		if (TFE_Settings::getTempSettings()->vr)
 		{
 			glBindFramebuffer(GL_FRAMEBUFFER, m_fbo);
 			TFE_ASSERT_GL;
@@ -294,6 +293,13 @@ void ScreenCapture::captureFrame(const char* outputPath)
 
 			glFramebufferTextureLayer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, 0, 0, 0);
 			glBindFramebuffer(GL_FRAMEBUFFER, 0);
+			TFE_ASSERT_GL;
+		}
+		else
+#endif
+		{
+			glReadPixels(0, 0, m_width, m_height, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+			glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
 			TFE_ASSERT_GL;
 		}
 	}

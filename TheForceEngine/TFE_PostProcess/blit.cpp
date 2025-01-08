@@ -6,6 +6,7 @@
 #include <TFE_System/math.h>
 #include <TFE_Vr/vr.h>
 
+#if defined(ENABLE_VR)
 namespace TFE_RenderBackend
 {
 	extern Mat4  s_cameraProjVR[2];
@@ -15,6 +16,7 @@ namespace TFE_RenderBackend
 	extern Vec3f s_cameraPosVR[2];
 	extern Vec3f s_cameraPosVR_YDown[2];
 }
+#endif
 
 bool Blit::init()
 {
@@ -116,6 +118,7 @@ void Blit::setEffectState()
 		m_shader->setVariable(m_colorCorrectVarId, SVT_VEC4, m_colorCorrectParam.m);
 	}
 
+#if defined(ENABLE_VR)
 	if (TFE_Settings::getTempSettings()->vr)
 	{
 		const std::array<Vec3f, 8>& frustum = vr::GetUnitedFrustum();
@@ -133,6 +136,7 @@ void Blit::setEffectState()
 		s32 lock = vrSettings->pdaToVr.lockToCamera ? 1 : 0;
 		m_shader->setVariable(m_LockToCameraId, SVT_ISCALAR, &lock);
 	}
+#endif
 }
 
 void Blit::setupShader()

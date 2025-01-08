@@ -110,6 +110,7 @@ void begin()
 #endif
 	ImGui_ImplSDL2_NewFrame();
 
+#if defined(ENABLE_VR)
 	// override some ImGui SDL2 stuff for VR
 	if (TFE_Settings::getTempSettings()->vr)
 	{
@@ -122,6 +123,7 @@ void begin()
 		TFE_Input::getMousePos(&mouseX, &mouseY);
 		io.AddMousePosEvent((f32)mouseX, (f32)mouseY);
 	}
+#endif
 
 	ImGui::NewFrame();
 }

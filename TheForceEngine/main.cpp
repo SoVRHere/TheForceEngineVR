@@ -37,10 +37,10 @@
 #include <TFE_Jedi/Renderer/jediRenderer.h>
 #include <TFE_Vr/vr.h>
 
-#if ENABLE_EDITOR == 1
+#ifdef ENABLE_EDITOR
 #include <TFE_Editor/editor.h>
 #endif
-#if ENABLE_FORCE_SCRIPT == 1
+#ifdef ENABLE_FORCE_SCRIPT
 #include <TFE_ForceScript/forceScript.h>
 #endif
 
@@ -52,7 +52,6 @@
 #ifdef min
 #undef min
 #undef max
-#pragma comment(lib, "SDL2main.lib")
 #endif
 #endif
 
@@ -86,10 +85,12 @@ static const char* s_loadRequestFilename = nullptr;
 void parseOption(const char* name, const std::vector<const char*>& values, bool longName);
 bool validatePath();
 
+#if defined(ENABLE_VR)
 namespace TFE_RenderBackend
 {
 	extern vr::UpdateStatus s_VRUpdateStatus;
 }
+#endif
 
 void handleEvent(const SDL_Event& Event)
 {
@@ -258,11 +259,13 @@ bool sdlInit()
 	if (code != 0) { return false; }
 
 	TFE_Settings_Window* windowSettings = TFE_Settings::getWindowSettings();
+#if defined(ENABLE_VR)
 	if (TFE_Settings::getTempSettings()->vr)
 	{
 		windowSettings->fullscreen = false;
 		TFE_Settings::getTempSettings()->forceFullscreen = false;
 	}
+#endif
 	bool fullscreen    = windowSettings->fullscreen || TFE_Settings::getTempSettings()->forceFullscreen;
 	s_displayWidth     = windowSettings->width;
 	s_displayHeight    = windowSettings->height;
@@ -325,7 +328,7 @@ void setAppState(AppState newState, int argc, char* argv[])
 {
 	const TFE_Settings_Graphics* config = TFE_Settings::getGraphicsSettings();
 
-#if ENABLE_EDITOR == 1
+#ifdef ENABLE_EDITOR
 	if (newState != APP_STATE_EDITOR)
 	{
 		TFE_Editor::disable();
@@ -341,7 +344,7 @@ void setAppState(AppState newState, int argc, char* argv[])
 
 		if (validatePath())
 		{
-		#if ENABLE_EDITOR == 1
+		#ifdef ENABLE_EDITOR
 			TFE_Editor::enable();
 		#endif
 		}
@@ -358,10 +361,12 @@ void setAppState(AppState newState, int argc, char* argv[])
 			newState = APP_STATE_GAME;
 			TFE_FrontEndUI::setAppState(APP_STATE_GAME);
 
+#if defined(ENABLE_VR)
 			if (TFE_Settings::getTempSettings()->vr)
 			{
 				vr::Reset();
 			}
+#endif
 
 			TFE_Game* gameInfo = TFE_Settings::getGame();
 			if (s_curGame)
@@ -550,6 +555,7 @@ bool validatePath()
 
 void updateVR()
 {
+#if defined(ENABLE_VR)
 	if (TFE_Settings::getTempSettings()->vr)
 	{
 		// always enable relative mode for VR to avoid mouse clicks outside of the window leading to loosing window focus
@@ -579,10 +585,12 @@ void updateVR()
 	//	}
 	//	vr::SubmitFrame();
 	//} while (true);
+#endif
 }
 
 void overrideVRSettings(bool firstRun)
 {
+#if defined(ENABLE_VR)
 	if (TFE_Settings::getTempSettings()->vrResetSettings)
 	{
 		TFE_Settings::getVrSettings()->resetToDefaults();
@@ -616,6 +624,7 @@ void overrideVRSettings(bool firstRun)
 
 		TFE_System::setVsync(false);
 	}
+#endif
 }
 
 int main(int argc, char* argv[])
@@ -816,6 +825,7 @@ int main(int argc, char* argv[])
 		u32 state = SDL_GetRelativeMouseState(&mouseX, &mouseY);
 		SDL_GetMouseState(&mouseAbsX, &mouseAbsY);
 		bool mouseMoveEmulatedByVrController = false;
+#if defined(ENABLE_VR)
 		if (TFE_Settings::getTempSettings()->vr)
 		{
 			mouseMoveEmulatedByVrController = vr::HandleControllerEvents(s_curGame ? s_curGame->getState() : IGame::State::Unknown, mouseX, mouseY);
@@ -831,7 +841,7 @@ int main(int argc, char* argv[])
 			mouseAbsX = (s32)((f32)mouseAbsX * (f32)targetSize.x / (f32)s_displayWidth);
 			mouseAbsY = (s32)((f32)mouseAbsY * (f32)targetSize.y / (f32)s_displayHeight);
 		}
-
+#endif
 		if (!mouseMoveEmulatedByVrController && (mouseX != 0 || mouseY != 0))
 		{
 			TFE_Input::setRelativeMousePos(mouseX, mouseY);
@@ -965,7 +975,7 @@ int main(int argc, char* argv[])
 		bool endInputFrame = true;
 		if (s_curState == APP_STATE_EDITOR)
 		{
-		#if ENABLE_EDITOR == 1
+		#ifdef ENABLE_EDITOR
 			if (TFE_Editor::update(isConsoleOpen))
 			{
 				TFE_FrontEndUI::setAppState(APP_STATE_MENU);
@@ -1010,7 +1020,7 @@ int main(int argc, char* argv[])
 		}
 
 		bool swap = s_curState != APP_STATE_EDITOR && (s_curState != APP_STATE_MENU || TFE_FrontEndUI::isConfigMenuOpen());
-	#if ENABLE_EDITOR == 1
+	#ifdef ENABLE_EDITOR
 		if (s_curState == APP_STATE_EDITOR)
 		{
 			swap = TFE_Editor::render();
@@ -1031,6 +1041,7 @@ int main(int argc, char* argv[])
 		}
 		frame++;
 
+#if defined(ENABLE_VR)
 		if (TFE_Settings::getTempSettings()->vr)
 		{
 			if (TFE_RenderBackend::s_VRUpdateStatus == vr::UpdateStatus::ShouldQuit)
@@ -1038,6 +1049,7 @@ int main(int argc, char* argv[])
 				s_loop = false;
 			}
 		}
+#endif
 
 		if (endInputFrame)
 		{
@@ -1064,7 +1076,9 @@ int main(int argc, char* argv[])
 	TFE_RenderBackend::updateSettings();
 	TFE_Settings::shutdown();
 	TFE_Jedi::texturepacker_freeGlobal();
+#if defined(ENABLE_VR)
 	vr::Shutdown();
+#endif
 	TFE_RenderBackend::destroy();
 	TFE_SaveSystem::destroy();
 	SDL_Quit();

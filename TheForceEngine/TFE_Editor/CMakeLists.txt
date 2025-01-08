@@ -1,5 +1,124 @@
-add_subdirectory(AssetBrowser/)
-add_subdirectory(EditorAsset/)
-add_subdirectory(LevelEditor/)
-file(GLOB SOURCES "*.cpp")
-target_sources(tfe PRIVATE ${SOURCES})
+project(TFE_Editor)
+set(SOURCES
+	AssetBrowser/assetBrowser.cpp
+	AssetBrowser/assetBrowser.h
+	EditorAsset/editor3dThumbnails.cpp
+	EditorAsset/editor3dThumbnails.h
+	EditorAsset/editorAsset.cpp
+	EditorAsset/editorAsset.h
+	EditorAsset/editorColormap.cpp
+	EditorAsset/editorColormap.h
+	EditorAsset/editorFrame.cpp
+	EditorAsset/editorFrame.h
+	EditorAsset/editorLevelPreview.cpp
+	EditorAsset/editorLevelPreview.h
+	EditorAsset/editorObj3D.cpp
+	EditorAsset/editorObj3D.h
+	EditorAsset/editorSound.cpp
+	EditorAsset/editorSound.h
+	EditorAsset/editorSprite.cpp
+	EditorAsset/editorSprite.h
+	EditorAsset/editorTexture.cpp
+	EditorAsset/editorTexture.h
+	LevelEditor/Rendering/grid.cpp
+	LevelEditor/Rendering/grid.h
+	LevelEditor/Rendering/grid2d.cpp
+	LevelEditor/Rendering/grid2d.h
+	LevelEditor/Rendering/grid3d.cpp
+	LevelEditor/Rendering/grid3d.h
+	LevelEditor/Rendering/viewport.cpp
+	LevelEditor/Rendering/viewport.h
+	LevelEditor/Scripting/levelEditorScripts.cpp
+	LevelEditor/Scripting/levelEditorScripts.h
+	LevelEditor/Scripting/ls_api.h
+	LevelEditor/Scripting/ls_draw.cpp
+	LevelEditor/Scripting/ls_draw.h
+	LevelEditor/Scripting/ls_level.cpp
+	LevelEditor/Scripting/ls_level.h
+	LevelEditor/Scripting/ls_selection.cpp
+	LevelEditor/Scripting/ls_selection.h
+	LevelEditor/Scripting/ls_system.cpp
+	LevelEditor/Scripting/ls_system.h
+	LevelEditor/browser.cpp
+	LevelEditor/browser.h
+	LevelEditor/camera.cpp
+	LevelEditor/camera.h
+	LevelEditor/contextMenu.cpp
+	LevelEditor/contextMenu.h
+	LevelEditor/dragSelect.cpp
+	LevelEditor/dragSelect.h
+	LevelEditor/editCommon.cpp
+	LevelEditor/editCommon.h
+	LevelEditor/editEntity.cpp
+	LevelEditor/editEntity.h
+	LevelEditor/editGeometry.cpp
+	LevelEditor/editGeometry.h
+	LevelEditor/editGuidelines.cpp
+	LevelEditor/editGuidelines.h
+	LevelEditor/editNotes.cpp
+	LevelEditor/editNotes.h
+	LevelEditor/editVertex.cpp
+	LevelEditor/editVertex.h
+	LevelEditor/entity.cpp
+	LevelEditor/entity.h
+	LevelEditor/error.h
+	LevelEditor/featureId.cpp
+	LevelEditor/featureId.h
+	LevelEditor/groups.cpp
+	LevelEditor/groups.h
+	LevelEditor/guidelines.cpp
+	LevelEditor/guidelines.h
+	LevelEditor/hotkeys.cpp
+	LevelEditor/hotkeys.h
+	LevelEditor/infoPanel.cpp
+	LevelEditor/infoPanel.h
+	LevelEditor/levelDataSnapshot.cpp
+	LevelEditor/levelDataSnapshot.h
+	LevelEditor/levelEditor.cpp
+	LevelEditor/levelEditor.h
+	LevelEditor/levelEditorData.cpp
+	LevelEditor/levelEditorData.h
+	LevelEditor/levelEditorHistory.cpp
+	LevelEditor/levelEditorHistory.h
+	LevelEditor/levelEditorInf.cpp
+	LevelEditor/levelEditorInf.h
+	LevelEditor/lighting.cpp
+	LevelEditor/lighting.h
+	LevelEditor/note.cpp
+	LevelEditor/note.h
+	LevelEditor/selection.cpp
+	LevelEditor/selection.h
+	LevelEditor/sharedState.h
+	LevelEditor/shell.cpp
+	LevelEditor/shell.h
+	LevelEditor/tabControl.cpp
+	LevelEditor/tabControl.h
+	LevelEditor/userPreferences.cpp
+	LevelEditor/userPreferences.h
+
+	editor.cpp
+	editor.h
+	editorConfig.cpp
+	editorConfig.h
+	editorLevel.cpp
+	editorLevel.h
+	editorMath.cpp
+	editorMath.h
+	editorProject.cpp
+	editorProject.h
+	editorResources.cpp
+	editorResources.h
+	errorMessages.cpp
+	errorMessages.h
+	history.cpp
+	history.h
+	historyView.cpp
+	historyView.h
+	snapshotReaderWriter.cpp
+	snapshotReaderWriter.h
+)
+
+#add_custom_target(${PROJECT_NAME} "" SOURCES ${SOURCES})
+add_library(${PROJECT_NAME} OBJECT ${SOURCES})
+target_sources(${PROJECT_NAME} PRIVATE ${SOURCES})
+source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} PREFIX Sources FILES ${SOURCES})

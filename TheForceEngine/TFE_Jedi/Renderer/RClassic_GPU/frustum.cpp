@@ -28,10 +28,12 @@ namespace TFE_FrontEndUI
 	//extern bool preciseFrustum;
 }
 
+#if defined(ENABLE_VR)
 namespace TFE_RenderBackend
 {
 	extern vr::UpdateStatus s_VRUpdateStatus;
 }
+#endif
 
 namespace TFE_Jedi
 {
@@ -299,6 +301,7 @@ namespace TFE_Jedi
 		// This is done because exact frustum clipping isn't actually necessary for rendering, clipping is only used for portal testing.
 		Mat4 proj = s_cameraProj;
 
+#if defined(ENABLE_VR)
 		if (TFE_Settings::getTempSettings()->vr && TFE_RenderBackend::s_VRUpdateStatus == vr::UpdateStatus::Ok)
 		{
 			Mat4 viewHmd = vr::GetEyePose(vr::Side::Left).mTransformationYDown;
@@ -309,6 +312,7 @@ namespace TFE_Jedi
 
 			//TFE_FrontEndUI::preciseFrustum = true;
 		}
+#endif
 
 		proj.m0.x *= c_superSidePlaneNormalScale;
 		proj.m1.y *= c_superSidePlaneNormalScale;

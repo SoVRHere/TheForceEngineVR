@@ -1206,6 +1206,7 @@ namespace TFE_DarkForces
 		const fixed16_16 weaponLightingZDist  = FIXED(6);
 		const fixed16_16 gasmaskLightingZDist = FIXED(2);
 
+#if defined(ENABLE_VR)
 		ScopeFunctions scopeFuncs{
 			[]() {
 				if (TFE_Settings::getTempSettings()->vr)
@@ -1221,6 +1222,7 @@ namespace TFE_DarkForces
 				TFE_Jedi::ShiftVR = nullptr;
 			},
 		};
+#endif
 
 		PlayerWeapon* weapon = s_curPlayerWeapon;
 		if (weapon && !s_weaponOffAnim)

@@ -9,6 +9,7 @@
 #include <TFE_Vr/vr.h>
 #include <TFE_Ui/imGUI/imgui.h>
 
+#if defined(ENABLE_VR)
 namespace TFE_RenderBackend
 {
 	extern Mat4  s_cameraProjVR[2];
@@ -18,6 +19,7 @@ namespace TFE_RenderBackend
 	extern Vec3f s_cameraPosVR[2];
 	extern Vec3f s_cameraPosVR_YDown[2];
 }
+#endif
 
 namespace TFE_RenderShared
 {
@@ -158,6 +160,7 @@ namespace TFE_RenderShared
 
 		s_shader.bind();
 
+#if defined(ENABLE_VR)
 		if (TFE_Settings::getTempSettings()->vr)
 		{
 			if (!TFE_Settings::getTempSettings()->vrMultiview)
@@ -215,6 +218,7 @@ namespace TFE_RenderShared
 			s_shader.setVariableArray(s_CtrlIndexTriggerId, SVT_SCALAR, ctrlIndexTrigger, 2);
 		}
 		else
+#endif
 		{
 			float L = draw_data->DisplayPos.x;
 			float R = draw_data->DisplayPos.x + draw_data->DisplaySize.x;

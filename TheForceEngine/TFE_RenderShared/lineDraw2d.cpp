@@ -13,6 +13,7 @@
 #define MAX_LINES 65536
 #define MAX_CURVES 4096
 
+#if defined(ENABLE_VR)
 namespace TFE_RenderBackend
 {
 	extern Mat4  s_cameraProjVR[2];
@@ -22,6 +23,7 @@ namespace TFE_RenderBackend
 	extern Vec3f s_cameraPosVR[2];
 	extern Vec3f s_cameraPosVR_YDown[2];
 }
+#endif
 
 namespace TFE_RenderShared
 {
@@ -412,6 +414,7 @@ namespace TFE_RenderShared
 		{
 			s_vertexBuffer.bind();
 
+#if defined(ENABLE_VR)
 			if (TFE_Settings::getTempSettings()->vr)
 			{
 				const std::array<Vec3f, 8>& frustum = vr::GetUnitedFrustum();
@@ -436,6 +439,7 @@ namespace TFE_RenderShared
 				TFE_RenderBackend::drawIndexedTriangles(s_lineCount2d * 2, sizeof(u32));
 			}
 			else
+#endif
 			{
 				LineDraw* draw = s_lineDraw;
 				for (s32 i = 0; i < s_lineDrawCount; i++, draw++)

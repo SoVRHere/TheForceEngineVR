@@ -342,6 +342,7 @@ namespace TFE_DarkForces
 			}
 		}
 
+#if defined(ENABLE_VR)
 		ScopeFunctions scopeFuncs{
 			[]() {
 				if (TFE_Settings::getTempSettings()->vr)
@@ -357,6 +358,7 @@ namespace TFE_DarkForces
 				TFE_Jedi::ShiftVR = nullptr;
 			},
 		};
+#endif
 
 		// Draw the menu.
 		if (s_emState.confirmState == CONFIRM_STATE_NONE)
@@ -797,6 +799,7 @@ namespace TFE_DarkForces
 		TFE_Input::getMousePos(&mx, &my);
 		s_emState.cursorPosAccum = { mx, my };
 
+#if defined(ENABLE_VR)
 		if (TFE_Settings::getTempSettings()->vr)
 		{
 			const WindowState& win = TFE_RenderBackend::getWindowState();
@@ -817,6 +820,7 @@ namespace TFE_DarkForces
 			s_emState.cursorPos.z = s_emState.cursorPosAccum.z;
 			return;
 		}
+#endif
 
 		if (displayInfo.width >= displayInfo.height)
 		{

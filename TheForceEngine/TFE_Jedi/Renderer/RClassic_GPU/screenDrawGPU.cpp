@@ -20,6 +20,7 @@
 
 using namespace TFE_RenderBackend;
 
+#if defined(ENABLE_VR)
 namespace TFE_RenderBackend
 {
 	extern Mat4  s_cameraProjVR[2];
@@ -29,6 +30,7 @@ namespace TFE_RenderBackend
 	extern Vec3f s_cameraPosVR[2];
 	extern Vec3f s_cameraPosVR_YDown[2];
 }
+#endif
 
 namespace TFE_Jedi
 {
@@ -288,6 +290,7 @@ namespace TFE_Jedi
 				s_scrQuadShader.setVariable(s_palFxFlash, SVT_VEC3, palFx.m);
 			}
 
+#if defined(ENABLE_VR)
 			if (TFE_Settings::getTempSettings()->vr)
 			{
 				const std::array<Vec3f, 8>& frustum = vr::GetUnitedFrustum();
@@ -306,6 +309,7 @@ namespace TFE_Jedi
 				s_scrQuadShader.setVariableArray(s_frustumId, SVT_VEC3, frustum.data()->m, (u32)frustum.size());
 				s_scrQuadShader.setVariable(s_HmdViewId, SVT_MAT3x3, hmdMtx.data);
 			}
+#endif
 
 			const TextureGpu* palette  = TFE_RenderBackend::getPaletteTexture();
 			const TextureGpu* colormap = TFE_Sectors_GPU::getColormap();

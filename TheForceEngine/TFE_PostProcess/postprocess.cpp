@@ -12,6 +12,7 @@
 #include <assert.h>
 #include <vector>
 
+#if defined(ENABLE_VR)
 namespace TFE_RenderBackend
 {
 	extern Mat4  s_cameraProjVR[2];
@@ -21,6 +22,7 @@ namespace TFE_RenderBackend
 	extern Vec3f s_cameraPosVR[2];
 	extern Vec3f s_cameraPosVR_YDown[2];
 }
+#endif
 
 namespace TFE_PostProcess
 {
@@ -360,6 +362,7 @@ namespace TFE_PostProcess
 			// Tint.
 			shader->setVariable(s_overlayEffect->m_tintId, SVT_VEC4, effect->tint);
 
+#if defined(ENABLE_VR)
 			if (TFE_Settings::getTempSettings()->vr)
 			{
 				const TFE_Settings_Vr* vrSettings = TFE_Settings::getVrSettings();
@@ -377,6 +380,7 @@ namespace TFE_PostProcess
 				//shader->setVariable(s_overlayEffect->m_FovId, SVT_VEC2, fov.m);
 				//shader->setVariable(s_overlayEffect->m_scaleId, SVT_SCALAR, &scale);
 			}
+#endif
 
 			drawRectangle();
 		}

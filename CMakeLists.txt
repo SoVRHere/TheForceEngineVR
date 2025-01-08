@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.18 FATAL_ERROR)
 include(CheckCXXCompilerFlag)
 
 set(CMAKE_DISABLE_SOURCE_CHANGES ON)
@@ -14,7 +14,7 @@ project(TheForceEngine
 	DESCRIPTION "Modern 'Jedi Engine' replacement supporting Dark Forces, mods, and in the future Outlaws."
 	)
 
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
@@ -29,6 +29,15 @@ endif()
 if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-switch")	
 endif()
+
+if(MSVC)
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MP /EHsc /W3 /GR- /GF")
+	# force Unicode over Multi-byte
+	#add_definitions(-DUNICODE -D_UNICODE)
+	add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
+	add_compile_definitions(_HAS_STD_BYTE=0)
+	#add_compile_definitions(SDL_MAIN_HANDLED)
+endif(MSVC)
 
 if (UNIX AND NOT APPLE)
 	set(LINUX ON)
@@ -53,12 +62,37 @@ option(ENABLE_TFE "Enable building “The Force Engine”" ON)
 option(ENABLE_SYSMIDI "Enable System-MIDI Output if RTMidi is available" ON)
 option(ENABLE_EDITOR "Enable TFE Editor" OFF)
 option(ENABLE_FORCE_SCRIPT "Enable Force Script" OFF)
-option(ENABLE_ADJUSTABLEHUD_MOD "Install the build‑in “AdjustableHud mod” with TFE" ON)
+option(ENABLE_ADJUSTABLEHUD_MOD "Install the build-in “AdjustableHud mod” with TFE" ON)
+option(ENABLE_VR "Build TFE with VR Support" ON)
+option(START_VR "Start VR on start up, ignored if ENABLE_VR is OFF, use --novr/--vr CLI options to control VR initialization on start up" ON)
 
 if(ENABLE_TFE)
 	add_executable(tfe)
-	set_target_properties(tfe PROPERTIES OUTPUT_NAME "theforceengine")
+	
+	if(START_VR AND ENABLE_VR)
+		add_compile_definitions(START_VR)
+	endif()
+	
+	if(ENABLE_VR)
+		set_target_properties(tfe PROPERTIES OUTPUT_NAME "TheForceEngineVR")
+	else()
+		set_target_properties(tfe PROPERTIES OUTPUT_NAME "TheForceEngine")
+	endif()
 
+	if(WIN32)
+		#set_property(TARGET tfe PROPERTY WIN32_EXECUTABLE TRUE)
+		set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /SUBSYSTEM:WINDOWS")
+		#set_target_properties(tfe PROPERTIES WIN32_EXECUTABLE OFF)
+		target_link_libraries(tfe PRIVATE 
+			${CMAKE_SOURCE_DIR}/TheForceEngine/sdl2_win32/lib/x64/SDL2.lib
+			${CMAKE_SOURCE_DIR}/TheForceEngine/sdl2_win32/lib/x64/SDL2main.lib
+		)
+		include_directories(
+			TheForceEngine/sdl2_win32/include 
+		)
+		set_target_properties(tfe PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/TheForceEngine)
+	endif()
+	
 	if(UNIX)
 		find_package(PkgConfig REQUIRED)
 		find_package(SDL2 2.0.20 REQUIRED)
@@ -91,30 +125,37 @@ if(ENABLE_TFE)
 	endif()
 
 	if(ENABLE_SYSMIDI)
-		pkg_check_modules(RTMIDI rtmidi>=5.0.0)
-		if(RTMIDI_FOUND)
-			add_definitions("-DBUILD_SYSMIDI")
-			target_link_libraries(tfe PRIVATE ${RTMIDI_LIBRARIES})
+		if(WIN32)
+			add_compile_definitions(BUILD_SYSMIDI)
 		else()
-			set(ENABLE_SYSMIDI 0)
-			message(STATUS "System MIDI Disabled")
+			pkg_check_modules(RTMIDI rtmidi>=5.0.0)
+			if(RTMIDI_FOUND)
+				add_compile_definitions(BUILD_SYSMIDI)
+				target_link_libraries(tfe PRIVATE ${RTMIDI_LIBRARIES})
+			else()
+				set(ENABLE_SYSMIDI 0)
+				message(STATUS "System MIDI Disabled")
+			endif()
 		endif()
 	endif()
+	
 	if(ENABLE_EDITOR)
-		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DBUILD_EDITOR")
+		add_compile_definitions(BUILD_EDITOR)
 	endif()
 	if(ENABLE_FORCE_SCRIPT)
-		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DBUILD_FORCE_SCRIPT")
+		add_compile_definitions(BUILD_FORCE_SCRIPT)
 	endif()
-
+	if(ENABLE_VR)
+		add_compile_definitions(ENABLE_VR)
+	endif()
 
 	if(ENABLE_FORCE_SCRIPT)
 		target_include_directories(tfe PRIVATE "TheForceEngine/TFE_ForceScript/Angelscript/angelscript/include")
 		target_include_directories(tfe PRIVATE "TheForceEngine/TFE_ForceScript/Angelscript/add_on")
 	endif()
-	target_include_directories(tfe PRIVATE TheForceEngine)
+	include_directories(TheForceEngine)
 
-	add_subdirectory(TheForceEngine/)
+	add_subdirectory(TheForceEngine)
 endif()
 
 ### installation ###
@@ -170,13 +211,44 @@ if(ENABLE_TFE)
 	endif()
 endif()
 
-if(ENABLE_ADJUSTABLEHUD_MOD)
-	add_subdirectory(TheForceEngine/Mods/TFE/AdjustableHud)
+#if(ENABLE_ADJUSTABLEHUD_MOD)
+#	add_subdirectory(TheForceEngine/Mods/TFE/AdjustableHud)
+#
+#	if(LINUX)
+#		install(
+#			FILES "${CMAKE_CURRENT_SOURCE_DIR}/TheForceEngine/io.github.theforceengine.tfe.Mod.AdjustableHud.metainfo.xml"
+#			DESTINATION "share/metainfo"
+#		)
+#	endif()
+#endif()
 
-	if(LINUX)
-		install(
-			FILES "${CMAKE_CURRENT_SOURCE_DIR}/TheForceEngine/io.github.theforceengine.tfe.Mod.AdjustableHud.metainfo.xml"
-			DESTINATION "share/metainfo"
-		)
-	endif()
+target_link_libraries(tfe PRIVATE 
+	TFE_A11y
+	TFE_Archive
+	TFE_Asset
+	TFE_Audio
+	TFE_DarkForces
+	TFE_FileSystem
+	TFE_FrontEndUI
+	TFE_Game
+	TFE_Input
+	TFE_Jedi
+	TFE_Memory
+	TFE_Outlaws
+	TFE_Polygon
+	TFE_PostProcess
+	TFE_RenderBackend
+	TFE_RenderShared
+	TFE_Settings
+	TFE_System
+	TFE_Ui
+)
+if(ENABLE_EDITOR)
+	target_link_libraries(tfe PRIVATE TFE_Editor)
+endif()
+if(ENABLE_FORCE_SCRIPT)
+	target_link_libraries(tfe PRIVATE TFE_ForceScript)
+endif()
+if(ENABLE_VR)
+	target_link_libraries(tfe PRIVATE TFE_Vr)
 endif()

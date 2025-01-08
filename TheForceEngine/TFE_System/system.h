@@ -11,16 +11,6 @@
 #define TFE_MINOR_VERSION 10
 #define TFE_BUILD_VERSION 0
 
-#if defined(_WIN32) || defined(BUILD_EDITOR)
-#if !defined(ENABLE_EDITOR)
-#define ENABLE_EDITOR 1
-#endif
-#endif
-
-#if defined(_WIN32) || defined(BUILD_FORCE_SCRIPT)
-#define ENABLE_FORCE_SCRIPT 1
-#endif
-
 enum LogWriteType
 {
 	LOG_MSG = 0,
