@@ -4,8 +4,7 @@ name: Windows/x64 Build VR & publish version tagged commit
 
 on:
   push:
-    tags: ['v*.*.*'] # This triggers the workflow only on version tags like v1.0.0, v2.21.52, etc.
-      branches: [ "feature/vr" ]
+    branches: [ "feature/vr" ]
   # pull_request:
      # branches: [ "feature/build_test" ]
 
@@ -43,7 +42,6 @@ jobs:
       - name: Build artifacts
         run: |
           cmake --install ./BuildArtifacts/Build --config RelWithDebInfo --prefix ${{env.ARTIFACTS_PATH}}
-
 
       #- name: Build binaries
       #  run: MSBuild.exe /p:Configuration=${{env.BUILD_TYPE}} /p:OutDir=${{github.workspace}}/Build/ TheForceEngineVR.sln
