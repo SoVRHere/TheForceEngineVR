@@ -4,7 +4,8 @@ name: Windows/x64 Build VR & publish version tagged commit
 
 on:
   push:
-    branches: [ "feature/vr" ]
+    tags: ['test*.*.*'] # This triggers the workflow only on version tags like v1.0.0, v2.21.52, etc.
+    # branches: [ "feature/vr" ]
   # pull_request:
      # branches: [ "feature/build_test" ]
 
