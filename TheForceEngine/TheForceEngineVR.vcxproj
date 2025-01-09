@@ -188,7 +188,7 @@
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>$(SolutionDir)TheForceEngine\TFE_Vr\Lib\x64\VrWrapper_d.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>$(SolutionDir)TheForceEngine\sdl2_win32\lib\x64\SDL2.lib;$(SolutionDir)TheForceEngine\sdl2_win32\lib\x64\SDL2main.lib;$(SolutionDir)TheForceEngine\sdl2_win32\lib\x64\SDL2_image.lib;$(SolutionDir)TheForceEngine\TFE_Vr\Lib\x64\VrWrapper_d.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PreBuildEvent>
       <Command>
@@ -271,7 +271,7 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>$(SolutionDir)TheForceEngine\TFE_Vr\Lib\x64\VrWrapper.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>$(SolutionDir)TheForceEngine\sdl2_win32\lib\x64\SDL2.lib;$(SolutionDir)TheForceEngine\sdl2_win32\lib\x64\SDL2main.lib;$(SolutionDir)TheForceEngine\sdl2_win32\lib\x64\SDL2_image.lib;$(SolutionDir)TheForceEngine\TFE_Vr\Lib\x64\VrWrapper.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <Manifest>
       <EnableDpiAwareness>PerMonitorHighDPIAware</EnableDpiAwareness>
@@ -296,7 +296,7 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>$(SolutionDir)TheForceEngine\TFE_Vr\Lib\x64\VrWrapper.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>$(SolutionDir)TheForceEngine\TFE_Vr\Lib\x64\VrWrapper.lib;%(AdditionalDependencies);$(SolutionDir)TheForceEngine\sdl2_win32\lib\x64\SDL2.lib;$(SolutionDir)TheForceEngine\sdl2_win32\lib\x64\SDL2main.lib;$(SolutionDir)TheForceEngine\sdl2_win32\lib\x64\SDL2_image.lib</AdditionalDependencies>
     </Link>
     <PreBuildEvent>
       <Command>@(
@@ -327,7 +327,7 @@ echo ^)";
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>$(SolutionDir)TheForceEngine\sdl2_win32\lib\x64\SDL2.lib;$(SolutionDir)TheForceEngine\sdl2_win32\lib\x64\SDL2main.lib;$(SolutionDir)TheForceEngine\sdl2_win32\lib\x64\SDL2_image.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <Manifest>
       <EnableDpiAwareness>PerMonitorHighDPIAware</EnableDpiAwareness>

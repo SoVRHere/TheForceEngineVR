@@ -61,6 +61,8 @@
 
 #Directories
 .vs/
+Build*/
+Install*/
 Internal/
 TheForceEngine/Games/
 TheForceEngine/Mods/
@@ -72,10 +74,6 @@ TheForceEngine/Exports/
 TheForceEngine/VTune Profiler Results/
 TheForceEngine/glslang/
 TheForceEngine/Documentation/blog posts/
-BuildArtifacts/
-BuildExes/
-Build/
-Builds/
 TheForceEngine/bug_reports/
 WDFuseCommonFiles/
 x64/Debug/

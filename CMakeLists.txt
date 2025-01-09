@@ -6,7 +6,7 @@ set(CMAKE_DISABLE_IN_SOURCE_BUILD ON)
 
 # force Release by default.
 if(NOT DEFINED CMAKE_BUILD_TYPE)
-       set(CMAKE_BUILD_TYPE "Release" CACHE STRING "" FORCE)
+	set(CMAKE_BUILD_TYPE "Release" CACHE STRING "" FORCE)
 endif()
 
 project(TheForceEngine
@@ -80,9 +80,7 @@ if(ENABLE_TFE)
 	endif()
 
 	if(WIN32)
-		#set_property(TARGET tfe PROPERTY WIN32_EXECUTABLE TRUE)
-		set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /SUBSYSTEM:WINDOWS")
-		#set_target_properties(tfe PROPERTIES WIN32_EXECUTABLE OFF)
+		set_property(TARGET tfe PROPERTY WIN32_EXECUTABLE TRUE)
 		target_link_libraries(tfe PRIVATE 
 			${CMAKE_SOURCE_DIR}/TheForceEngine/sdl2_win32/lib/x64/SDL2.lib
 			${CMAKE_SOURCE_DIR}/TheForceEngine/sdl2_win32/lib/x64/SDL2main.lib
@@ -160,6 +158,10 @@ endif()
 
 ### installation ###
 
+if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+	set(CMAKE_INSTALL_PREFIX "${CMAKE_CURRENT_SOURCE_DIR}/Install" CACHE PATH "..." FORCE)
+endif(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+
 if(ENABLE_TFE)
 	# Main binary
 	install(TARGETS tfe
@@ -168,15 +170,22 @@ if(ENABLE_TFE)
 	)
 
 	# Support data
-	install(DIRECTORY
+	set(DATA_DIRS
 		"${CMAKE_CURRENT_SOURCE_DIR}/TheForceEngine/Captions"
 		"${CMAKE_CURRENT_SOURCE_DIR}/TheForceEngine/Documentation"
 		"${CMAKE_CURRENT_SOURCE_DIR}/TheForceEngine/UI_Text"
 		"${CMAKE_CURRENT_SOURCE_DIR}/TheForceEngine/UI_Images"
-		"${CMAKE_CURRENT_SOURCE_DIR}/TheForceEngine/EditorDef"
 		"${CMAKE_CURRENT_SOURCE_DIR}/TheForceEngine/Shaders"
 		"${CMAKE_CURRENT_SOURCE_DIR}/TheForceEngine/SoundFonts"
 		"${CMAKE_CURRENT_SOURCE_DIR}/TheForceEngine/Fonts"
+	)
+	
+	if(ENABLE_EDITOR)
+		list(APPEND DATA_DIRS "${CMAKE_CURRENT_SOURCE_DIR}/TheForceEngine/EditorDef")
+	endif()
+	
+	install(DIRECTORY
+			${DATA_DIRS}
 		DESTINATION "${CMAKE_INSTALL_DATADIR}"
 		    FILE_PERMISSIONS
 		      OWNER_READ OWNER_WRITE
@@ -189,7 +198,7 @@ if(ENABLE_TFE)
 	)
 	# Always install the “Mods” directory but not always the “AdjustableHud” mod
 	install(DIRECTORY
-		DESTINATION "${CMAKE_INSTALL_DATADIR}/TheForceEngine/Mods"
+		DESTINATION "${CMAKE_INSTALL_DATADIR}/Mods"
 		DIRECTORY_PERMISSIONS
 			OWNER_READ OWNER_EXECUTE OWNER_WRITE
 			GROUP_READ GROUP_EXECUTE GROUP_WRITE
@@ -208,19 +217,38 @@ if(ENABLE_TFE)
 			FILES "${CMAKE_CURRENT_SOURCE_DIR}/TheForceEngine/io.github.theforceengine.tfe.metainfo.xml"
 			DESTINATION "share/metainfo"
 		)
+	elseif(WIN32)
+		install(
+			FILES 
+				"${CMAKE_SOURCE_DIR}/TheForceEngine/SDL2.dll" 
+				"${CMAKE_SOURCE_DIR}/TheForceEngine/SDL2_image.dll"
+			DESTINATION .
+		)
+		install(
+			FILES 
+				"${CMAKE_SOURCE_DIR}/TheForceEngine/VrWrapper_d.dll"
+			DESTINATION .
+			CONFIGURATIONS Debug			
+		)
+		install(
+			FILES
+				"${CMAKE_SOURCE_DIR}/TheForceEngine/VrWrapper.dll"
+			DESTINATION .
+			CONFIGURATIONS Release RelWithDebInfo
+		)
 	endif()
 endif()
 
-#if(ENABLE_ADJUSTABLEHUD_MOD)
-#	add_subdirectory(TheForceEngine/Mods/TFE/AdjustableHud)
-#
-#	if(LINUX)
-#		install(
-#			FILES "${CMAKE_CURRENT_SOURCE_DIR}/TheForceEngine/io.github.theforceengine.tfe.Mod.AdjustableHud.metainfo.xml"
-#			DESTINATION "share/metainfo"
-#		)
-#	endif()
-#endif()
+if(ENABLE_ADJUSTABLEHUD_MOD)
+	add_subdirectory(TheForceEngine/Mods/TFE/AdjustableHud)
+
+	if(LINUX)
+		install(
+			FILES "${CMAKE_CURRENT_SOURCE_DIR}/TheForceEngine/io.github.theforceengine.tfe.Mod.AdjustableHud.metainfo.xml"
+			DESTINATION "share/metainfo"
+		)
+	endif()
+endif()
 
 target_link_libraries(tfe PRIVATE 
 	TFE_A11y

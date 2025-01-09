@@ -4,24 +4,24 @@ project(
 	DESCRIPTION "“The Force Engine’s” built‑in “AdjustableHud” mod"
 )
 
-add_custom_target(
-	${PROJECT_NAME}
-	""
-	SOURCES
-		AdjustableHud.txt
-		Credits.txt
-		HudStatusLeftAddon.bm
-		HudStatusLeftAddon.png
-		HudStatusRightAddon.bm
-		HudStatusRightAddon.png
-	BYPRODUCTS
-		"${CMAKE_INSTALL_DATADIR}/Mods/TFE/${PROJECT_NAME}/AdjustableHud.txt"
-		"${CMAKE_INSTALL_DATADIR}/Mods/TFE/${PROJECT_NAME}/Credits.txt"
-		"${CMAKE_INSTALL_DATADIR}/Mods/TFE/${PROJECT_NAME}/HudStatusLeftAddon.bm"
-		"${CMAKE_INSTALL_DATADIR}/Mods/TFE/${PROJECT_NAME}/HudStatusLeftAddon.png"
-		"${CMAKE_INSTALL_DATADIR}/Mods/TFE/${PROJECT_NAME}/HudStatusRightAddon.bm"
-		"${CMAKE_INSTALL_DATADIR}/Mods/TFE/${PROJECT_NAME}/HudStatusRightAddon.png"
-)
+#add_custom_target(
+#	${PROJECT_NAME}
+#	""
+#	SOURCES
+#		AdjustableHud.txt
+#		Credits.txt
+#		HudStatusLeftAddon.bm
+#		HudStatusLeftAddon.png
+#		HudStatusRightAddon.bm
+#		HudStatusRightAddon.png
+#	BYPRODUCTS
+#		"${CMAKE_INSTALL_DATADIR}/Mods/TFE/${PROJECT_NAME}/AdjustableHud.txt"
+#		"${CMAKE_INSTALL_DATADIR}/Mods/TFE/${PROJECT_NAME}/Credits.txt"
+#		"${CMAKE_INSTALL_DATADIR}/Mods/TFE/${PROJECT_NAME}/HudStatusLeftAddon.bm"
+#		"${CMAKE_INSTALL_DATADIR}/Mods/TFE/${PROJECT_NAME}/HudStatusLeftAddon.png"
+#		"${CMAKE_INSTALL_DATADIR}/Mods/TFE/${PROJECT_NAME}/HudStatusRightAddon.bm"
+#		"${CMAKE_INSTALL_DATADIR}/Mods/TFE/${PROJECT_NAME}/HudStatusRightAddon.png"
+#)
 
 install(
 	DIRECTORY
