@@ -65,6 +65,26 @@ option(ENABLE_FORCE_SCRIPT "Enable Force Script" OFF)
 option(ENABLE_ADJUSTABLEHUD_MOD "Install the build-in “AdjustableHud mod” with TFE" ON)
 option(ENABLE_VR "Build TFE with VR Support" ON)
 option(START_VR "Start VR on start up, ignored if ENABLE_VR is OFF, use --novr/--vr CLI options to control VR initialization on start up" ON)
+option(BUILD_SDL "Build SDL from sources" OFF)
+
+if (BUILD_SDL)
+# we use function, because it creates a new scope, so we dont have to push and pop modified variables
+function(ADD_SDL)
+	# see here: https://stackoverflow.com/questions/3766740/overriding-a-default-option-value-in-cmake-from-a-parent-cmakelists-txt
+	# This makes sure that we really override the option command in the SDL project
+	set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
+
+	# set(CMAKE_CXX_FLAGS_DEBUG ${CMAKE_CXX_FLAGS_RELEASE}) # always build in release
+	set(SDL_SHARED_ENABLED_BY_DEFAULT OFF)
+	set(SDL2_DISABLE_SDL2MAIN OFF)
+	set(SDL_TEST OFF)
+	add_subdirectory(TheForceEngine/SDL)
+
+	set(BUILD_SHARED_LIBS OFF)
+	add_subdirectory(TheForceEngine/SDL_image)
+endfunction()
+add_sdl()
+endif()
 
 if(ENABLE_TFE)
 	add_executable(tfe)
@@ -81,40 +101,44 @@ if(ENABLE_TFE)
 
 	if(WIN32)
 		set_property(TARGET tfe PROPERTY WIN32_EXECUTABLE TRUE)
+	endif()
+
+	if(MSVC)
+		set_target_properties(tfe PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/TheForceEngine)
+	endif()
+
+	if(BUILD_SDL)
+		target_link_libraries(tfe PRIVATE SDL2::SDL2main SDL2::SDL2-static)
+		target_link_libraries(tfe PRIVATE SDL2_image::SDL2_image-static)
+		include_directories(
+			TheForceEngine/SDL/include
+			TheForceEngine/SDL_image/include
+		)
+	elseif(WIN32)
+		add_compile_definitions(SDL_SHARED)	
 		target_link_libraries(tfe PRIVATE 
 			${CMAKE_SOURCE_DIR}/TheForceEngine/sdl2_win32/lib/x64/SDL2.lib
 			${CMAKE_SOURCE_DIR}/TheForceEngine/sdl2_win32/lib/x64/SDL2main.lib
+			${CMAKE_SOURCE_DIR}/TheForceEngine/sdl2_win32/lib/x64/SDL2_image.lib
 		)
 		include_directories(
 			TheForceEngine/sdl2_win32/include 
 		)
-		set_target_properties(tfe PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/TheForceEngine)
 	endif()
 	
 	if(UNIX)
-		find_package(PkgConfig REQUIRED)
-		find_package(SDL2 2.0.20 REQUIRED)
-		pkg_check_modules(SDL2_IMAGE REQUIRED SDL2_image)
-		target_include_directories(tfe PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
-		target_include_directories(tfe PRIVATE ${SDL2_INCLUDE_DIRS})
-		target_include_directories(tfe PRIVATE ${SDL2_IMAGE_INCLUDE_DIRS})
-		target_link_libraries(tfe PRIVATE SDL2::SDL2main SDL2::SDL2
-					${SDL2_IMAGE_LIBRARIES}
-		)
+		#find_package(PkgConfig REQUIRED)
+		#find_package(SDL2 2.0.20 REQUIRED)
+		#pkg_check_modules(SDL2_IMAGE REQUIRED SDL2_image)
+		#target_include_directories(tfe PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+		#target_include_directories(tfe PRIVATE ${SDL2_INCLUDE_DIRS})
+		#target_include_directories(tfe PRIVATE ${SDL2_IMAGE_INCLUDE_DIRS})
+		#target_link_libraries(tfe PRIVATE SDL2::SDL2main SDL2::SDL2
+		#			${SDL2_IMAGE_LIBRARIES}
+		#)
 
 		# set up build directory to be able to run TFE immediately: symlink
 		# the necessary support file directories into the build env.
-		execute_process(COMMAND ln -sf ${CMAKE_SOURCE_DIR}/TheForceEngine/Captions)
-		execute_process(COMMAND ln -sf ${CMAKE_SOURCE_DIR}/TheForceEngine/Documentation)
-		execute_process(COMMAND ln -sf ${CMAKE_SOURCE_DIR}/TheForceEngine/Fonts)
-		execute_process(COMMAND ln -sf ${CMAKE_SOURCE_DIR}/TheForceEngine/Mods)
-		execute_process(COMMAND ln -sf ${CMAKE_SOURCE_DIR}/TheForceEngine/Shaders)
-		execute_process(COMMAND ln -sf ${CMAKE_SOURCE_DIR}/TheForceEngine/SoundFonts)
-		execute_process(COMMAND ln -sf ${CMAKE_SOURCE_DIR}/TheForceEngine/UI_Images)
-		execute_process(COMMAND ln -sf ${CMAKE_SOURCE_DIR}/TheForceEngine/UI_Text)
-		execute_process(COMMAND ln -sf ${CMAKE_SOURCE_DIR}/TheForceEngine/EditorDef)
-		include(CreateGitVersionH.cmake)
-		create_git_version_h()
 	endif()
 
 	if(COMPILER_ENABLE_AUTOZERO)
@@ -218,12 +242,14 @@ if(ENABLE_TFE)
 			DESTINATION "share/metainfo"
 		)
 	elseif(WIN32)
-		install(
-			FILES 
-				"${CMAKE_SOURCE_DIR}/TheForceEngine/SDL2.dll" 
-				"${CMAKE_SOURCE_DIR}/TheForceEngine/SDL2_image.dll"
-			DESTINATION .
-		)
+		if (NOT BUILD_SDL)
+			install(
+				FILES 
+					"${CMAKE_SOURCE_DIR}/TheForceEngine/SDL2.dll" 
+					"${CMAKE_SOURCE_DIR}/TheForceEngine/SDL2_image.dll"
+				DESTINATION .
+			)
+		endif()
 		install(
 			FILES 
 				"${CMAKE_SOURCE_DIR}/TheForceEngine/VrWrapper_d.dll"
