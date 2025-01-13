@@ -55,6 +55,8 @@ namespace TFE_Jedi
 	public:
 		void computeAdjoinWindowBounds(EdgePairFixed* adjoinEdges);
 
+		virtual ~TFE_Sectors() = default;
+
 		// Sub-Renderer specific
 		virtual void destroy() = 0;
 		virtual void reset() = 0;

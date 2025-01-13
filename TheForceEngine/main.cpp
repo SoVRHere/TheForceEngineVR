@@ -31,8 +31,10 @@
 #include <algorithm>
 #include <cinttypes>
 #include <time.h>
+#ifdef _WIN32
 #include <sys/types.h>
 #include <sys/timeb.h>
+#endif
 
 #include <TFE_Jedi/Renderer/jediRenderer.h>
 #include <TFE_Vr/vr.h>
@@ -58,10 +60,12 @@
 #define PROGRAM_ERROR   1
 #define PROGRAM_SUCCESS 0
 
+#if !defined(ANDROID)
 #ifndef _DEBUG
 #define INSTALL_CRASH_HANDLER 1
 #else
 #define INSTALL_CRASH_HANDLER 0
+#endif
 #endif
 
 using namespace TFE_Input;
@@ -627,7 +631,11 @@ void overrideVRSettings(bool firstRun)
 #endif
 }
 
-int main(int argc, char* argv[])
+//#if defined(ANDROID)
+//extern "C" int SDL_main(int argc, char* argv[])
+//#else
+extern "C" int main(int argc, char* argv[])
+//#endif
 {
 #if INSTALL_CRASH_HANDLER
 	TFE_CrashHandler::setProcessExceptionHandlers();
@@ -722,7 +730,7 @@ int main(int argc, char* argv[])
 		windowFlags |= WINFLAG_FULLSCREEN;
 	}
 	if (graphics->vsync) { TFE_System::logWrite(LOG_MSG, "Display", "Vertical Sync enabled."); windowFlags |= WINFLAG_VSYNC; }
-	
+
 	WindowState windowState =
 	{
 		"",
@@ -765,10 +773,10 @@ int main(int argc, char* argv[])
 	reticle_init();
 
 	// Test
-	#ifdef ENABLE_FORCE_SCRIPT
+#ifdef ENABLE_FORCE_SCRIPT
 	TFE_ForceScript::init();
-	#endif
-		
+#endif
+
 	// Start up the game and skip the title screen.
 	if (firstRun)
 	{
@@ -798,7 +806,7 @@ int main(int argc, char* argv[])
 	{
 		TFE_FRAME_BEGIN();
 		TFE_System::frameLimiter_begin();
-		
+
 		bool enableRelative = TFE_Input::relativeModeEnabled();
 		if (enableRelative != relativeMode)
 		{
@@ -967,20 +975,20 @@ int main(int argc, char* argv[])
 			}
 		}
 
-		#ifdef ENABLE_FORCE_SCRIPT
-			TFE_ForceScript::update();
-		#endif
+#ifdef ENABLE_FORCE_SCRIPT
+		TFE_ForceScript::update();
+#endif
 
 		const bool isConsoleOpen = TFE_FrontEndUI::isConsoleOpen();
 		bool endInputFrame = true;
 		if (s_curState == APP_STATE_EDITOR)
 		{
-		#ifdef ENABLE_EDITOR
+#ifdef ENABLE_EDITOR
 			if (TFE_Editor::update(isConsoleOpen))
 			{
 				TFE_FrontEndUI::setAppState(APP_STATE_MENU);
 			}
-		#endif
+#endif
 		}
 		else if (s_curState == APP_STATE_GAME)
 		{
@@ -1020,12 +1028,12 @@ int main(int argc, char* argv[])
 		}
 
 		bool swap = s_curState != APP_STATE_EDITOR && (s_curState != APP_STATE_MENU || TFE_FrontEndUI::isConfigMenuOpen());
-	#ifdef ENABLE_EDITOR
+#ifdef ENABLE_EDITOR
 		if (s_curState == APP_STATE_EDITOR)
 		{
 			swap = TFE_Editor::render();
 		}
-	#endif
+#endif
 
 		// Blit the frame to the window and draw UI.
 		TFE_RenderBackend::swap(swap);
@@ -1083,10 +1091,10 @@ int main(int argc, char* argv[])
 	TFE_SaveSystem::destroy();
 	SDL_Quit();
 
-	#ifdef ENABLE_FORCE_SCRIPT
+#ifdef ENABLE_FORCE_SCRIPT
 	TFE_ForceScript::destroy();
-	#endif
-		
+#endif
+
 	TFE_System::logWrite(LOG_MSG, "Progam Flow", "The Force Engine Game Loop Ended.");
 	TFE_System::logClose();
 	TFE_System::freeMessages();

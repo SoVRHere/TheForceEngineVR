@@ -13,7 +13,7 @@
 #if defined(USE_INTERNAL_IMGUI_RENDERER)
 #include "imGUI/imgui_impl_opengl3.h"
 #else
-#include <TFE_RenderShared/ImGuiDraw.h>
+#include <TFE_RenderShared/imGuiDraw.h>
 #endif
 #include "portable-file-dialogs.h"
 #include "markdown.h"

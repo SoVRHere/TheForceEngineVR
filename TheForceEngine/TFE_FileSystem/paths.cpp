@@ -21,12 +21,6 @@
 
 namespace TFE_Paths
 {
-#if defined(START_VR)
-	const char* const settingIniFile = "settings_vr.ini";
-#else
-	const char* const settingIniFile = "settings.ini";
-#endif
-
 	struct FileMapping
 	{
 		std::string fileName;
@@ -135,12 +129,14 @@ namespace TFE_Paths
 		FileUtil::getCurrentDirectory(path);
 		// This is here for ease of use in Visual Studio.
 		// Check to see if the current directory is valid.
+#if defined(SDL_SHARED)
 		char testPath[TFE_MAX_PATH];
 		sprintf(testPath, "%s/%s", path, "SDL2.dll");
 		if (!FileUtil::exists(testPath))
 		{
 			FileUtil::getExecutionDirectory(path);
 		}
+#endif
 
 		s_paths[PATH_PROGRAM] = path;
 		s_paths[PATH_PROGRAM] += "\\";

@@ -57,5 +57,9 @@ namespace TFE_Paths
 	// Add a single file that can be referenced by 'fileName' even though the real name may be different.
 	void addSingleFilePath(const char* fileName, const char* filePath);
 
-	extern const char* const settingIniFile;
+#if defined(START_VR)
+	const char* const settingIniFile = "settings_vr.ini";
+#else
+	const char* const settingIniFile = "settings.ini";
+#endif
 }

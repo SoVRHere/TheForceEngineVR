@@ -22,12 +22,16 @@ typedef std::atomic<int32_t>  atomic_s32;
 typedef std::atomic<float>    atomic_f32;
 typedef std::atomic<bool>     atomic_bool;
 
+#if defined(__clang__)
+#pragma clang diagnostic ignored "-Wformat-security"
+#endif
+
 struct Vec2f
 {
 	union
 	{
 		struct { f32 x, z; };
-		struct { f32 x, y; };
+		struct { f32 _x, y; };
 		f32 m[2];
 	};
 };
@@ -55,7 +59,7 @@ struct Vec2i
 	union
 	{
 		struct { s32 x, z; };
-		struct { s32 x, y; };
+		struct { s32 _x, y; };
 		s32 m[2];
 	};
 };
