@@ -6,7 +6,7 @@
 #include <TFE_DarkForces/GameUI/pda.h>
 #include <TFE_FrontEndUI/frontEndUi.h>
 
-#include "VrWrapper.h"
+#include "VrWrapper/VrWrapper.h"
 
 namespace vr
 {

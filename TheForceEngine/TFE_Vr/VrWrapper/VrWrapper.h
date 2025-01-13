@@ -1,13 +1,17 @@
 #pragma once
 
+#if defined(VRW_BUILD_IN_VR_WRAPPER)
+	#define VR_WRAPPER_API
+#else
 #if defined(_WIN32)
-	#if defined(VR_BUILD_LIB)  // when building the lib
+	#if defined(VRW_BUILD_LIB)  // when building the lib
 		#define VR_WRAPPER_API __declspec(dllexport)
 	#else  // when using the DLL
 		#define VR_WRAPPER_API __declspec(dllimport)
 	#endif
 #else
-	#error "handle non win32 platform here"
+	#define VR_WRAPPER_API
+#endif
 #endif
 
 #include <cstdint>

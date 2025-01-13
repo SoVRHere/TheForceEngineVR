@@ -631,11 +631,7 @@ void overrideVRSettings(bool firstRun)
 #endif
 }
 
-//#if defined(ANDROID)
-//extern "C" int SDL_main(int argc, char* argv[])
-//#else
-extern "C" int main(int argc, char* argv[])
-//#endif
+int main(int argc, char* argv[])
 {
 #if INSTALL_CRASH_HANDLER
 	TFE_CrashHandler::setProcessExceptionHandlers();
