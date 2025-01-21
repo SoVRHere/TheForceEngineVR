@@ -2,7 +2,6 @@ project(TFE_RenderBackend)
 set(SOURCES
 	Win32OpenGL/dynamicTexture.cpp
 	Win32OpenGL/gl.h
-	Win32OpenGL/glad.c
 	Win32OpenGL/glslParser.cpp
 	Win32OpenGL/glslParser.h
 	Win32OpenGL/indexBuffer.cpp
@@ -30,6 +29,18 @@ set(SOURCES
 	textureGpu.h
 	vertexBuffer.h
 )
+
+if(WIN32)
+	list(APPEND SOURCES
+		Win32OpenGL/gl_wgl.h
+		Win32OpenGL/glad_wgl.c
+	)
+elseif(ANDROID)
+	list(APPEND SOURCES
+		Win32OpenGL/gl_es.h
+		Win32OpenGL/glad_es.c
+	)
+endif()
 
 #add_custom_target(${PROJECT_NAME} "" SOURCES ${SOURCES})
 add_library(${PROJECT_NAME} OBJECT ${SOURCES})

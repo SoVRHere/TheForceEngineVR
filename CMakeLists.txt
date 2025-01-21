@@ -27,7 +27,7 @@ endif()
 
 # disable Clangs excessive warnings about unhandled switch values
 if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-switch")	
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-switch")
 endif()
 
 if(MSVC)
@@ -45,15 +45,15 @@ endif()
 
 if(WIN32)
 	# windows: drop everything into one folder
-        set(CMAKE_INSTALL_BINDIR ".")
-        set(CMAKE_INSTALL_LIBDIR ".")
-        set(CMAKE_INSTALL_DATADIR ".")
+	set(CMAKE_INSTALL_BINDIR ".")
+	set(CMAKE_INSTALL_LIBDIR ".")
+	set(CMAKE_INSTALL_DATADIR ".")
 else()
 	set(TFE_ICONDIR "share/icons/hicolor")
 	# tweak DATADIR to end up with ./share/TheForceEngine/
-        set(CMAKE_INSTALL_DATADIR "share/${PROJECT_NAME}"
-                CACHE PATH "Read-only architecture-independent data"
-        )
+		set(CMAKE_INSTALL_DATADIR "share/${PROJECT_NAME}"
+			CACHE PATH "Read-only architecture-independent data"
+		)
 endif()
 include(GNUInstallDirs)
 
@@ -65,7 +65,11 @@ option(ENABLE_FORCE_SCRIPT "Enable Force Script" OFF)
 option(ENABLE_ADJUSTABLEHUD_MOD "Install the build-in “AdjustableHud mod” with TFE" ON)
 option(ENABLE_VR "Build TFE with VR Support" ON)
 option(START_VR "Start VR on start up, ignored if ENABLE_VR is OFF, use --novr/--vr CLI options to control VR initialization on start up" ON)
-option(BUILD_SDL "Build SDL from sources" OFF)
+if(WIN32)
+	option(BUILD_SDL "Build SDL from sources" OFF)
+else()
+	option(BUILD_SDL "Build SDL from sources" ON)
+endif()
 
 if (BUILD_SDL)
 # we use function, because it creates a new scope, so we dont have to push and pop modified variables
@@ -75,12 +79,16 @@ function(ADD_SDL)
 	set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
 
 	# set(CMAKE_CXX_FLAGS_DEBUG ${CMAKE_CXX_FLAGS_RELEASE}) # always build in release
-	set(SDL_SHARED_ENABLED_BY_DEFAULT OFF)
-	set(SDL2_DISABLE_SDL2MAIN OFF)
+	#set(SDL_SHARED_ENABLED_BY_DEFAULT OFF)
+	#if(WIN32)
+	#	set(SDL2_DISABLE_SDL2MAIN OFF)
+	#else()
+	#endif()
 	set(SDL_TEST OFF)
-	add_subdirectory(TheForceEngine/SDL)
-
 	set(BUILD_SHARED_LIBS OFF)
+	#set(SDL_STATIC ON)
+	
+	add_subdirectory(TheForceEngine/SDL)
 	add_subdirectory(TheForceEngine/SDL_image)
 endfunction()
 add_sdl()
@@ -89,6 +97,10 @@ endif()
 if(ENABLE_TFE)
 	add_executable(tfe)
 	
+	if(ANDROID)
+		add_compile_definitions(SDL_MAIN_HANDLED)
+	endif()
+
 	if(START_VR AND ENABLE_VR)
 		add_compile_definitions(START_VR)
 	endif()
@@ -108,8 +120,11 @@ if(ENABLE_TFE)
 	endif()
 
 	if(BUILD_SDL)
-		target_link_libraries(tfe PRIVATE SDL2::SDL2main SDL2::SDL2-static)
+		target_link_libraries(tfe PRIVATE SDL2::SDL2-static)
 		target_link_libraries(tfe PRIVATE SDL2_image::SDL2_image-static)
+		if(WIN32)
+			target_link_libraries(tfe PRIVATE SDL2::SDL2main)
+		endif()
 		include_directories(
 			TheForceEngine/SDL/include
 			TheForceEngine/SDL_image/include
@@ -150,14 +165,14 @@ if(ENABLE_TFE)
 		if(WIN32)
 			add_compile_definitions(BUILD_SYSMIDI)
 		else()
-			pkg_check_modules(RTMIDI rtmidi>=5.0.0)
-			if(RTMIDI_FOUND)
+			# pkg_check_modules(RTMIDI rtmidi>=5.0.0)
+			# if(RTMIDI_FOUND)
 				add_compile_definitions(BUILD_SYSMIDI)
-				target_link_libraries(tfe PRIVATE ${RTMIDI_LIBRARIES})
-			else()
-				set(ENABLE_SYSMIDI 0)
-				message(STATUS "System MIDI Disabled")
-			endif()
+				# target_link_libraries(tfe PRIVATE ${RTMIDI_LIBRARIES})
+			# else()
+				# set(ENABLE_SYSMIDI 0)
+				# message(STATUS "System MIDI Disabled")
+			# endif()
 		endif()
 	endif()
 	

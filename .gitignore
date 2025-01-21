@@ -79,5 +79,8 @@ WDFuseCommonFiles/
 x64/Debug/
 CMakeFiles/
 
+SDL/
+SDL_image/
+
 # Linux
 TheForceEngine/tfelnx

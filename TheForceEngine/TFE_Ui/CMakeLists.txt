@@ -6,9 +6,9 @@ set(SOURCES
 	imGUI/imgui.h
 	#imGUI/imgui_demo.cpp
 	imGUI/imgui_draw.cpp
-	imGUI/imgui_impl_opengl3.cpp
-	imGUI/imgui_impl_opengl3.h
-	imGUI/imgui_impl_opengl3_loader.h
+	#imGUI/imgui_impl_opengl3.cpp
+	#imGUI/imgui_impl_opengl3.h
+	#imGUI/imgui_impl_opengl3_loader.h
 	imGUI/imgui_impl_sdl2.cpp
 	imGUI/imgui_impl_sdl2.h
 	imGUI/imgui_internal.h
