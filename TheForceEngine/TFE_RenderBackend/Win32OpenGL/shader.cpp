@@ -6,6 +6,7 @@
 #include <TFE_FileSystem/filestream.h>
 #include <TFE_FileSystem/paths.h>
 #include <TFE_RenderBackend/renderBackend.h>
+#include <TFE_Settings/settings.h>
 #include "gl.h"
 #include <assert.h>
 #include <string>
@@ -24,8 +25,11 @@ namespace ShaderGL
 		"vtx_color", // ATTR_COLOR
 	};
 
-	static const s32 c_glslVersion[] = { 130, 330, 450 };
+#if defined(ANDROID)
+	static const GLchar* c_glslVersionString[] = { "#version 130\n", "#version 320 es\n", "#version 450\n" };
+#else
 	static const GLchar* c_glslVersionString[] = { "#version 130\n", "#version 330\n", "#version 450\n" };
+#endif
 	static std::vector<char> s_buffers[2];
 	static std::string s_defineString;
 	static std::string s_vertexFile, s_fragmentFile;
@@ -36,6 +40,7 @@ namespace ShaderGL
 		GLint status = 0, log_length = 0;
 		glGetShaderiv(handle, GL_COMPILE_STATUS, &status);
 		glGetShaderiv(handle, GL_INFO_LOG_LENGTH, &log_length);
+		TFE_ASSERT_GL;
 		if ((GLboolean)status == GL_FALSE)
 		{
 			TFE_System::logWrite(LOG_ERROR, "Shader", "Failed to compile '%s'!\n", desc);
@@ -45,7 +50,9 @@ namespace ShaderGL
 		{
 			std::vector<char> buf;
 			buf.resize(size_t(log_length + 1));
+			buf.back() = 0;
 			glGetShaderInfoLog(handle, log_length, NULL, (GLchar*)buf.data());
+			TFE_ASSERT_GL;
 			TFE_System::logWrite(LOG_ERROR, "Shader", "Error: %s\n", buf.data());
 		}
 		return (GLboolean)status == GL_TRUE;
@@ -57,6 +64,7 @@ namespace ShaderGL
 		GLint status = 0, log_length = 0;
 		glGetProgramiv(handle, GL_LINK_STATUS, &status);
 		glGetProgramiv(handle, GL_INFO_LOG_LENGTH, &log_length);
+		TFE_ASSERT_GL;
 		if ((GLboolean)status == GL_FALSE)
 		{
 			TFE_System::logWrite(LOG_ERROR, "Shader", "Failed to link '%s' - with GLSL %s", desc, c_glslVersionString[version]);
@@ -66,7 +74,9 @@ namespace ShaderGL
 		{
 			std::vector<char> buf;
 			buf.resize(size_t(log_length + 1));
+			buf.back() = 0;
 			glGetShaderInfoLog(handle, log_length, NULL, (GLchar*)buf.data());
+			TFE_ASSERT_GL;
 			TFE_System::logWrite(LOG_ERROR, "Shader", "Error: %s\n", buf.data());
 		}
 
@@ -74,35 +84,119 @@ namespace ShaderGL
 	}
 }
 
+
+const char* vertexShaderDefine = "#define VERTEX_SHADER\n";
+const char* fragmentShaderDefine = "#define FRAGMENT_SHADER\n";
+
+const char* extension_GL_OES_standard_derivatives = "#extension GL_OES_standard_derivatives : enable\n";
+const char* extension_GL_EXT_clip_cull_distance = "#extension GL_EXT_clip_cull_distance : enable\n";
+const char* extension_GL_OVR_multiview2 = "#extension GL_OVR_multiview2 : enable\n";
+
+#if defined(ANDROID)
+const char* defaultPrecisions = R"(
+	precision highp int;
+	precision highp float;
+	precision highp sampler2D;
+	precision highp usampler2D;
+	precision highp sampler3D;
+	precision highp samplerCube;
+	precision highp sampler2DArray;
+	precision highp sampler2DShadow;
+	precision highp samplerCubeShadow;
+	precision highp sampler2DArrayShadow;
+	precision highp samplerBuffer;
+	precision highp isamplerBuffer;
+	precision highp usamplerBuffer;
+)";
+#else
+const char* defaultPrecisions = R"(
+	#define highp
+	#define mediump
+	#define lowp
+)";
+#endif
+
 bool Shader::create(const char* vertexShaderGLSL, const char* fragmentShaderGLSL, const char* defineString/* = nullptr*/, ShaderVersion version/* = SHADER_VER_COMPTABILE*/)
 {
+	if (version != ShaderVersion::SHADER_VER_STD)
+	{
+#if defined(ANDROID)
+		TFE_ERROR("GL", "Only SHADER_VER_STD is supported.");
+#endif
+	}
 	// Create shaders
 	m_shaderVersion = version;
-	const GLchar* vertex_shader_with_version[4] = { ShaderGL::c_glslVersionString[m_shaderVersion], "#define VERTEX_SHADER\r\n", defineString ? defineString : "", vertexShaderGLSL};
-	u32 vertHandle = glCreateShader(GL_VERTEX_SHADER);
-	glShaderSource(vertHandle, 4, vertex_shader_with_version, NULL);
-	glCompileShader(vertHandle);
-	if (!ShaderGL::CheckShader(vertHandle, ShaderGL::s_vertexFile.c_str())) { return false; }
 
-	const GLchar* fragment_shader_with_version[4] = { ShaderGL::c_glslVersionString[m_shaderVersion], "#define FRAGMENT_SHADER\r\n", defineString ? defineString : "", fragmentShaderGLSL };
-	u32 fragHandle = glCreateShader(GL_FRAGMENT_SHADER);
-	glShaderSource(fragHandle, 4, fragment_shader_with_version, NULL);
-	glCompileShader(fragHandle);
-	if (!ShaderGL::CheckShader(fragHandle, ShaderGL::s_fragmentFile.c_str()))
+	u32 vertHandle = glCreateShader(GL_VERTEX_SHADER);
+	TFE_ASSERT_GL;
 	{
-		return false;
+		std::vector<const GLchar*> vertex_shader_parts = { ShaderGL::c_glslVersionString[m_shaderVersion] };
+		if (TFE_Settings::getTempSettings()->vr)
+		{
+			vertex_shader_parts.push_back(extension_GL_OVR_multiview2);
+		}
+#if defined(ANDROID)
+		vertex_shader_parts.push_back(extension_GL_EXT_clip_cull_distance);
+#endif
+		vertex_shader_parts.push_back(vertexShaderDefine);
+		vertex_shader_parts.push_back(defaultPrecisions);
+		if (defineString)
+		{
+			vertex_shader_parts.push_back(defineString);
+		}
+		vertex_shader_parts.push_back(vertexShaderGLSL);
+
+		glShaderSource(vertHandle, (GLsizei)vertex_shader_parts.size(), vertex_shader_parts.data(), nullptr);
+		glCompileShader(vertHandle);
+		TFE_ASSERT_GL;
+		if (!ShaderGL::CheckShader(vertHandle, ShaderGL::s_vertexFile.c_str()))
+		{
+			return false;
+		}
+	}
+
+	u32 fragHandle = glCreateShader(GL_FRAGMENT_SHADER);
+	TFE_ASSERT_GL;
+	{
+		std::vector<const GLchar*> fragment_shader_parts = { ShaderGL::c_glslVersionString[m_shaderVersion] };
+		if (TFE_Settings::getTempSettings()->vr)
+		{
+			fragment_shader_parts.push_back(extension_GL_OVR_multiview2);
+		}
+#if defined(ANDROID)
+		fragment_shader_parts.push_back(extension_GL_OES_standard_derivatives);
+#endif
+		fragment_shader_parts.push_back(fragmentShaderDefine);
+		fragment_shader_parts.push_back(defaultPrecisions);
+		if (defineString)
+		{
+			fragment_shader_parts.push_back(defineString);
+		}
+		fragment_shader_parts.push_back(fragmentShaderGLSL);
+		glShaderSource(fragHandle, (GLsizei)fragment_shader_parts.size(), fragment_shader_parts.data(), nullptr);
+		glCompileShader(fragHandle);
+		TFE_ASSERT_GL;
+		if (!ShaderGL::CheckShader(fragHandle, ShaderGL::s_fragmentFile.c_str()))
+		{
+			return false;
+		}
 	}
 
 	m_gpuHandle = glCreateProgram();
 	glAttachShader(m_gpuHandle, vertHandle);
 	glAttachShader(m_gpuHandle, fragHandle);
+	TFE_ASSERT_GL;
 	// Bind vertex attribute names to slots.
 	for (u32 i = 0; i < ATTR_COUNT; i++)
 	{
 		glBindAttribLocation(m_gpuHandle, i, ShaderGL::c_shaderAttrName[i]);
 	}
 	glLinkProgram(m_gpuHandle);
-	if (!ShaderGL::CheckProgram(m_gpuHandle, "shader program", m_shaderVersion)) { return false; }
+	TFE_ASSERT_GL;
+	if (!ShaderGL::CheckProgram(m_gpuHandle, "shader program", m_shaderVersion))
+	{
+		return false;
+	}
 
 	{
 		GLint numUniforms;

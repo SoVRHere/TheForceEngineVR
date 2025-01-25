@@ -633,6 +633,8 @@ void overrideVRSettings(bool firstRun)
 
 int main(int argc, char* argv[])
 {
+	TFE_ANDROID("Android API %d", SDL_GetAndroidSDKVersion());
+
 #if INSTALL_CRASH_HANDLER
 	TFE_CrashHandler::setProcessExceptionHandlers();
 	TFE_CrashHandler::setThreadExceptionHandlers();
@@ -648,6 +650,7 @@ int main(int argc, char* argv[])
 	if (!pathsSet)
 	{
 		TFE_System::logWrite(LOG_ERROR, "Main", "Cannot set paths.");
+		TFE_ANDROID("!pathsSet");
 		return PROGRAM_ERROR;
 	}
 

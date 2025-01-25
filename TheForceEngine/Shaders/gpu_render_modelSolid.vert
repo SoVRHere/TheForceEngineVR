@@ -34,7 +34,6 @@ in vec3 vtx_nrm;
 in vec2 vtx_uv;
 in vec4 vtx_color;
 
-out float gl_ClipDistance[8];
 out vec2 Frag_Uv;
 out vec3 Frag_WorldPos;
 noperspective out float Frag_Light;
@@ -84,6 +83,7 @@ void main()
 	// Clipping.
 	uint portalOffset, portalCount;
 	unpackPortalInfo(PortalInfo.x, portalOffset, portalCount);
+	gl_ClipDistance[7] = 1.0; // must be sized by the shader either by redeclaring it with an explicit size, or by indexing it with only integral constant expressions
 	for (int i = 0; i < int(portalCount) && i < 8; i++)
 	{
 		vec4 plane = texelFetch(DrawListPlanes, int(portalOffset) + i);
@@ -119,7 +119,7 @@ void main()
 			if (worldAmbient < 31.0 || cameraLightSource > 0.0)
 			{
 				float lightSource = getLightRampValue(z, worldAmbient);
-				if (lightSource > 0)
+				if (lightSource > 0.0)
 				{
 					light += lightSource;
 				}

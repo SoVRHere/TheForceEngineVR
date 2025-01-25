@@ -380,7 +380,7 @@ vec3 getAttenuatedColor(int baseColor, int light)
 vec3 getAttenuatedColorBlend(float baseColor, float light)
 {
 	int color = int(baseColor);
-	if (light < 31)
+	if (light < 31.0)
 	{
 		int l0 = int(light);
 		int l1 = min(31, l0 + 1);

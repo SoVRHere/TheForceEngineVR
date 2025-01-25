@@ -294,7 +294,7 @@ void TextureGpu::clearSlots(u32 count, u32 start/* = 0*/)
 void TextureGpu::readCpu(u8* image)
 {
 	glBindTexture(GL_TEXTURE_2D, m_gpuHandle);
-	glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, image);
+	//glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, image);
 	glBindTexture(GL_TEXTURE_2D, 0);
 	TFE_ASSERT_GL;
 }

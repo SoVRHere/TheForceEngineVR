@@ -198,6 +198,9 @@ namespace TFE_RenderBackend
 		{
 			uiScale = 150;
 		}
+#if defined(ANDROID)
+		uiScale = 225;
+#endif
 
 	#ifndef _WIN32
 		SDL_SetWindowFullscreen(window, windowed ? 0 : SDL_WINDOW_FULLSCREEN_DESKTOP);

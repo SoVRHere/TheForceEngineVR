@@ -228,6 +228,7 @@ namespace TFE_Settings
 				// First try the local path.
 				char localPath[TFE_MAX_PATH];
 				TFE_Paths::appendPath(PATH_PROGRAM, "DARK.GOB", localPath);
+				TFE_ANDROID("localPath = {}", localPath);
 
 				FileStream file;
 				if (file.open(localPath, Stream::MODE_READ))
@@ -285,7 +286,7 @@ namespace TFE_Settings
 				}
 			}
 #endif
-#ifdef __linux__
+#if defined(__linux__) && !defined(ANDROID)
 			if (!pathValid)
 			{
 				pathValid = LinuxSteam::getSteamPath(c_steamRemasterProductId[gameId], c_steamRemasterLocalPath[gameId],

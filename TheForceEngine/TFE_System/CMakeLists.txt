@@ -26,6 +26,8 @@ set(SOURCES
 )
 if(WIN32)
 	list(APPEND SOURCES CrashHandler/crashHandlerWin32.cpp)
+elseif(ANDROID)
+	list(APPEND SOURCES android.cpp android.h)
 elseif(LINUX)
 	list(APPEND SOURCES CrashHandler/crashHandlerLinux.cpp)
 endif()

@@ -13,6 +13,8 @@
 #ifdef _WIN32
 	#include <Windows.h>
 	#include <io.h>
+#elif ANDROID
+	#include <TFE_System/android.h>
 #endif
 
 namespace TFE_System
@@ -89,6 +91,8 @@ namespace TFE_System
 		//Write to the debugger or terminal output.
 		#ifdef _WIN32
 			OutputDebugStringA(s_workStr);
+		#elif ANDROID
+			android::Log(type, s_workStr);
 		#else
 			fprintf(stderr, "%s", s_workStr);
 		#endif

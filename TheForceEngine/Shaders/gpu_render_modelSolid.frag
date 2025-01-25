@@ -72,7 +72,7 @@ void main()
 				if (worldAmbient < 31.0 || cameraLightSource > 0.0)
 				{
 					float lightSource = getLightRampValue(z, worldAmbient);
-					if (lightSource > 0)
+					if (lightSource > 0.0)
 					{
 						light += lightSource;
 					}

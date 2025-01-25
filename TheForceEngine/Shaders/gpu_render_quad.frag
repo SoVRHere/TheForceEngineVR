@@ -160,7 +160,7 @@ void main()
 
 	// Get the final attenuated color.
 #ifdef OPT_TRUE_COLOR
-	Out_Color.rgb = getAttenuatedColor(baseColor.rgb, lightLevel);
+	Out_Color.rgb = getAttenuatedColor(baseColor.rgb, float(lightLevel));
 	Out_Color.rgb = handlePaletteFx(Out_Color.rgb);
 #else
 	Out_Color.rgb = getAttenuatedColor(baseColor, lightLevel);

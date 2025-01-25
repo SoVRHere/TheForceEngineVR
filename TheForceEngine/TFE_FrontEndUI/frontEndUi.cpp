@@ -336,6 +336,10 @@ namespace TFE_FrontEndUI
 		s_titleFont   = io.Fonts->AddFontFromFileTTF(fontpath, floorf(48*s_uiScale + 0.5f));
 		s_dialogFont  = io.Fonts->AddFontFromFileTTF(fontpath, floorf(20*s_uiScale + 0.5f));
 
+#if defined(ANDROID)
+		ImGui::GetStyle().ScrollbarSize = 45.0f; // TODO: should be screen size/dpi dependent?
+#endif
+
 		if (!loadGpuImage("UI_Images/TFE_TitleLogo.png", &s_logoGpuImage))
 		{
 			TFE_System::logWrite(LOG_ERROR, "SystemUI", "Cannot load TFE logo: \"UI_Images/TFE_TitleLogo.png\"");

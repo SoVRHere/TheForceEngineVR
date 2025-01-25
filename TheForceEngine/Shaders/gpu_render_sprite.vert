@@ -24,9 +24,8 @@ uniform samplerBuffer DrawListPlanes;
 // in int gl_VertexID;
 out vec2 Frag_Uv; // base uv coordinates (0 - 1)
 out vec3 Frag_Pos;     // camera relative position for lighting.
-out float gl_ClipDistance[8];
-flat out vec4 Texture_Data; // not much here yet.
 flat out int Frag_TextureId;
+flat out vec4 Texture_Data; // not much here yet.
 
 void unpackPortalInfo(uint portalInfo, out uint portalOffset, out uint portalCount)
 {
@@ -69,6 +68,7 @@ void main()
 	unpackPortalInfo(portalInfo, portalOffset, portalCount);
 
 	// Clipping.
+	gl_ClipDistance[7] = 1.0; // must be sized by the shader either by redeclaring it with an explicit size, or by indexing it with only integral constant expressions
 	for (int i = 0; i < int(portalCount) && i < 8; i++)
 	{
 		vec4 plane = texelFetch(DrawListPlanes, int(portalOffset) + i);

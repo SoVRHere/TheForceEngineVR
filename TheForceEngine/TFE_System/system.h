@@ -7,6 +7,10 @@
 #include <ctype.h>
 #include "types.h"
 
+#if defined(ANDROID)
+#include <android/log.h>
+#endif
+
 #define TFE_MAJOR_VERSION 1
 #define TFE_MINOR_VERSION 10
 #define TFE_BUILD_VERSION 0
@@ -98,6 +102,12 @@ static inline void __strupr(char *c)
 #define TFE_INFO(tag, ...) TFE_System::logWrite(LOG_MSG, tag, fmt::format(__VA_ARGS__).c_str())
 
 #define TFE_ASSERT assert
+
+#if defined(ANDROID)
+#define TFE_ANDROID(...) __android_log_print(ANDROID_LOG_DEBUG, "TFE", fmt::format(__VA_ARGS__).c_str())
+#else
+#define TFE_ANDROID(...) 
+#endif
 
 template<typename T>
 class ScopeFunction final

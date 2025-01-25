@@ -1,6 +1,5 @@
-#ifdef OPT_VR_MULTIVIEW
-#extension GL_OVR_multiview2 : enable
-#ifdef VERTEX_SHADER
+#if defined(OPT_VR_MULTIVIEW)
+#if defined(VERTEX_SHADER)
 layout(num_views = 2) in;
 #endif
 #endif

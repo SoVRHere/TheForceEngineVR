@@ -95,10 +95,11 @@ add_sdl()
 endif()
 
 if(ENABLE_TFE)
-	add_executable(tfe)
-	
 	if(ANDROID)
 		add_compile_definitions(SDL_MAIN_HANDLED)
+		add_library(tfe SHARED)
+	else()
+		add_executable(tfe)
 	endif()
 
 	if(START_VR AND ENABLE_VR)

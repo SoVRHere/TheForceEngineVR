@@ -114,7 +114,9 @@ namespace TFE_RenderState
 			}
 			if (stateToChange & STATE_WIREFRAME)
 			{
+#if !defined(ANDROID)
 				glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+#endif
 			}
 			if (stateToChange)
 			{
@@ -151,7 +153,9 @@ namespace TFE_RenderState
 			}
 			if (stateToChange & STATE_WIREFRAME)
 			{
+#if !defined(ANDROID)
 				glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+#endif
 			}
 			if (stateToChange)
 			{

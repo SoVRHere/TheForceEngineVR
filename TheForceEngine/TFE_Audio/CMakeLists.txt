@@ -25,7 +25,7 @@ set(SOURCES
 	systemMidiDevice.cpp
 	systemMidiDevice.h
 )
-if(LINUX)
+if(LINUX AND ENABLE_SYSMIDI)
 	# we use the system libraries on Linux
 	list(REMOVE_ITEM SOURCES RtMidi.cpp)
 	list(REMOVE_ITEM SOURCES RtMidi.h)

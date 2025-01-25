@@ -20,14 +20,13 @@ uniform usamplerBuffer DrawListData;
 uniform samplerBuffer  DrawListPlanes;	// Top and Bottom planes for each portal.
 
 // in int gl_VertexID;
-out float gl_ClipDistance[8];
 flat out vec4 Frag_Uv;
-out vec3 Frag_Pos;
-out vec4 Texture_Data;
 flat out vec4 Frag_Color;
 flat out float Frag_Scale;
 flat out int Frag_TextureId;
 flat out int Frag_Flags;
+out vec3 Frag_Pos;
+out vec4 Texture_Data;
 
 void unpackPortalInfo(uint portalInfo, out uint portalOffset, out uint portalCount)
 {
@@ -135,7 +134,7 @@ void main()
 					// Scale when looking up by view[1][1] which is 1.0 when looking straight and tends toward 0.0 as looking up or down.
 					d /= CameraView[1].y;
 					// Clamp to the maximum top.
-					y0 = CameraPos.y - min(100, d);
+					y0 = CameraPos.y - min(100.0, d);
 				}
 				else
 				{
@@ -304,6 +303,7 @@ void main()
 	#endif  // !SECTOR_TRANSPARENT_PASS
 
 	// Clipping.
+	gl_ClipDistance[7] = 1.0; // must be sized by the shader either by redeclaring it with an explicit size, or by indexing it with only integral constant expressions
 	for (int i = 0; i < int(portalCount) && i < 8; i++)
 	{
 		vec4 plane = texelFetch(DrawListPlanes, int(portalOffset) + i);
@@ -313,7 +313,7 @@ void main()
 	{
 		gl_ClipDistance[i] = 1.0;
 	}
-	
+
 	Frag_Pos = vtx_pos - CameraPos;
 	
 	// Transform from world to view space.

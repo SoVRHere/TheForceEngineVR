@@ -24,7 +24,6 @@ uniform sampler2D BasePalette;
 #endif
 
 // Vertex Data
-out float gl_ClipDistance[8];
 in vec3 vtx_pos;
 in vec2 vtx_uv;
 in vec4 vtx_color;
@@ -57,6 +56,7 @@ void main()
 	// Clipping.
 	uint portalOffset, portalCount;
 	unpackPortalInfo(PortalInfo.x, portalOffset, portalCount);
+	gl_ClipDistance[7] = 1.0; // must be sized by the shader either by redeclaring it with an explicit size, or by indexing it with only integral constant expressions
 	for (int i = 0; i < int(portalCount) && i < 8; i++)
 	{
 		vec4 plane = texelFetch(DrawListPlanes, int(portalOffset) + i);

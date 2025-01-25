@@ -1,4 +1,5 @@
 #include "openGL_Caps.h"
+#include <TFE_System/system.h>
 #include "gl.h"
 #include <assert.h>
 #include <algorithm>
@@ -24,6 +25,7 @@ namespace OpenGL_Caps
 	static u32 m_deviceTier = 0;
 	static s32 m_textureBufferMaxSize = 0;
 	static f32 m_maxAnisotropy = 1.0f;
+	static s32 m_maxClipDistances = 0;
 
 	enum SpecMinimum
 	{
@@ -64,6 +66,12 @@ namespace OpenGL_Caps
 			m_maxAnisotropy = 0.0f;
 		}
 
+		if (SDL_GL_ExtensionSupported("GL_EXT_clip_cull_distance"))
+		{
+			glGetIntegerv(GL_MAX_CLIP_DISTANCES, &m_maxClipDistances);
+			TFE_INFO("GL", "Max Clip Distances: {}", m_maxClipDistances);
+		}
+
 		// clear any pending errors.
 		(void)glGetError();
 
@@ -81,6 +89,24 @@ namespace OpenGL_Caps
 		{
 			m_deviceTier = DEV_TIER_1;
 		}
+
+#if defined(ANDROID)
+		if (m_maxClipDistances >= 8)
+		{
+			if (SDL_GL_ExtensionSupported("GL_OES_standard_derivatives"))
+			{
+				m_deviceTier = DEV_TIER_3;
+			}
+			else
+			{
+				TFE_ERROR("GL", "GL_OES_standard_derivatives not supported!!!");
+			}
+		}
+		else
+		{
+			TFE_ERROR("GL", "GL_EXT_clip_cull_distance not supported or not sufficient!!!");
+		}
+#endif
 	}
 
 	bool supportsPbo()
