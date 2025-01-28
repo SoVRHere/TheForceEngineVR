@@ -48,7 +48,7 @@ namespace OpenGL_Debug
 		{
 			DOCASE(GL_NONE);
 
-			DOCASE(GL_RGB4);
+			//DOCASE(GL_RGB4);
 			//DOCASE(GL_RGB5);
 			DOCASE(GL_RGB8);
 			//DOCASE(GL_RGB10);

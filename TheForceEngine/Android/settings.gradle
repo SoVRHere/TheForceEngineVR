@@ -1,0 +1,2 @@
+include ':tfe'
+rootProject.name = "TheForceEngine"

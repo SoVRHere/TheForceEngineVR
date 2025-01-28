@@ -1,0 +1,1 @@
+files from this folder are bundled into apk

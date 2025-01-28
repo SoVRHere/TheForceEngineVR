@@ -1,0 +1,214 @@
+
+plugins {
+    id 'com.android.application'
+    id 'kotlin-android'
+}
+
+android {
+    compileSdk 34
+    //buildToolsVersion "34.0.0"
+
+    namespace "com.tfe.game"
+
+    signingConfigs {
+        // USE FOR PLAY STORE RELEASES
+        release {
+            storeFile file("tfe_release.jks")
+            storePassword "******"
+            keyAlias "******"
+            keyPassword "******"
+        }
+
+        developer {
+            // NEVER EVER USE THIS KEY FOR PLAY STORE RELEASES
+            storeFile file("tfe_developer.jks")
+            storePassword "tfe_developer"
+            keyAlias "tfe_developer"
+            keyPassword "tfe_developer"
+        }
+    }
+
+    defaultConfig {
+        applicationId "com.tfe.game"
+        versionCode project.hasProperty("versionCode") ? project.versionCode.toInteger() : 1
+        versionName project.hasProperty("versionName") ? project.versionName : "1.0"
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        // enable generating separate debug symbol files for native code
+        ndk.debugSymbolLevel = 'FULL'
+
+        externalNativeBuild {
+            cmake {
+                arguments "-DBUILD_SDL=ON", "-DBUILD_SHARED_LIBS=OFF", "-DENABLE_SYSMIDI=OFF"
+                //cppFlags "-v"
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled true // crashing
+            debuggable false
+            signingConfig signingConfigs.release
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+
+        developer {
+            //minifyEnabled true // crashing
+            //shrinkResources false // Temporarily disable resource shrinking
+            debuggable false
+            signingConfig signingConfigs.developer
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+
+        debug {
+            //minifyEnabled true // crashing
+            debuggable true
+            jniDebuggable true
+            signingConfig signingConfigs.developer
+            //signingConfig debug.signingConfig
+        }
+    }
+
+    flavorDimensions += "version"
+    productFlavors {
+        android {
+            dimension "version"
+            //applicationIdSuffix ".android"
+            versionNameSuffix "-android"
+            ndk.abiFilters 'arm64-v8a'//, 'x86_64'
+            externalNativeBuild {
+                cmake {
+                    arguments "-DENABLE_VR=OFF"
+                }
+            }
+            minSdk 28
+            targetSdk 34
+        }
+        quest {
+            dimension "version"
+            //applicationIdSuffix ".quest"
+            versionNameSuffix "-quest"
+            ndk.abiFilters 'arm64-v8a'
+            externalNativeBuild {
+                cmake {
+                    arguments "-DENABLE_VR=ON", "-DSTART_VR=ON"
+                    //, "-DVRW_BUILD_IN_VR_WRAPPER=ON"//, "-DDEVICE_QUEST=ON"
+                }
+            }
+            minSdk 29
+            targetSdk 32
+        }
+    }
+    externalNativeBuild {
+        cmake {
+            path "../../../CMakeLists.txt"
+            buildStagingDirectory "../../../Builds/Android/.cxx"
+            version "3.18.1+"  // https://stackoverflow.com/questions/51471908/upgrade-cmake-version-installed-with-android-studio-ubuntu-18-04
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+    kotlinOptions {
+        jvmTarget = '1.8'
+    }
+    ndkVersion '25.2.9519653'
+    aaptOptions {
+        ignoreAssetsPattern '*.zip:CMakeLists.txt'
+    }
+    sourceSets {
+        main {
+            assets {
+                srcDirs '../../../InstallAndroid'
+            }
+            java {
+                srcDirs '../../SDL/android-project/app/src/main/java'
+            }
+            jniLibs {
+                srcDirs '../../TFE_Vr/Lib/Android'
+            }
+        }
+    }
+}
+
+//tasks.register("cmakeInstall", Exec) {
+//    dependsOn("buildCMakeDebug")
+//
+//    println("---------------------------------")
+//    def buildDir = file("../../../Builds/Android/.cxx") // Path to native CMake build output
+//    def installDir = file("../../../InstallAndroid")
+//    workingDir buildDir
+//
+//    println("---------------------------------")
+//
+//    doFirst {
+//        if (!installDir.exists()) {
+//            installDir.mkdirs()
+//        }
+//    }
+//
+//    commandLine "cmake", "--install", buildDir, "--prefix", installDir
+//
+//    doLast {
+//        println("running mytask")
+//    }
+//}
+
+// cmake --install above is broken, so I do install manually here
+tasks.named('preBuild').configure {
+    //dependsOn("buildCMakeDebug")
+    //finalizedBy("cmakeInstall")
+    doLast {
+        println("---------------------------------")
+        def installFolder = "../../../InstallAndroid/"
+        def installDir = file(installFolder)
+        installDir.deleteDir()
+        installDir.mkdirs()
+
+        def srcDirs= [
+                "Captions",
+                "Documentation",
+                "UI_Text",
+                "UI_Images",
+                "Shaders",
+                "SoundFonts",
+                "Fonts",
+                "Mods"
+        ]
+
+        srcDirs.each { item ->
+            def scrFolder = "../../" + item
+            def dstFolder = installFolder + item
+            println "copying: $scrFolder $dstFolder"
+            copy {
+                from file(scrFolder)
+                into file(dstFolder)
+            }
+        }
+
+        def userDir = file(installFolder + "User")
+        if (!userDir.exists()) {
+            userDir.mkdirs()
+        }
+        new File("$userDir/readme.txt").text = "user data will be saved here"
+
+        def darkDir = file(installFolder + "Dark Forces")
+        if (!darkDir.exists()) {
+            darkDir.mkdirs()
+        }
+        new File("$darkDir/readme.txt").text = "copy Dark Forces game data here, optionally including enhanced.gob from remastered version"
+    }
+}
+
+dependencies {
+    implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
+    implementation 'androidx.core:core-ktx:1.5.0'
+    implementation 'androidx.appcompat:appcompat:1.2.0'
+    implementation 'com.google.android.material:material:1.2.1'
+    implementation 'androidx.constraintlayout:constraintlayout:2.0.4'
+    testImplementation 'junit:junit:4.+'
+    androidTestImplementation 'androidx.test.ext:junit:1.1.5'
+    androidTestImplementation 'androidx.test.espresso:espresso-core:3.3.0'
+}
