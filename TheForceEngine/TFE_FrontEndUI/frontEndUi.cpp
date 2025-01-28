@@ -772,6 +772,13 @@ namespace TFE_FrontEndUI
 					s_appState = APP_STATE_MENU;
 				}
 				else
+#elif defined(ANDROID)
+				{
+					setSettingsTemplate(TEMPLATE_MODERN);
+					TFE_Settings_Graphics* graphicsSettings = TFE_Settings::getGraphicsSettings();
+					graphicsSettings->reticleScale = 1.0f;
+					s_appState = APP_STATE_MENU;
+				}
 #endif
 				{
 					DisplayInfo displayInfo;
@@ -1667,6 +1674,7 @@ namespace TFE_FrontEndUI
 			sprintf(s_saveGameConfirmMsg, "Overwrite Save '%s'?###SaveConfirm", prevName);
 		}
 
+		TFE_Input::startTextInput();
 		ImGui::OpenPopup(s_saveGameConfirmMsg);
 		s_popupOpen = true;
 		s_popupSetFocus = true;
@@ -1677,6 +1685,7 @@ namespace TFE_FrontEndUI
 		s_popupOpen = false;
 		s_popupSetFocus = false;
 		ImGui::CloseCurrentPopup();
+		TFE_Input::stopTextInput();
 	}
 
 	void saveLoadConfirmed(bool isSaving)

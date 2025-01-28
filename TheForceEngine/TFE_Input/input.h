@@ -68,6 +68,9 @@ namespace TFE_Input
 	Button getControllerButtonPressed();
 	Axis getControllerAnalogDown();
 	MouseButton getMouseButtonPressed();
+
+	void startTextInput();
+	void stopTextInput();
 	
 	bool loadKeyNames(const char* path);
 	const char* getControllerAxisName(Axis axis);

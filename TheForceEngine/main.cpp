@@ -1097,6 +1097,12 @@ int main(int argc, char* argv[])
 	TFE_System::logWrite(LOG_MSG, "Progam Flow", "The Force Engine Game Loop Ended.");
 	TFE_System::logClose();
 	TFE_System::freeMessages();
+#if defined(ANDROID)
+	// TODO: this is workaround to enforce static deinitialization as in SDL app exiting main doesn't mean that app exits completely,
+	// it's just sitting on background & when it's run again we are dealing with static objects in wrong state leading to crashes,
+	// proper solution is to clean up static object properly, usually call delete/destroy & set to nullptr, ...
+	std::exit(0);
+#endif
 	return PROGRAM_SUCCESS;
 }
 

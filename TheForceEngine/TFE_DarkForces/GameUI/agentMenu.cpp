@@ -296,6 +296,7 @@ namespace TFE_DarkForces
 				{
 					case AGENT_NEW:
 					{
+						TFE_Input::startTextInput();
 						s_newAgentDlg = JTRUE;
 						memset(s_newAgentName, 0, 32);
 						s_editBox.cursor = 0;
@@ -565,11 +566,13 @@ namespace TFE_DarkForces
 		{
 			agentMenu_createNewAgent();
 			s_newAgentDlg = JFALSE;
+			TFE_Input::stopTextInput();
 			return;
 		}
 		else if (TFE_Input::keyPressed(KEY_ESCAPE))
 		{
 			s_newAgentDlg = JFALSE;
+			TFE_Input::stopTextInput();
 			return;
 		}
 
@@ -610,6 +613,7 @@ namespace TFE_DarkForces
 					agentMenu_createNewAgent();
 				}
 				s_newAgentDlg = JFALSE;
+				TFE_Input::stopTextInput();
 			}
 			// Reset.
 			s_buttonPressed = -1;

@@ -5,6 +5,7 @@
 #include "filestream.h"
 #include <TFE_System/system.h>
 #include <TFE_Archive/archive.h>
+#include <SDL.h>
 #include <algorithm>
 #include <deque>
 #include <string>
@@ -90,6 +91,11 @@ namespace TFE_Paths
 	//  to debug (non-)issues.
 	bool setProgramDataPath(const char *append)
 	{
+#if defined(ANDROID)
+		s_paths[PATH_PROGRAM_DATA] = std::string{SDL_AndroidGetExternalStoragePath()} + "/";
+		s_systemPaths.push_back(getPath(PATH_PROGRAM_DATA));
+		TFE_ANDROID("s_paths[PATH_PROGRAM_DATA] = {}", getPath(PATH_PROGRAM_DATA));
+#else
 		s_systemPaths.push_back(getPath(PATH_PROGRAM));
 		if (isPortableInstall())
 		{
@@ -104,12 +110,18 @@ namespace TFE_Paths
 		s_systemPaths.push_back(s);
 		setTFEPath(append, PATH_PROGRAM_DATA);
 		s_systemPaths.push_back(getPath(PATH_PROGRAM_DATA));
+#endif
 
 		return true;
 	}
 
 	bool setUserDocumentsPath(const char *append)
 	{
+#if defined(ANDROID)
+		s_paths[PATH_USER_DOCUMENTS] = std::string{SDL_AndroidGetExternalStoragePath()} + "/User/";
+		s_systemPaths.push_back(getPath(PATH_USER_DOCUMENTS));
+		TFE_ANDROID("s_paths[PATH_USER_DOCUMENTS] = {}", getPath(PATH_USER_DOCUMENTS));
+#else
 		if (isPortableInstall())
 		{
 			s_paths[PATH_USER_DOCUMENTS] = s_paths[PATH_PROGRAM];
@@ -127,16 +139,22 @@ namespace TFE_Paths
 		// support data to reside at where the executable was launched
 		// from.
 		FileUtil::setCurrentDirectory(s_paths[PATH_USER_DOCUMENTS].c_str());
+#endif
 		return true;
 	}
 
 	bool setProgramPath(void)
 	{
+#if defined(ANDROID)
+		s_paths[PATH_PROGRAM] = std::string{ SDL_AndroidGetExternalStoragePath() } + "/Dark Forces/";
+		TFE_ANDROID("s_paths[PATH_PROGRAM] = {}", getPath(PATH_PROGRAM));
+#else
 		char p[TFE_MAX_PATH];
 		memset(p, 0, TFE_MAX_PATH);
 		FileUtil::getCurrentDirectory(p);
 		s_paths[PATH_PROGRAM] = p;
 		s_paths[PATH_PROGRAM] += "/";
+#endif
 		return true;
 	}
 

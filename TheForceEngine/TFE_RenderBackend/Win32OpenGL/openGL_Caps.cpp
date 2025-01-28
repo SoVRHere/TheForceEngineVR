@@ -1,4 +1,5 @@
 #include "openGL_Caps.h"
+#include "openGL_Debug.h"
 #include <TFE_System/system.h>
 #include "gl.h"
 #include <assert.h>
@@ -40,6 +41,7 @@ namespace OpenGL_Caps
 		m_deviceTier = DEV_TIER_0;
 		glGetIntegerv(GL_MAJOR_VERSION, &gl_maj);
 		glGetIntegerv(GL_MINOR_VERSION, &gl_min);
+		TFE_ASSERT_GL;
 
 		if (SDL_GL_ExtensionSupported("GL_ARB_pixel_buffer_object"))
 			m_supportFlags |= CAP_PBO | CAP_NON_POW_2;
@@ -60,20 +62,21 @@ namespace OpenGL_Caps
 		if (m_supportFlags & CAP_ANISO)
 		{
 			glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY, &m_maxAnisotropy);
+			TFE_ASSERT_GL;
 		}
 		else
 		{
 			m_maxAnisotropy = 0.0f;
 		}
 
+#if defined(ANDROID)
 		if (SDL_GL_ExtensionSupported("GL_EXT_clip_cull_distance"))
+#endif
 		{
 			glGetIntegerv(GL_MAX_CLIP_DISTANCES, &m_maxClipDistances);
+			TFE_ASSERT_GL;
 			TFE_INFO("GL", "Max Clip Distances: {}", m_maxClipDistances);
 		}
-
-		// clear any pending errors.
-		(void)glGetError();
 
 		if ((gl_maj >= 4) && (gl_min >= 5) &&
 		    (m_textureBufferMaxSize >= GLSPEC_MAX_TEXTURE_BUFFER_SIZE_MIN))

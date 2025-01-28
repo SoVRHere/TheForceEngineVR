@@ -19,6 +19,10 @@
 #define VERIFY_MEMORY()
 #endif
 
+#if defined(ANDROID)
+#include <sys/mman.h>
+#endif
+
 using namespace TFE_Jedi;
 
 enum
@@ -194,7 +198,14 @@ namespace TFE_Memory
 		assert(region);
 		for (s32 i = 0; i < region->blockCount; i++)
 		{
+#if defined(ANDROID)
+			if (munmap(region->memBlocks[i], sizeof(MemoryBlock) + region->blockSize))
+			{
+				TFE_CRITICAL("MemoryRegion", "munmap failed");
+			}
+#else
 			free(region->memBlocks[i]);
+#endif
 		}
 		free(region->memBlocks);
 		free(region);
@@ -773,7 +784,11 @@ namespace TFE_Memory
 
 		u64 blockIndex = region->blockCount;
 		assert(blockIndex < region->blockArrCapacity);
+#if defined(ANDROID)
+		region->memBlocks[blockIndex] = (MemoryBlock*)mmap(/*desired address*/0, sizeof(MemoryBlock) + region->blockSize, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+#else
 		region->memBlocks[blockIndex] = (MemoryBlock*)malloc(sizeof(MemoryBlock) + region->blockSize);
+#endif
 		if (!region->memBlocks[blockIndex])
 		{
 			TFE_System::logWrite(LOG_ERROR, "MemoryRegion", "Failed to allocate block of size %u in region '%s'.", region->blockSize, region->name);

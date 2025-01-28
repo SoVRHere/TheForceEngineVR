@@ -2,6 +2,7 @@
 #include <TFE_FileSystem/filestream.h>
 #include <TFE_System/system.h>
 #include <TFE_System/parser.h>
+#include <SDL.h>
 #include <memory.h>
 #include <string.h>
 #include <assert.h>
@@ -351,6 +352,26 @@ namespace TFE_Input
 	bool bufferedKeyDown(KeyboardCode key)
 	{
 		return s_bufferedKey[key];
+	}
+
+	void startTextInput()
+	{
+#if defined(ANDROID)
+		if (SDL_HasScreenKeyboardSupport())
+		{
+			SDL_StartTextInput();
+		}
+#endif
+	}
+
+	void stopTextInput()
+	{
+#if defined(ANDROID)
+		if (SDL_HasScreenKeyboardSupport())
+		{
+			SDL_StopTextInput();
+		}
+#endif
 	}
 
 	bool loadKeyNames(const char* path)
