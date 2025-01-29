@@ -2,6 +2,7 @@
 #include "Shaders/filter.h"
 #include "Shaders/textureSampleFunc.h"
 #include "Shaders/lighting.h"
+#include "Shaders/clipping.h"
 
 #ifdef OPT_VR_MULTIVIEW
 uniform vec3 CameraPos_[2];
@@ -198,6 +199,8 @@ float getBayerIndex(vec2 uv)
 
 void main()
 {
+	Clip();
+
     vec3 cameraRelativePos = Frag_Pos;
 	bool sky = Frag_Uv.y > 2.5;
 	bool sign = false;

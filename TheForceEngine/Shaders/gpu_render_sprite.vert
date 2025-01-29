@@ -1,4 +1,5 @@
 #include "Shaders/vr.h"
+#include "Shaders/clipping.h"
 
 #ifdef OPT_VR_MULTIVIEW
 uniform vec3 CameraPos_[2];
@@ -68,15 +69,15 @@ void main()
 	unpackPortalInfo(portalInfo, portalOffset, portalCount);
 
 	// Clipping.
-	gl_ClipDistance[7] = 1.0; // must be sized by the shader either by redeclaring it with an explicit size, or by indexing it with only integral constant expressions
+	Frag_ClipDistance[7] = 1.0; // must be sized by the shader either by redeclaring it with an explicit size, or by indexing it with only integral constant expressions
 	for (int i = 0; i < int(portalCount) && i < 8; i++)
 	{
 		vec4 plane = texelFetch(DrawListPlanes, int(portalOffset) + i);
-		gl_ClipDistance[i] = dot(vec4(vtx_pos.xyz, 1.0), plane);
+		Frag_ClipDistance[i] = dot(vec4(vtx_pos.xyz, 1.0), plane);
 	}
 	for (int i = int(portalCount); i < 8; i++)
 	{
-		gl_ClipDistance[i] = 1.0;
+		Frag_ClipDistance[i] = 1.0;
 	}
 
 	// Relative position

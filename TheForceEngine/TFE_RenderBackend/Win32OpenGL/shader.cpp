@@ -2,6 +2,7 @@
 #include <TFE_RenderBackend/shader.h>
 #include <TFE_RenderBackend/vertexBuffer.h>
 #include <TFE_RenderBackend/Win32OpenGL/openGL_Debug.h>
+#include <TFE_RenderBackend/Win32OpenGL/openGL_Caps.h>
 #include <TFE_System/system.h>
 #include <TFE_FileSystem/filestream.h>
 #include <TFE_FileSystem/paths.h>
@@ -91,6 +92,10 @@ const char* fragmentShaderDefine = "#define FRAGMENT_SHADER\n";
 const char* extension_GL_OES_standard_derivatives = "#extension GL_OES_standard_derivatives : enable\n";
 const char* extension_GL_EXT_clip_cull_distance = "#extension GL_EXT_clip_cull_distance : enable\n";
 const char* extension_GL_OVR_multiview2 = "#extension GL_OVR_multiview2 : enable\n";
+const char* extension_GL_NV_shader_noperspective_interpolation = "#extension GL_NV_shader_noperspective_interpolation : enable\n";
+
+const char* noperspective_interpolation = "#define NOPERSPECTIVE noperspective\n";
+const char* no_noperspective_interpolation = "#define NOPERSPECTIVE\n";
 
 #if defined(ANDROID)
 const char* defaultPrecisions = R"(
@@ -136,7 +141,21 @@ bool Shader::create(const char* vertexShaderGLSL, const char* fragmentShaderGLSL
 			vertex_shader_parts.push_back(extension_GL_OVR_multiview2);
 		}
 #if defined(ANDROID)
-		vertex_shader_parts.push_back(extension_GL_EXT_clip_cull_distance);
+		if (OpenGL_Caps::supportsClipping())
+		{
+			vertex_shader_parts.push_back(extension_GL_EXT_clip_cull_distance);
+		}
+		if (OpenGL_Caps::supportsNoPerspectiveInterpolation())
+		{
+			vertex_shader_parts.push_back(extension_GL_NV_shader_noperspective_interpolation);
+			vertex_shader_parts.push_back(noperspective_interpolation);
+		}
+		else
+		{
+			vertex_shader_parts.push_back(no_noperspective_interpolation);
+		}
+#else
+		vertex_shader_parts.push_back(noperspective_interpolation);
 #endif
 		vertex_shader_parts.push_back(vertexShaderDefine);
 		vertex_shader_parts.push_back(defaultPrecisions);
@@ -165,6 +184,17 @@ bool Shader::create(const char* vertexShaderGLSL, const char* fragmentShaderGLSL
 		}
 #if defined(ANDROID)
 		fragment_shader_parts.push_back(extension_GL_OES_standard_derivatives);
+		if (OpenGL_Caps::supportsNoPerspectiveInterpolation())
+		{
+			fragment_shader_parts.push_back(extension_GL_NV_shader_noperspective_interpolation);
+			fragment_shader_parts.push_back(noperspective_interpolation);
+		}
+		else
+		{
+			fragment_shader_parts.push_back(no_noperspective_interpolation);
+		}
+#else
+		fragment_shader_parts.push_back(noperspective_interpolation);
 #endif
 		fragment_shader_parts.push_back(fragmentShaderDefine);
 		fragment_shader_parts.push_back(defaultPrecisions);

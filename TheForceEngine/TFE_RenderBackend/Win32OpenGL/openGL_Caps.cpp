@@ -15,6 +15,8 @@ enum CapabilityFlags
 	CAP_NON_POW_2 = (1 << 4),
 	CAP_TEXTURE_ARRAY = (1 << 5),
 	CAP_ANISO = (1 << 6),
+	CAP_CLIP_DISTANCES = (1 << 7),
+	CAP_NOPERSPECTIVE_INTERPOLATION = (1 << 8),
 
 	CAP_2_1_FULL = (CAP_VBO | CAP_PBO | CAP_NON_POW_2),
 	CAP_3_3_FULL = (CAP_PBO | CAP_VBO | CAP_FBO | CAP_UBO | CAP_NON_POW_2 | CAP_TEXTURE_ARRAY)
@@ -35,6 +37,27 @@ namespace OpenGL_Caps
 
 	void queryCapabilities()
 	{
+		{
+			GLint numExts = 0;
+			glGetIntegerv(GL_NUM_EXTENSIONS, &numExts);
+			TFE_ASSERT_GL;
+
+			TFE_INFO("GL", "GL extesions({}):", numExts);
+			for (GLint i = 0; i < numExts; i++)
+			{
+				const char* ext = (const char*)glGetStringi(GL_EXTENSIONS, i);
+				TFE_ASSERT_GL;
+				if (ext)
+				{
+					TFE_INFO("GL", "{}", ext);
+				}
+				else
+				{
+					TFE_WARN("GL", "invalid extesion name");
+				}
+			}
+		}
+
 		GLint gl_maj = 0, gl_min = 0;
 
 		m_supportFlags = 0;
@@ -76,7 +99,38 @@ namespace OpenGL_Caps
 			glGetIntegerv(GL_MAX_CLIP_DISTANCES, &m_maxClipDistances);
 			TFE_ASSERT_GL;
 			TFE_INFO("GL", "Max Clip Distances: {}", m_maxClipDistances);
+			if (m_maxClipDistances >= 8)
+			{
+				m_supportFlags |= CAP_CLIP_DISTANCES;
+			}
+			else
+			{
+				TFE_WARN("GL", "number of max GL_EXT_clip_cull_distance values is {}, at least 8 are required, using SW implementation instead", m_maxClipDistances);
+				m_maxClipDistances = 8;
+			}
 		}
+#if defined(ANDROID)
+		else
+		{
+			TFE_WARN("GL", "GL_EXT_clip_cull_distance not supported, using SW implementation instead");
+			m_maxClipDistances = 8;
+		}
+#endif
+
+#if defined(ANDROID)
+		if (SDL_GL_ExtensionSupported("GL_NV_shader_noperspective_interpolation"))
+#endif
+		{
+			m_supportFlags |= CAP_NOPERSPECTIVE_INTERPOLATION;
+		}
+#if defined(ANDROID)
+		else
+		{
+			TFE_WARN("GL", "GL_NV_shader_noperspective_interpolation not supported, some rendering may look broken");
+			m_maxClipDistances = 8;
+		}
+#endif
+
 
 		if ((gl_maj >= 4) && (gl_min >= 5) &&
 		    (m_textureBufferMaxSize >= GLSPEC_MAX_TEXTURE_BUFFER_SIZE_MIN))
@@ -94,20 +148,13 @@ namespace OpenGL_Caps
 		}
 
 #if defined(ANDROID)
-		if (m_maxClipDistances >= 8)
+		if (SDL_GL_ExtensionSupported("GL_OES_standard_derivatives"))
 		{
-			if (SDL_GL_ExtensionSupported("GL_OES_standard_derivatives"))
-			{
-				m_deviceTier = DEV_TIER_3;
-			}
-			else
-			{
-				TFE_ERROR("GL", "GL_OES_standard_derivatives not supported!!!");
-			}
+			m_deviceTier = DEV_TIER_3;
 		}
 		else
 		{
-			TFE_ERROR("GL", "GL_EXT_clip_cull_distance not supported or not sufficient!!!");
+			TFE_ERROR("GL", "GL_OES_standard_derivatives not supported!!!");
 		}
 #endif
 	}
@@ -140,6 +187,16 @@ namespace OpenGL_Caps
 	bool supportsAniso()
 	{
 		return (m_supportFlags & CAP_ANISO) != 0;
+	}
+
+	bool supportsClipping()
+	{
+		return (m_supportFlags & CAP_CLIP_DISTANCES) != 0;
+	}
+
+	bool supportsNoPerspectiveInterpolation()
+	{
+		return (m_supportFlags & CAP_NOPERSPECTIVE_INTERPOLATION) != 0;
 	}
 
 	bool deviceSupportsGpuBlit()

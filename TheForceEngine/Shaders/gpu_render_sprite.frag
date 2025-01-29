@@ -2,6 +2,7 @@
 #include "Shaders/filter.h"
 #include "Shaders/textureSampleFunc.h"
 #include "Shaders/lighting.h"
+#include "Shaders/clipping.h"
 
 #ifdef OPT_VR_MULTIVIEW
 uniform vec3 CameraPos_[2];
@@ -28,6 +29,8 @@ flat in vec4 Texture_Data;
 
 void main()
 {
+	Clip();
+
     vec3 cameraRelativePos = Frag_Pos;
 	float light = 31.0;
 

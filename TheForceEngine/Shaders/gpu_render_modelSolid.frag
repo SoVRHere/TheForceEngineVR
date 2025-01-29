@@ -2,6 +2,7 @@
 #include "Shaders/filter.h"
 #include "Shaders/textureSampleFunc.h"
 #include "Shaders/lighting.h"
+#include "Shaders/clipping.h"
 
 #ifdef OPT_VR_MULTIVIEW
 uniform vec3 CameraPos_[2];
@@ -15,7 +16,7 @@ uniform vec4 TextureOffsets;
 
 in vec2 Frag_Uv;
 in vec3 Frag_WorldPos;
-noperspective in float Frag_Light;
+NOPERSPECTIVE in float Frag_Light;
 flat in float Frag_ModelY;
 #ifdef OPT_TRUE_COLOR
 flat in vec4 Frag_Color;
@@ -34,6 +35,8 @@ out vec4 Out_Color;
 
 void main()
 {
+	Clip();
+
 	#ifdef OPT_TRUE_COLOR
 		vec4 baseColor = Frag_Color;
 	#else
