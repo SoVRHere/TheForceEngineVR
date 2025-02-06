@@ -5,6 +5,8 @@ set(SOURCES
 	inputEnum.h
 	inputMapping.cpp
 	inputMapping.h
+	touchInput.cpp
+	touchInput.h
 )
 
 #add_custom_target(${PROJECT_NAME} "" SOURCES ${SOURCES})
