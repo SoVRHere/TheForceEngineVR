@@ -1,5 +1,6 @@
 #include "android.h"
 
+#include "gitVersion.h"
 #include <jni.h>
 #include <android/log.h>
 #include <android/asset_manager.h>
@@ -10,6 +11,14 @@
 #include <fstream>
 #include <cassert>
 
+#include <TFE_Input/input.h>
+#include <TFE_System/math.h>
+#include <TFE_Ui/imGUI/imgui.h>
+
+//#include <TFE_DarkForces/GameUI/escapeMenu.h>
+//#include <TFE_DarkForces/GameUI/pda.h>
+//#include <TFE_FrontEndUI/frontEndUi.h>
+
 #define TFE_JAVA_PREFIX	com_tfe_core
 #define CONCAT1(prefix, class, function) CONCAT2(prefix, class, function)
 #define CONCAT2(prefix, class, function) Java_ ## prefix ## _ ## class ## _ ## function
@@ -17,7 +26,7 @@
 
 extern "C"
 {
-	JNIEXPORT void JNICALL TFE_JAVA_INTERFACE(onCreateActivity)(JNIEnv* env, jclass jcls, jobject activity, jobject assetManager, jobject assetList);
+	JNIEXPORT void JNICALL TFE_JAVA_INTERFACE(onCreateActivity)(JNIEnv* env, jclass jcls, jobject activity, jobject assetManager, jobject assetList, jstring externalPublicDir);
 	JNIEXPORT void JNICALL TFE_JAVA_INTERFACE(onDestroyActivity)(JNIEnv* env, jclass jcls);
 }
 
@@ -33,7 +42,27 @@ static AAssetManager* gAAssetManager = nullptr;
 
 static jobject gActivityRef = 0;
 
+static std::string gExternalStorageDir; // public dir, not removed when uninstalled unlike SDL_AndroidGetExternalStoragePath()
+
 namespace fs = std::filesystem;
+
+static void ClearDirectory(const fs::path& dir)
+{
+	if (fs::exists(dir) && fs::is_directory(dir))
+	{
+		for (const auto& entry : fs::directory_iterator(dir))
+		{
+			try
+			{
+				fs::remove_all(entry);
+			}
+			catch (const std::filesystem::filesystem_error& e)
+			{
+				LOGI("clearing folder %s with error %s", entry.path().c_str(), e.what());
+			}
+		}
+	}
+}
 
 static void CopyNewAssets(AAssetManager* assetManager, const std::vector<std::string>& assetItems)
 {
@@ -109,7 +138,7 @@ static std::vector<std::string> ListString2Cpp(JNIEnv* env, jobject arrayList)
 	return result;
 }
 
-JNIEXPORT void JNICALL TFE_JAVA_INTERFACE(onCreateActivity)(JNIEnv* env, jclass jcls, jobject activity, jobject assetManager, jobject assetList)
+JNIEXPORT void JNICALL TFE_JAVA_INTERFACE(onCreateActivity)(JNIEnv* env, jclass jcls, jobject activity, jobject assetManager, jobject assetList, jstring externalPublicDir)
 {
 	TFE_ASSERT((gJavaAssetManagerRef == 0) && "Java's asset manager was not previously destroyed");
 	TFE_ASSERT((gAAssetManager == nullptr) && "AAssetManager was not previously destroyed");
@@ -123,6 +152,58 @@ JNIEXPORT void JNICALL TFE_JAVA_INTERFACE(onCreateActivity)(JNIEnv* env, jclass 
 	gAAssetManager = AAssetManager_fromJava(env, assetManager);
 
 	gActivityRef = env->NewGlobalRef(activity);
+
+	const char* nativePath = env->GetStringUTFChars(externalPublicDir, 0);
+	gExternalStorageDir = nativePath;
+	env->ReleaseStringUTFChars(externalPublicDir, nativePath);
+
+	// old version stores user data to external private folder, move to external public
+	// so it's not removed when uninstalled
+	const fs::path obsoleteUserPath = fs::path{ SDL_AndroidGetExternalStoragePath() } / "User";
+	const fs::path newUserPath = fs::path{ gExternalStorageDir };
+	if (fs::exists(obsoleteUserPath) && fs::is_directory(obsoleteUserPath) && !fs::exists(newUserPath))
+	{
+		const fs::copy_options fsOptions = fs::copy_options::recursive;
+		LOGI("moving user data from %s to %s", obsoleteUserPath.c_str(), newUserPath.c_str());
+		fs::copy(obsoleteUserPath, newUserPath, fsOptions);
+		fs::remove_all(obsoleteUserPath);
+	}
+
+	// if there is a new version installed, remove all data so new can be copied
+	const fs::path versionFilePath = fs::path{ SDL_AndroidGetExternalStoragePath() } / "version.txt";
+	bool removeData = false;
+	{
+		if (fs::exists(versionFilePath))
+		{
+			std::string version;
+			std::ifstream file{versionFilePath, std::ios::in};
+			if (file.is_open())
+			{
+				while (getline(file, version))
+				{}
+				file.close();
+			}
+
+			LOGI("Comparing '%s' with '%s'", version.c_str(), c_gitVersion);
+			if (version != c_gitVersion)
+			{
+				removeData = true;
+			}
+		}
+		else
+		{
+			removeData = true;
+		}
+	}
+
+	if (removeData)
+	{
+		LOGI("Removing all assets");
+		ClearDirectory(fs::path{ SDL_AndroidGetExternalStoragePath() });
+		std::ofstream file{versionFilePath, std::ios::trunc };
+		file << c_gitVersion;
+		file.close();
+	}
 
 	CopyNewAssets(gAAssetManager, ListString2Cpp(env, assetList));
 }
@@ -152,6 +233,11 @@ namespace TFE_System::android
 	JNIEnv* GetJNIEnv()
 	{
 		return (JNIEnv*)SDL_AndroidGetJNIEnv();
+	}
+
+	const std::string& GetExternalStorageDir()
+	{
+		return gExternalStorageDir;
 	}
 
 	void Log(LogWriteType type, const char* message)

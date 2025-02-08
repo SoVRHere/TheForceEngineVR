@@ -15,6 +15,7 @@
 #include <TFE_Polygon/polygon.h>
 #include <TFE_RenderBackend/renderBackend.h>
 #include <TFE_Input/inputMapping.h>
+#include <TFE_Input/touchInput.h>
 #include <TFE_Settings/settings.h>
 #include <TFE_System/system.h>
 #include <TFE_System/CrashHandler/crashHandler.h>
@@ -34,6 +35,10 @@
 #ifdef _WIN32
 #include <sys/types.h>
 #include <sys/timeb.h>
+#endif
+
+#if defined(ANDROID)
+#include <TFE_System/android.h>
 #endif
 
 #include <TFE_Jedi/Renderer/jediRenderer.h>
@@ -56,6 +61,10 @@
 #undef max
 #endif
 #endif
+
+#include <TFE_DarkForces/GameUI/escapeMenu.h>
+#include <TFE_DarkForces/GameUI/pda.h>
+#include <TFE_FrontEndUI/frontEndUi.h>
 
 #define PROGRAM_ERROR   1
 #define PROGRAM_SUCCESS 0
@@ -85,6 +94,8 @@ static char s_screenshotTime[TFE_MAX_PATH];
 static s32  s_startupGame = -1;
 static IGame* s_curGame = nullptr;
 static const char* s_loadRequestFilename = nullptr;
+
+bool s_inMenu = false;
 
 void parseOption(const char* name, const std::vector<const char*>& values, bool longName);
 bool validatePath();
@@ -210,7 +221,7 @@ void handleEvent(const SDL_Event& Event)
 		} break;
 		case SDL_CONTROLLERAXISMOTION:
 		{
-			// Axis are now handled interally so the deadzone can be changed.
+			// Axis are now handled internally so the deadzone can be changed.
 			if (Event.caxis.axis == SDL_CONTROLLER_AXIS_LEFTX)
 			{ TFE_Input::setAxis(AXIS_LEFT_X, f32(Event.caxis.value) / 32768.0f); }
 			else if (Event.caxis.axis == SDL_CONTROLLER_AXIS_LEFTY)
@@ -251,8 +262,16 @@ void handleEvent(const SDL_Event& Event)
 				TFE_Input::setButtonUp(Button(Event.cbutton.button));
 			}
 		} break;
+
+		case SDL_FINGERDOWN:
+		case SDL_FINGERUP:
+		case SDL_FINGERMOTION:
+		{
+			TFE_Input::handleTouchEvents(Event);
+		} break;
 		default:
 		{
+			//TFE_INFO("SDL event", "unknown 0x{:x}", Event.type);
 		} break;
 	}
 }
@@ -261,6 +280,8 @@ bool sdlInit()
 {
 	const int code = SDL_Init(SDL_INIT_TIMER | SDL_INIT_VIDEO | SDL_INIT_EVENTS | SDL_INIT_GAMECONTROLLER | SDL_INIT_AUDIO);
 	if (code != 0) { return false; }
+
+	TFE_ANDROID("Android API {}", SDL_GetAndroidSDKVersion());
 
 	TFE_Settings_Window* windowSettings = TFE_Settings::getWindowSettings();
 #if defined(ENABLE_VR)
@@ -457,6 +478,7 @@ bool systemMenuKeyCombo()
 
 void parseCommandLine(s32 argc, char* argv[])
 {
+	//TFE_SaveSystem::postLoadRequest("save001.tfe"); // load
 	if (argc < 1) { return; }
 
 	const char* curOptionName = nullptr;
@@ -633,8 +655,6 @@ void overrideVRSettings(bool firstRun)
 
 int main(int argc, char* argv[])
 {
-	TFE_ANDROID("Android API %d", SDL_GetAndroidSDKVersion());
-
 #if INSTALL_CRASH_HANDLER
 	TFE_CrashHandler::setProcessExceptionHandlers();
 	TFE_CrashHandler::setThreadExceptionHandlers();
@@ -650,7 +670,6 @@ int main(int argc, char* argv[])
 	if (!pathsSet)
 	{
 		TFE_System::logWrite(LOG_ERROR, "Main", "Cannot set paths.");
-		TFE_ANDROID("!pathsSet");
 		return PROGRAM_ERROR;
 	}
 
@@ -758,6 +777,16 @@ int main(int argc, char* argv[])
 	TFE_FrontEndUI::init();
 	game_init();
 	inputMapping_startup();
+	if (SDL_GetNumTouchDevices() > 0)
+	{
+#if defined(ANDROID)
+		bool enable = true;
+#else
+		bool enable = false;
+#endif
+		DisplayInfo displayInfo;
+		TFE_Input::initTouchControls(enable);
+	}
 	TFE_SaveSystem::init();
 	TFE_A11Y::init();
 
@@ -800,7 +829,7 @@ int main(int argc, char* argv[])
 	u32 frame = 0u;
 	bool showPerf = false;
 	bool relativeMode = false;
-	TFE_System::logWrite(LOG_MSG, "Progam Flow", "The Force Engine Game Loop Started");
+	TFE_System::logWrite(LOG_MSG, "Program Flow", "The Force Engine Game Loop Started");
 	while (s_loop && !TFE_System::quitMessagePosted())
 	{
 		TFE_FRAME_BEGIN();
@@ -822,6 +851,8 @@ int main(int argc, char* argv[])
 			}
 		}
 
+		s_inMenu = !s_curGame || s_curGame->getState() != IGame::State::Mission || TFE_FrontEndUI::isConfigMenuOpen() || TFE_DarkForces::escapeMenu_isOpen() || TFE_DarkForces::pda_isOpen();
+
 		// System events
 		SDL_Event event;
 		while (SDL_PollEvent(&event)) { handleEvent(event); }
@@ -832,7 +863,9 @@ int main(int argc, char* argv[])
 		u32 state = SDL_GetRelativeMouseState(&mouseX, &mouseY);
 		SDL_GetMouseState(&mouseAbsX, &mouseAbsY);
 		bool mouseMoveEmulatedByVrController = false;
-#if defined(ENABLE_VR)
+#if defined(ANDROID) && !defined(ENABLE_VR)
+		SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, s_inMenu ? "1" : "0");
+#elif defined(ENABLE_VR)
 		if (TFE_Settings::getTempSettings()->vr)
 		{
 			mouseMoveEmulatedByVrController = vr::HandleControllerEvents(s_curGame ? s_curGame->getState() : IGame::State::Unknown, mouseX, mouseY);
@@ -1083,6 +1116,7 @@ int main(int argc, char* argv[])
 	TFE_RenderBackend::updateSettings();
 	TFE_Settings::shutdown();
 	TFE_Jedi::texturepacker_freeGlobal();
+	TFE_Input::destroyTouchControls();
 #if defined(ENABLE_VR)
 	vr::Shutdown();
 #endif
@@ -1094,7 +1128,7 @@ int main(int argc, char* argv[])
 	TFE_ForceScript::destroy();
 #endif
 
-	TFE_System::logWrite(LOG_MSG, "Progam Flow", "The Force Engine Game Loop Ended.");
+	TFE_System::logWrite(LOG_MSG, "Program Flow", "The Force Engine Game Loop Ended.");
 	TFE_System::logClose();
 	TFE_System::freeMessages();
 #if defined(ANDROID)

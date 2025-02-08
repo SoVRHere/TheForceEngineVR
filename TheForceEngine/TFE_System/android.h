@@ -1,9 +1,10 @@
 #pragma once
 
+#include <SDL.h>
 #include <TFE_System/system.h>
+#include <TFE_Game/igame.h>
 #include <android/asset_manager.h>
 #include <android/native_activity.h>
-#include <string>
 
 namespace TFE_System::android
 {
@@ -11,4 +12,5 @@ namespace TFE_System::android
 	jobject 		GetActivity();
 	JNIEnv* 		GetJNIEnv();
 	void 			Log(LogWriteType type, const char* message);
+	const std::string& GetExternalStorageDir();
 }

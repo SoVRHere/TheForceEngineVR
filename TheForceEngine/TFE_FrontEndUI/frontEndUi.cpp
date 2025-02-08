@@ -23,6 +23,7 @@
 #include <TFE_Archive/zipArchive.h>
 #include <TFE_Archive/gobMemoryArchive.h>
 #include <TFE_Input/inputMapping.h>
+#include <TFE_Input/touchInput.h>
 #include <TFE_Asset/imageAsset.h>
 #include <TFE_Ui/ui.h>
 #include <TFE_Ui/markdown.h>
@@ -704,6 +705,7 @@ namespace TFE_FrontEndUI
 		}
 		if (!drawFrontEnd)
 		{
+			TFE_Input::drawTouchControls();
 #if defined(ENABLE_VR)
 			drawVrControllersInfo(w);
 #endif

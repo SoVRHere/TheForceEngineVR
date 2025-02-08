@@ -5,10 +5,12 @@ import android.content.Context;
 import android.content.pm.PackageManager;
 import android.content.res.AssetManager;
 import android.os.Bundle;
+import android.os.Environment;
 import android.util.Log;
 
 import org.libsdl.app.SDLActivity;
 
+import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -60,7 +62,9 @@ public class AndroidActivity extends SDLActivity {
 //            }
         }
 
-        AndroidActivity.onCreateActivity((Activity)this, getAssets(), assetList);
+        File externalDir = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), "TheForceEngine");
+        String externalPublicDir = externalDir.getAbsolutePath();
+        AndroidActivity.onCreateActivity((Activity)this, getAssets(), assetList, externalPublicDir);
     }
 
     @Override
@@ -80,7 +84,7 @@ public class AndroidActivity extends SDLActivity {
         return context;
     }
 
-    public static native void onCreateActivity(Activity activity, AssetManager assetManager, List<String> assetList);
+    public static native void onCreateActivity(Activity activity, AssetManager assetManager, List<String> assetList, String externalPublicDir);
     public static native void onDestroyActivity();
 
     public static int doGetVersionCode() {

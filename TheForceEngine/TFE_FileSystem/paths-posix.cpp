@@ -9,6 +9,9 @@
 #include <algorithm>
 #include <deque>
 #include <string>
+#if defined(ANDROID)
+#include <TFE_System/android.h>
+#endif
 
 namespace FileUtil {
 	extern bool existsNoCase(const char *filename);
@@ -118,7 +121,7 @@ namespace TFE_Paths
 	bool setUserDocumentsPath(const char *append)
 	{
 #if defined(ANDROID)
-		s_paths[PATH_USER_DOCUMENTS] = std::string{SDL_AndroidGetExternalStoragePath()} + "/User/";
+		s_paths[PATH_USER_DOCUMENTS] = TFE_System::android::GetExternalStorageDir() + "/";
 		s_systemPaths.push_back(getPath(PATH_USER_DOCUMENTS));
 		TFE_ANDROID("s_paths[PATH_USER_DOCUMENTS] = {}", getPath(PATH_USER_DOCUMENTS));
 #else

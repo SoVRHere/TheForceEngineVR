@@ -188,11 +188,11 @@ tasks.named('preBuild').configure {
             }
         }
 
-        def userDir = file(installFolder + "User")
-        if (!userDir.exists()) {
-            userDir.mkdirs()
-        }
-        new File("$userDir/readme.txt").text = "user data will be saved here"
+//        def userDir = file(installFolder + "User")
+//        if (!userDir.exists()) {
+//            userDir.mkdirs()
+//        }
+//        new File("$userDir/readme.txt").text = "user data will be saved here"
 
         def darkDir = file(installFolder + "Dark Forces")
         if (!darkDir.exists()) {

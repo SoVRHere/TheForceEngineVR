@@ -30,6 +30,7 @@ namespace TFE_Input
 		State mState;
 		Vec2f mStartPos;
 		Vec2f mCurrentPos;
+		Vec2f mLastPos;
 	};
 
 	struct TouchAction
@@ -43,11 +44,16 @@ namespace TFE_Input
 			RightMouseButtonUp,
 			MiddleMouseButtonDown,
 			MiddleMouseButtonUp,
+			SetRelativeMousePos,
 			// controller
 			LeftAxis,
 			RightAxis,
 			LeftTrigger,
 			RightTrigger,
+			LeftShoulderDown,
+			LeftShoulderUp,
+			RightShoulderDown,
+			RightShoulderUp,
 			AButtonDown,
 			AButtonUp,
 			BButtonDown,
@@ -55,9 +61,21 @@ namespace TFE_Input
 			XButtonDown,
 			XButtonUp,
 			YButtonDown,
-			YButtonUp
+			YButtonUp,
+			DPadLeftDown,
+			DPadLeftUp,
+			DPadRightDown,
+			DPadRightUp,
+			DPadTopDown,
+			DPadTopUp,
+			DPadBottomDown,
+			DPadBottomUp,
+			GuideDown,
+			GuideUp,
+			StartDown,
+			StartUp
 		};
-		using Data = std::variant<std::monostate, bool, float, Vec2f>;
+		using Data = std::variant<std::monostate, bool, float, Vec2f, Vec2i>;
 
 		Action mAction;
 		Data mData;
@@ -86,6 +104,7 @@ namespace TFE_Input
 	public:
 		virtual bool HandleEvent(const Finger& finger);
 		virtual bool IsHit(const Finger& finger) = 0;
+		virtual void UpdateAction(const Finger& finger, TouchControl::State state, TouchAction& action) {}
 		virtual void Draw() = 0;
 		virtual ~TouchControl() = default;
 
@@ -108,12 +127,35 @@ namespace TFE_Input
 
 	public:
 		virtual bool IsHit(const Finger& finger) override;
-		//virtual bool HandleEvent(const Finger& finger) override;
 		virtual void Draw() override;
-		//virtual ~CircleButton();
+
+	protected:
+		Vec2f mPos;
+		float mSize;
+	};
+
+	class MoveButton : public CircleButton
+	{
+	public:
+		MoveButton(std::string name, const Vec4f& activeArea, float size, float innerSize, const Actions& actions);
+
+	public:
+		virtual bool IsHit(const Finger& finger) override;
+		virtual void UpdateAction(const Finger& finger, TouchControl::State state, TouchAction& action) override;
+		virtual void Draw() override;
 
 	private:
-		Vec2f		mPos;
-		float		mSize;
+		float mInnerSize;
+	};
+
+	class RotateButton : public TouchControl
+	{
+	public:
+		RotateButton(std::string name, const Vec4f& activeArea, const Actions& actions);
+
+	public:
+		virtual bool IsHit(const Finger& finger) override;
+		virtual void UpdateAction(const Finger& finger, TouchControl::State state, TouchAction& action) override;
+		virtual void Draw() override;
 	};
 }

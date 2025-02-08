@@ -1,1 +1,1 @@
-files from this folder are bundled into apk
+this file was bundled into apk because it's in Android Studio project's assets folder

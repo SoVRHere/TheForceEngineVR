@@ -35,8 +35,8 @@
 
 <!--    https://developer.android.com/guide/topics/manifest/uses-permission-element-->
 
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
+<!--    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>-->
+<!--    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>-->
 <!--    <uses-permission android:name="android.permission.BLUETOOTH android:requiredFeature="false""/>-->
     <uses-permission android:name="android.permission.VIBRATE" android:requiredFeature="false"/>
     <uses-permission android:name="android.permission.CAMERA" android:requiredFeature="false"/>
@@ -55,6 +55,8 @@
         android:hardwareAccelerated="true">
 
         <meta-data android:name="SDL_ENV.SDL_ACCELEROMETER_AS_JOYSTICK" android:value="0"/>
+        <!-- controlled runtime, enabled for all UI, disabled in-game -->
+        <!-- <meta-data android:name="SDL_ENV.SDL_TOUCH_MOUSE_EVENTS" android:value="0"/> -->
 
         <activity
             android:name="TfeActivity"
