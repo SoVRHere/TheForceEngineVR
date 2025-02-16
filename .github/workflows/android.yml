@@ -9,9 +9,6 @@ on:
   # pull_request:
      # branches: [ "feature/build_test" ]
 
-env:
-  ARTIFACTS_PATH: ${{github.workspace}}/BuildArtifacts/TheForceEngineAndroid
-  
 jobs:
   build-android:
     runs-on: windows-latest
@@ -36,5 +33,27 @@ jobs:
 
     - name: Build with Gradle
       run: |
-        cd TheForceEngine/Android
+        cd ./TheForceEngine/Android
         ./gradlew assembleAndroidDeveloper
+        
+    - name: Create GitHub release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
+      with:
+        # tag_name: ${{github.event.head_commit.message}}
+        # release_name: "Release ${{github.event.head_commit.message}}"
+        tag_name: ${{github.ref_name}}
+        release_name: "Release ${{github.ref_name}}"
+        draft: false
+        prerelease: false
+
+    - name: Upload Release asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
+      with:
+        upload_url: ${{steps.create_release.outputs.upload_url}}
+        asset_path: ./TheForceEngine/Android/tfe/build/outputs/apk/android/developer/tfe-android-developer.apk  # Path to your artifact file(s)
+        asset_name: the-force-engine-android.apk  # Custom name for the artifact file
