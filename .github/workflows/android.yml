@@ -42,5 +42,5 @@ jobs:
 
     - name: Build with Gradle
       run: |
-        cd ./TheForceEngine/Android/ |
-        gradlew assembleandroidDeveloperDeveloper
+        cd TheForceEngine/Android/
+        gradlew assemble
