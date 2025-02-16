@@ -57,3 +57,4 @@ jobs:
         upload_url: ${{steps.create_release.outputs.upload_url}}
         asset_path: ./TheForceEngine/Android/tfe/build/outputs/apk/android/developer/tfe-android-developer.apk  # Path to your artifact file(s)
         asset_name: the-force-engine-android.apk  # Custom name for the artifact file
+        asset_content_type: application/vnd.android.package-archive  # Adjust based on file type
