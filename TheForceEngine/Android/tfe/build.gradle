@@ -38,7 +38,10 @@ android {
 
         externalNativeBuild {
             cmake {
-                arguments "-DBUILD_SDL=ON", "-DBUILD_SHARED_LIBS=OFF", "-DENABLE_SYSMIDI=OFF"
+                // build SDL:
+                //arguments "-DBUILD_SDL=ON", "-DBUILD_SHARED_LIBS=OFF", "-DENABLE_SYSMIDI=OFF"
+                // use pre-built SDL:
+                arguments "-DBUILD_SDL=OFF", "-DENABLE_SYSMIDI=OFF"
                 //cppFlags "-v"
             }
         }
@@ -56,6 +59,7 @@ android {
             //minifyEnabled true // crashing
             //shrinkResources false // Temporarily disable resource shrinking
             debuggable false
+            jniDebuggable false
             signingConfig signingConfigs.developer
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
@@ -124,7 +128,10 @@ android {
                 srcDirs '../../../InstallAndroid'
             }
             java {
-                srcDirs '../../SDL/android-project/app/src/main/java'
+                // build SDL:
+                //srcDirs '../../SDL/android-project/app/src/main/java'
+                // use pre-built SDL:
+                srcDirs '../../sdl2_android/src/main/java'
             }
             jniLibs {
                 srcDirs '../../TFE_Vr/Lib/Android'

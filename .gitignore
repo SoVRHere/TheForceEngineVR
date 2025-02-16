@@ -80,7 +80,9 @@ x64/Debug/
 CMakeFiles/
 
 SDL/
+SDL_/
 SDL_image/
+SDL_image_/
 
 # Linux
 TheForceEngine/tfelnx

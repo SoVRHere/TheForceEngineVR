@@ -1,0 +1,33 @@
+# This starter workflow is for a CMake project running on a single platform. There is a different starter workflow if you need cross-platform coverage.
+# See: https://github.com/actions/starter-workflows/blob/main/ci/cmake-multi-platform.yml
+name: Android Build & publish version tagged commit
+
+on:
+  push:
+    tags: ['v*.*.*-android'] # This triggers the workflow only on version tags like v1.0.0-android, v2.21.52-android, etc.
+    # branches: [ "feature/vr" ]
+  # pull_request:
+     # branches: [ "feature/build_test" ]
+
+env:
+  # Customize the build type here (Release, Debug, RelWithDebInfo, etc.)
+  BUILD_TYPE: RelWithDebInfo
+  
+  ARTIFACTS_PATH: ${{github.workspace}}/BuildArtifacts/TheForceEngineAndroid
+  
+jobs:
+  build-android:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+      
+    - name: Update version file
+      run: |
+        "const char c_gitVersion[] = ""$(git describe --tags)"";" | Set-Content -Path ${{github.workspace}}/TheForceEngine/gitVersion.h
+
+    - name: Build with Gradle
+      run: |
+        ./gradlew assembleandroidDeveloperDeveloper
+        

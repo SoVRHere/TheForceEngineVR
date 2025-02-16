@@ -137,9 +137,14 @@ if(ENABLE_TFE)
 			${CMAKE_SOURCE_DIR}/TheForceEngine/sdl2_win32/lib/x64/SDL2main.lib
 			${CMAKE_SOURCE_DIR}/TheForceEngine/sdl2_win32/lib/x64/SDL2_image.lib
 		)
-		include_directories(
-			TheForceEngine/sdl2_win32/include 
+		include_directories(TheForceEngine/sdl2_win32/include)
+	elseif(ANDROID)
+		target_link_libraries(tfe PRIVATE
+			${CMAKE_SOURCE_DIR}/TheForceEngine/sdl2_android/lib/arm64-v8a/libSDL2.a
+			${CMAKE_SOURCE_DIR}/TheForceEngine/sdl2_android/lib/arm64-v8a/libSDL2_image.a
+			android log egl GLESv2 GLESv1_CM OpenSLES
 		)
+		include_directories(TheForceEngine/sdl2_android/include)
 	endif()
 	
 	if(UNIX)
