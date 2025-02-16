@@ -44,7 +44,6 @@ android {
                 arguments "-DBUILD_SDL=OFF", "-DENABLE_SYSMIDI=OFF"
                 //abiFilters "arm64-v8a", "x86_64"
                 //cppFlags "-v"
-                version "3.28.2"
             }
         }
     }
@@ -109,7 +108,7 @@ android {
         cmake {
             path "../../../CMakeLists.txt"
             buildStagingDirectory "../../../Builds/Android/.cxx"
-            version "3.18.1+"  // https://stackoverflow.com/questions/51471908/upgrade-cmake-version-installed-with-android-studio-ubuntu-18-04
+            version "3.28.2"
         }
     }
 
@@ -120,7 +119,7 @@ android {
     kotlinOptions {
         jvmTarget = '1.8'
     }
-    ndkVersion '28.0.13004108'
+    ndkVersion '25.2.9519653'
     aaptOptions {
         ignoreAssetsPattern '*.zip:CMakeLists.txt'
     }
