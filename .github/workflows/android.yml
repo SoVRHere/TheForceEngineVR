@@ -42,6 +42,14 @@ jobs:
       with:
         cmake-version: '3.28.2'
 
+    # Step 4: Set environment variables for CMake
+    - name: Set CMake Path
+      run: |
+        echo "CMake version:"
+        cmake --version
+        setx CMAKE_HOME $HOME/cmake
+        setx PATH "$CMAKE_HOME/bin;$PATH"
+
     - name: Build with Gradle
       run: |
         cd TheForceEngine/Android
