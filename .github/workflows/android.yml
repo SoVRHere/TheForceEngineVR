@@ -36,9 +36,11 @@ jobs:
       with:
         distribution: 'temurin'
         java-version: 17
-
-    # - name: Grant execute permission for gradlew
-      # run: chmod +x ./TheForceEngine/Android/gradlew
+        
+    - name: Install CMake
+      uses: actions/setup-cmake@v3
+      with:
+        cmake-version: '3.28.2'
 
     - name: Build with Gradle
       run: |
