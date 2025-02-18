@@ -11,6 +11,8 @@
 #include <string>
 #if defined(ANDROID)
 #include <TFE_System/android.h>
+#include <filesystem>
+namespace fs = std::filesystem;
 #endif
 
 namespace FileUtil {
@@ -122,6 +124,21 @@ namespace TFE_Paths
 	{
 #if defined(ANDROID)
 		s_paths[PATH_USER_DOCUMENTS] = TFE_System::android::GetExternalStorageDir() + "/";
+		const fs::path dir = s_paths[PATH_USER_DOCUMENTS];
+		if (fs::exists(dir) && !fs::is_directory(dir))
+		{
+			return false;
+		}
+
+		if (!fs::exists(dir))
+		{
+			fs::create_directory(dir);
+			if (!fs::is_directory(dir))
+			{
+				return false;
+			}
+		}
+
 		s_systemPaths.push_back(getPath(PATH_USER_DOCUMENTS));
 		TFE_ANDROID("s_paths[PATH_USER_DOCUMENTS] = {}", getPath(PATH_USER_DOCUMENTS));
 #else

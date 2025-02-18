@@ -46,19 +46,22 @@ static std::string gExternalStorageDir; // public dir, not removed when uninstal
 
 namespace fs = std::filesystem;
 
-static void ClearDirectory(const fs::path& dir)
+static void ClearDirectory(const fs::path& dir, std::vector<fs::path> keep)
 {
 	if (fs::exists(dir) && fs::is_directory(dir))
 	{
 		for (const auto& entry : fs::directory_iterator(dir))
 		{
-			try
+			if (auto it = std::find_if(keep.begin(), keep.end(), [&entry](const fs::path& path) { return fs::equivalent(path, entry); }); it == keep.end())
 			{
-				fs::remove_all(entry);
-			}
-			catch (const std::filesystem::filesystem_error& e)
-			{
-				LOGI("clearing folder %s with error %s", entry.path().c_str(), e.what());
+				try
+				{
+					fs::remove_all(entry);
+				}
+				catch (const std::filesystem::filesystem_error &e)
+				{
+					LOGI("clearing folder %s with error %s", entry.path().c_str(), e.what());
+				}
 			}
 		}
 	}
@@ -198,8 +201,9 @@ JNIEXPORT void JNICALL TFE_JAVA_INTERFACE(onCreateActivity)(JNIEnv* env, jclass 
 
 	if (removeData)
 	{
-		LOGI("Removing all assets");
-		ClearDirectory(fs::path{ SDL_AndroidGetExternalStoragePath() });
+		LOGI("Removing assets, keeping 'Dark Forces' & 'Mods' folders");
+		const fs::path external = fs::path{ SDL_AndroidGetExternalStoragePath() };
+		ClearDirectory(external, { external / "Dark Forces", external / "Mods" });
 		std::ofstream file{versionFilePath, std::ios::trunc };
 		file << c_gitVersion;
 		file.close();
