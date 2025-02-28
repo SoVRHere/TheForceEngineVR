@@ -39,6 +39,9 @@
 #include <TFE_DarkForces/hud.h>
 
 #include <climits>
+#if defined(ANDROID)
+#include <TFE_System/android.h>
+#endif
 
 using namespace TFE_Input;
 using namespace TFE_Audio;
@@ -46,6 +49,16 @@ using namespace TFE_Audio;
 namespace TFE_FrontEndUI
 {
 	//bool preciseFrustum = true;
+
+	struct VirtualKeyboardState
+	{
+		bool enabled{ false };
+		bool capsLock{ false };
+		bool sendEvents{ false };
+		std::string text;
+		uint32_t maxTextLength{ 0 };
+	};
+	static VirtualKeyboardState s_virtualKeyboard;
 
 	struct UiImage
 	{
@@ -337,8 +350,11 @@ namespace TFE_FrontEndUI
 		s_titleFont   = io.Fonts->AddFontFromFileTTF(fontpath, floorf(48*s_uiScale + 0.5f));
 		s_dialogFont  = io.Fonts->AddFontFromFileTTF(fontpath, floorf(20*s_uiScale + 0.5f));
 
-#if defined(ANDROID)
-		ImGui::GetStyle().ScrollbarSize = 45.0f; // TODO: should be screen size/dpi dependent?
+		// TODO: should be screen size/dpi dependent?
+#if defined(ENABLE_VR)
+		ImGui::GetStyle().ScrollbarSize = 20.0f;
+#elif defined(ANDROID)
+		ImGui::GetStyle().ScrollbarSize = 45.0f;
 #endif
 
 		if (!loadGpuImage("UI_Images/TFE_TitleLogo.png", &s_logoGpuImage))
@@ -670,6 +686,161 @@ namespace TFE_FrontEndUI
 		s_game = game;
 	}
 
+	bool VirtualKeyboard(VirtualKeyboardState& state)
+	{
+		if (!state.enabled)
+		{
+			return false;
+		}
+
+		struct Key
+		{
+			const char* label;
+			char text;
+			SDL_Scancode scancode;
+		};
+
+		auto SendEvent = [&state](const Key& key) {
+			if (!state.sendEvents)
+			{
+				return;
+			}
+
+			if (key.scancode == SDL_SCANCODE_RETURN || key.scancode == SDL_SCANCODE_BACKSPACE)
+			{
+				//TFE_Input::setBufferedKey((KeyboardCode)key.scancode);
+				SDL_Event event;
+				event.type = SDL_KEYDOWN;
+				event.key.state = SDL_PRESSED;
+				event.key.keysym.scancode = key.scancode;
+				event.key.repeat = 0;
+				SDL_PushEvent(&event);
+
+				event.type = SDL_KEYUP;
+				event.key.state = SDL_RELEASED;
+				SDL_PushEvent(&event);
+
+				return;
+			}
+
+			SDL_Event event;
+			event.type = SDL_TEXTINPUT;
+			event.text.text[0] = (!state.capsLock && key.text >= 'A' && key.text <= 'Z') ? tolower(key.text) : key.text;
+			event.text.text[1] = '\0';
+			SDL_PushEvent(&event);
+			//TFE_Input::setBufferedInput(Event.text.text);
+		};
+
+		const ImVec2 charSize = ImGui::CalcTextSize("0");
+		const float baseSize = std::max(charSize.y, charSize.y) * 1.2f;
+
+		const ImVec2 keySize(baseSize, baseSize);
+		const ImVec2 wideKeySize(90, baseSize);
+		const ImVec2 enterKeySize(140, baseSize);
+		const ImVec2 spaceKeySize(300, baseSize);
+		const float spacing = 10.0f;
+		bool uppercase = state.capsLock;
+		bool canAddText = state.maxTextLength == 0 || state.text.length() < state.maxTextLength;
+
+		// Define keyboard layout using SDL scancodes
+		constexpr Key row1[] = { {"1", '1', SDL_SCANCODE_1}, {"2", '2', SDL_SCANCODE_2}, {"3", '3', SDL_SCANCODE_3}, {"4", '4', SDL_SCANCODE_4}, {"5", '5', SDL_SCANCODE_5},
+								 {"6", '6', SDL_SCANCODE_6}, {"7", '7', SDL_SCANCODE_7}, {"8", '8', SDL_SCANCODE_8}, {"9", '9', SDL_SCANCODE_9}, {"0", '0', SDL_SCANCODE_0},
+								 {"Back", '\b', SDL_SCANCODE_BACKSPACE} };
+
+		constexpr Key row2[] = { {"Q", 'Q', SDL_SCANCODE_Q}, {"W", 'W', SDL_SCANCODE_W}, {"E", 'E', SDL_SCANCODE_E}, {"R", 'R', SDL_SCANCODE_R}, {"T", 'T', SDL_SCANCODE_T},
+								 {"Y", 'Y', SDL_SCANCODE_Y}, {"U", 'U', SDL_SCANCODE_U}, {"I", 'I', SDL_SCANCODE_I}, {"O", 'O', SDL_SCANCODE_O}, {"P", 'P', SDL_SCANCODE_P} };
+
+		constexpr Key row3[] = { {"A", 'A', SDL_SCANCODE_A}, {"S", 'S', SDL_SCANCODE_S}, {"D", 'D', SDL_SCANCODE_D},
+								 {"F", 'F', SDL_SCANCODE_F}, {"G", 'G', SDL_SCANCODE_G}, {"H", 'H', SDL_SCANCODE_H}, {"J", 'J', SDL_SCANCODE_J}, {"K", 'K', SDL_SCANCODE_K},
+								 {"L", 'L', SDL_SCANCODE_L}, {"Enter", '\n', SDL_SCANCODE_RETURN} };
+
+		constexpr Key row4[] = { {"Z", 'Z', SDL_SCANCODE_Z}, {"X", 'X', SDL_SCANCODE_X}, {"C", 'C', SDL_SCANCODE_C}, {"V", 'V', SDL_SCANCODE_V}, {"B", 'B', SDL_SCANCODE_B},
+								 {"N", 'N', SDL_SCANCODE_N}, {"M", 'M', SDL_SCANCODE_M}, {"_", '_', SDL_SCANCODE_MINUS} };
+
+		constexpr Key row5[] = { {"Caps", ' ', SDL_SCANCODE_CAPSLOCK}, {" Space ", ' ', SDL_SCANCODE_SPACE}};
+
+		bool isEnter = false;
+		auto Button = [&](const Key& key) {
+			const ImVec2 labelSize = ImGui::CalcTextSize(key.label);
+			std::string label = key.label;
+			if (!state.capsLock && key.text >= 'A' && key.text <= 'Z')
+			{
+				label[0] = tolower(label[0]);
+			}
+			if (ImGui::Button(label.c_str(), {std::max(labelSize.x * 1.2f, baseSize), baseSize}))
+			{
+				if (key.scancode == SDL_SCANCODE_RETURN)
+				{
+					isEnter = true;
+					SendEvent(key);
+				}
+				else if (key.scancode == SDL_SCANCODE_CAPSLOCK)
+				{
+					state.capsLock = !state.capsLock;
+				}
+				else if (key.scancode == SDL_SCANCODE_BACKSPACE)
+				{
+					if (!state.text.empty())
+					{
+						state.text.pop_back();
+					}
+					SendEvent(key);
+				}
+				else if (canAddText)
+				{
+					state.text += (key.scancode == SDL_SCANCODE_SPACE) ? " " : label;
+					SendEvent(key);
+				}
+			}
+			ImGui::SameLine(0, spacing);
+		};
+
+		ImGui::SetNextWindowFocus();
+		if (ImGui::Begin("##Virtual Keyboard", &state.enabled, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoNavInputs | ImGuiWindowFlags_NoNavFocus))
+		{
+			// Row 1: Numbers & Backspace
+			for (const Key& key : row1)
+			{
+				Button(key);
+			}
+			ImGui::NewLine();
+
+			// Row 2: QWERTY
+			ImGui::SetCursorPosX(0.5f * baseSize);
+			for (const Key& key : row2)
+			{
+				Button(key);
+			}
+			ImGui::NewLine();
+
+			// Row 3: ASDFGHJKL + Enter
+			ImGui::SetCursorPosX(1.0f * baseSize);
+			for (const Key& key : row3)
+			{
+				Button(key);
+			}
+			ImGui::NewLine();
+
+			// Row 4: ZXCVBNM
+			ImGui::SetCursorPosX(1.5f * baseSize);
+			for (const Key& key : row4)
+			{
+				Button(key);
+			}
+			ImGui::NewLine();
+
+			// Row 5: Caps & Space
+			ImGui::SetCursorPosX(2.0f * baseSize);
+			for (const Key& key : row5)
+			{
+				Button(key);
+			}
+		}
+		ImGui::End();
+
+		return isEnter;
+	}
+
 	void draw(bool drawFrontEnd, bool noGameData, bool setDefaults, bool showFps)
 	{
 		const u32 windowInvisFlags = ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoSavedSettings;
@@ -709,6 +880,18 @@ namespace TFE_FrontEndUI
 #if defined(ENABLE_VR)
 			drawVrControllersInfo(w);
 #endif
+			if (TFE_Input::isTextInput())
+			{	// during New Agent screen
+				s_virtualKeyboard.enabled = true;
+				s_virtualKeyboard.sendEvents = true;
+				ImGui::PushFont(s_dialogFont);
+				VirtualKeyboard(s_virtualKeyboard);
+				if (!s_virtualKeyboard.enabled)
+				{
+					TFE_Input::stopTextInput();
+				}
+				ImGui::PopFont();
+			}
 			if (showFps) { drawFps(w); }
 			return;
 		}
@@ -1677,6 +1860,8 @@ namespace TFE_FrontEndUI
 		}
 
 		TFE_Input::startTextInput();
+		s_virtualKeyboard.enabled = TFE_Input::isTextInput();
+
 		ImGui::OpenPopup(s_saveGameConfirmMsg);
 		s_popupOpen = true;
 		s_popupSetFocus = true;
@@ -1688,6 +1873,7 @@ namespace TFE_FrontEndUI
 		s_popupSetFocus = false;
 		ImGui::CloseCurrentPopup();
 		TFE_Input::stopTextInput();
+		s_virtualKeyboard.enabled = false;
 	}
 
 	void saveLoadConfirmed(bool isSaving)
@@ -1748,9 +1934,14 @@ namespace TFE_FrontEndUI
 		DisplayInfo displayInfo;
 		TFE_RenderBackend::getDisplayInfo(&displayInfo);
 
-		f32 leftColumn = displayInfo.width < 1200 ? 196.0f*s_uiScale : 256.0f*s_uiScale;
+		f32 leftColumn = displayInfo.width < 1200 ? 196.0f * s_uiScale : 256.0f * s_uiScale;
 		f32 rightColumn = leftColumn + ((f32)TFE_SaveSystem::SAVE_IMAGE_WIDTH + 32.0f)*s_uiScale;
 		const s32 listOffset = save ? 1 : 0;
+		if (TFE_Settings::getTempSettings()->vr)
+		{
+			leftColumn = 196.0f * s_uiScale;
+			rightColumn = leftColumn + ((f32)TFE_SaveSystem::SAVE_IMAGE_WIDTH + 32.0f) * s_uiScale * 0.8f;
+		}
 
 		// Left Column
 		ImGui::SetNextWindowPos(ImVec2(leftColumn, floorf(displayInfo.height * 0.25f)));
@@ -1760,6 +1951,11 @@ namespace TFE_FrontEndUI
 			ImVec2 size((f32)TFE_SaveSystem::SAVE_IMAGE_WIDTH, (f32)TFE_SaveSystem::SAVE_IMAGE_HEIGHT);
 			size.x *= s_uiScale;
 			size.y *= s_uiScale;
+			if (TFE_Settings::getTempSettings()->vr)
+			{
+				size.x *= 0.8f;
+				size.y *= 0.8f;
+			}
 
 			ImGui::Image(TFE_RenderBackend::getGpuPtr(s_saveImageView), size,
 				ImVec2(0, 0), ImVec2(1, 1), ImVec4(1, 1, 1, 1), ImVec4(0.5f, 0.5f, 0.5f, 1.0f));
@@ -1901,13 +2097,26 @@ namespace TFE_FrontEndUI
 
 			if (ImGui::BeginPopupModal(s_saveGameConfirmMsg, NULL, ImGuiWindowFlags_AlwaysAutoResize))
 			{
+				bool isEnter = false;
+				if (s_virtualKeyboard.enabled)
+				{
+					s_virtualKeyboard.text = s_newSaveName;
+					s_virtualKeyboard.maxTextLength = sizeof(s_newSaveName) - 1;
+					s_virtualKeyboard.sendEvents = false;
+					if (isEnter = VirtualKeyboard(s_virtualKeyboard); isEnter)
+					{
+						s_virtualKeyboard.enabled = false;
+					}
+					std::strcpy(s_newSaveName, s_virtualKeyboard.text.c_str());
+				}
+
 				bool shouldExit = false;
 				if (s_popupSetFocus)
 				{
 					ImGui::SetKeyboardFocusHere();
 					s_popupSetFocus = false;
 				}
-				ImGui::SetNextItemWidth(768 * s_uiScale);
+				//ImGui::SetNextItemWidth(768 * s_uiScale);
 				if (save && ImGui::InputText("###SaveNameText", s_newSaveName, TFE_SaveSystem::SAVE_MAX_NAME_LEN, ImGuiInputTextFlags_EnterReturnsTrue))
 				{
 					shouldExit = true;
@@ -1918,17 +2127,21 @@ namespace TFE_FrontEndUI
 					shouldExit = true;
 					saveLoadConfirmed(save);
 				}
-				if (ImGui::Button("OK", ImVec2(120, 0)))
+				if (!s_virtualKeyboard.enabled)
 				{
-					shouldExit = true;
-					saveLoadConfirmed(save);
+					if (ImGui::Button("OK") || isEnter)//, ImVec2(120, 0)))
+					{
+						shouldExit = true;
+						saveLoadConfirmed(save);
+					}
+					ImGui::SameLine(0.0f, 32.0f);
+					if (ImGui::Button("Cancel"))//, ImVec2(120, 0)))
+					{
+						shouldExit = false;
+						closeSaveNameEditPopup();
+					}
 				}
-				ImGui::SameLine(0.0f, 32.0f);
-				if (ImGui::Button("Cancel", ImVec2(120, 0)))
-				{
-					shouldExit = false;
-					closeSaveNameEditPopup();
-				}
+
 				ImGui::EndPopup();
 
 				if (shouldExit)
@@ -2930,6 +3143,20 @@ namespace TFE_FrontEndUI
 	{
 		TFE_Settings_Vr* vrSettings = TFE_Settings::getVrSettings();
 
+		ImGui::Text("Visit our");
+		ImGui::SameLine();
+		if (ImGui::Button("Discord"))
+		{
+			TFE_System::openURL("https://discord.gg/8XuXVFzyNu");
+		}
+#if !defined(ANDROID)
+		Tooltip("This will open browser/Discord on your Desktop.");
+#endif
+		ImGui::SameLine();
+		ImGui::Text("for more info.");
+		ImGui::Separator();
+		ImGui::NewLine();
+
 		ImGui::TextWrapped("VR runtime: %s", vr::GetRuntimeInfo());
 
 		ImGui::Separator();
@@ -2963,37 +3190,102 @@ namespace TFE_FrontEndUI
 		ImGui::Separator();
 		ImGui::NewLine();
 
-		ImGui::PushFont(s_dialogFont);
-		ImGui::LabelText("##ConfigLabel", "Controllers");
-		ImGui::PopFont();
-		ImGui::Checkbox("Ignore", &vrSettings->ignoreVrControllers);
-		Tooltip("Ignore if you want to play with mouse + keyboard/gamepad");
-
-		if (!vrSettings->ignoreVrControllers)
+		// Display
 		{
-			ImGui::LabelText("##ConfigLabel", "Invert Right Controller Rotation");
-			Tooltip("Right controller rotations (when right grip is pressed) work as emulated mouse move so if you play with inverted mouse "
-				"you probably want to invert it here as well.");
-			ImGui::Checkbox("Invert Horizontal", &vrSettings->rightControllerRotationInvertHorizontal); ImGui::SameLine();
-			ImGui::Checkbox("Invert Vertical", &vrSettings->rightControllerRotationInvertVertical);
-			ImGui::LabelText("##ConfigLabel", "Right Controller Rotation Sensitivity");
-			Tooltip("Changing mouse rotation sensitivity would work as well, however changing it here doesn't affect your mouse sensitivity.");
-			ImGui::SliderFloat("Horizontal", &vrSettings->rightControllerRotationSensitivityHorizontal, 0.1f, 10.0f);
-			ImGui::SliderFloat("Vertical", &vrSettings->rightControllerRotationSensitivityVertical, 0.1f, 10.0f);
-			ImGui::Separator();
+			ImGui::PushFont(s_dialogFont);
+			ImGui::LabelText("##ConfigLabel", "Display");
+			ImGui::PopFont();
 
-			ImGui::LabelText("##ConfigLabel", "Emulated buttons & keys:");
-			ImGui::TextWrapped("Dpad - click left stick in desired direction.");
-			ImGui::TextWrapped("Left Shoulder - left grip trigger + move right stick left.");
-			ImGui::TextWrapped("Right Shoulder - left grip trigger + move right stick right.");
-			ImGui::TextWrapped("Esc - left grip trigger + move right stick up.");
-			ImGui::TextWrapped("F1 - left grip trigger + move right stick down.");
-			ImGui::TextWrapped("Left Mouse click (menus) - right A or right index trigger.");
-			ImGui::TextWrapped("Mouse wheel (menus) - right stick.");
+			const Vec2ui &res = vr::GetRenderTargetSize();
+			ImGui::TextWrapped("Resolution: %d x %d", res.x, res.y);
+
+			static std::vector<float> displayRefreshRates = vr::GetDisplayRefreshRates();
+			if (!displayRefreshRates.empty())
+			{
+				auto GetDisplayRefreshRatesStrs = []() -> std::vector<std::string> {
+					std::vector<std::string> displayRefreshRatesStrs;
+					for (float rate: displayRefreshRates)
+					{
+						displayRefreshRatesStrs.push_back(fmt::format("{} Hz", (uint32_t) (rate + 0.1f)));
+					}
+					return displayRefreshRatesStrs;
+				};
+				auto FindRefreshRate = [](float rate) -> size_t {
+					for (size_t i = 0; i < displayRefreshRates.size(); i++)
+					{
+						if ((uint32_t) (displayRefreshRates[i] + 0.1f) == (uint32_t) (rate + 0.1f))
+						{
+							return i;
+						}
+					}
+					return 0;
+				};
+				static const std::vector<std::string> refreshRatesStrs = GetDisplayRefreshRatesStrs();
+				static const char *currentRefreshRate = nullptr;
+				auto it = std::find_if(displayRefreshRates.begin(), displayRefreshRates.end(), [](float rate) { return rate == vr::GetDisplayRefreshRate(); });
+				const int currentRefreshRateIndex = (it != displayRefreshRates.end()) ? (int) (it - displayRefreshRates.begin()) : -1;
+				currentRefreshRate = currentRefreshRateIndex >= 0 ? refreshRatesStrs[currentRefreshRateIndex].c_str() : nullptr;
+				if (ImGui::BeginCombo("Refresh rate", currentRefreshRate))
+				{
+					for (size_t n = 0; n < refreshRatesStrs.size(); n++)
+					{
+						bool is_selected = (currentRefreshRate == refreshRatesStrs[n].c_str());
+						if (ImGui::Selectable(refreshRatesStrs[n].c_str(), is_selected))
+						{
+							currentRefreshRate = refreshRatesStrs[n].c_str();
+							vr::SetDisplayRefreshRate(displayRefreshRates[n]);
+							vrSettings->displayRefreshRate = (uint32_t) (displayRefreshRates[n] + 0.1f);
+						}
+
+						if (is_selected)
+						{
+							ImGui::SetItemDefaultFocus();
+						}
+					}
+					ImGui::EndCombo();
+				}
+				Tooltip("If you use SideQuest or any other app to change your display refresh rate changing it here may have no effect."
+						" To solve it close your SideQuest app & restart the headset.");
+
+				ImGui::Separator();
+				ImGui::NewLine();
+			}
 		}
 
-		ImGui::Separator();
-		ImGui::NewLine();
+		// Controllers
+		{
+			ImGui::PushFont(s_dialogFont);
+			ImGui::LabelText("##ConfigLabel", "Controllers");
+			ImGui::PopFont();
+			ImGui::Checkbox("Ignore", &vrSettings->ignoreVrControllers);
+			Tooltip("Ignore if you want to play with mouse + keyboard/gamepad");
+
+			if (!vrSettings->ignoreVrControllers)
+			{
+				ImGui::LabelText("##ConfigLabel", "Invert Right Controller Rotation");
+				Tooltip("Right controller rotations (when right grip is pressed) work as emulated mouse move so if you play with inverted mouse "
+					"you probably want to invert it here as well.");
+				ImGui::Checkbox("Invert Horizontal", &vrSettings->rightControllerRotationInvertHorizontal); ImGui::SameLine();
+				ImGui::Checkbox("Invert Vertical", &vrSettings->rightControllerRotationInvertVertical);
+				ImGui::LabelText("##ConfigLabel", "Right Controller Rotation Sensitivity");
+				Tooltip("Changing mouse rotation sensitivity would work as well, however changing it here doesn't affect your mouse sensitivity.");
+				ImGui::SliderFloat("Horizontal", &vrSettings->rightControllerRotationSensitivityHorizontal, 0.1f, 10.0f);
+				ImGui::SliderFloat("Vertical", &vrSettings->rightControllerRotationSensitivityVertical, 0.1f, 10.0f);
+				ImGui::Separator();
+
+				ImGui::LabelText("##ConfigLabel", "Emulated buttons & keys:");
+				ImGui::TextWrapped("Dpad - click left stick in desired direction.");
+				ImGui::TextWrapped("Left Shoulder - left grip trigger + move right stick left.");
+				ImGui::TextWrapped("Right Shoulder - left grip trigger + move right stick right.");
+				ImGui::TextWrapped("Esc - left grip trigger + move right stick up.");
+				ImGui::TextWrapped("F1 - left grip trigger + move right stick down.");
+				ImGui::TextWrapped("Left Mouse click (menus) - right A or right index trigger.");
+				ImGui::TextWrapped("Mouse wheel (menus) - right stick.");
+			}
+
+			ImGui::Separator();
+			ImGui::NewLine();
+		}
 
 		ImGui::PushFont(s_dialogFont);
 		ImGui::LabelText("##ConfigLabel", "2D");

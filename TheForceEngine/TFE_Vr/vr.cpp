@@ -1,10 +1,13 @@
 #include "vr.h"
 #include <TFE_System/system.h>
-#include <TFE_Settings/settings.h>
 #include <TFE_Input/input.h>
 #include <TFE_DarkForces/GameUI/escapeMenu.h>
 #include <TFE_DarkForces/GameUI/pda.h>
 #include <TFE_FrontEndUI/frontEndUi.h>
+
+#if defined(ANDROID)
+#include <TFE_System/android.h>
+#endif
 
 #include "VrWrapper/VrWrapper.h"
 
@@ -64,6 +67,8 @@ namespace vr
 	uint32_t											mMouseButtonsPressed{ 0 };
 	Vec2i												mPointerMousePos{ -10, -10 };
 	Vec2i												mLastPointerMousePos = { -10, -10 };
+
+	TFE_Settings_Vr::ScreenToVr*						mCurrentScreenToVr{ nullptr };
 
 	void UpdateView(Side eye)
 	{
@@ -176,7 +181,11 @@ namespace vr
 #if defined(_DEBUG)
 			vrw::VrWrapper::MessageSeverity::Debug
 #else
-			vrw::VrWrapper::MessageSeverity::Info
+			vrw::VrWrapper::MessageSeverity::Info,
+#endif
+#if defined(ANDROID)
+			TFE_System::android::GetActivity(),
+			TFE_System::android::GetJNIEnv(),
 #endif
 		};
 		g_VrWrapper = vrw::VrWrapper::Initialize(options);
@@ -262,6 +271,56 @@ namespace vr
 	{
 		auto& renderTarget = mRenderTargets[eye][mSwapchainIndex];
 		return *renderTarget;
+	}
+
+	std::vector<float> GetDisplayRefreshRates()
+	{
+		if (IsInitialized())
+		{
+			if (const uint32_t rates = g_VrWrapper->EnumerateDisplayRefreshRates(nullptr); rates > 0)
+			{
+				std::vector<float> refreshRates(rates);
+				g_VrWrapper->EnumerateDisplayRefreshRates(refreshRates.data());
+				return refreshRates;
+			}
+		}
+
+		return {};
+	}
+
+	float GetDisplayRefreshRate()
+	{
+		return IsInitialized() ? g_VrWrapper->GetDisplayRefreshRate() : -1.0f;
+	}
+
+	bool SetDisplayRefreshRate(float displayRefreshRate)
+	{
+		if (IsInitialized())
+		{
+			return g_VrWrapper->SetDisplayRefreshRate(displayRefreshRate);
+		}
+
+		return false;
+	}
+
+	bool IsVirtualKeyboardSupported()
+	{
+		if (IsInitialized())
+		{
+			return g_VrWrapper->IsFeatureSupported(vrw::VrWrapper::Feature::VirtualKeyboard);
+		}
+
+		return false;
+	}
+
+	void ShowVirtualKeyboard(bool show)
+	{
+		if (!IsInitialized())
+		{
+			return;
+		}
+
+		g_VrWrapper->ShowVirtualKeyboard(show);
 	}
 
 	Mat4 VrMat4ToTFEMat4(const vrw::Mat4f& mat)
@@ -475,6 +534,8 @@ namespace vr
 
 	bool HandleControllerEvents(IGame::State gameState, s32& mouseRelX, s32& mouseRelY)
 	{
+		mCurrentScreenToVr = nullptr;
+
 		if (!IsInitialized())
 		{
 			return false;
@@ -775,6 +836,8 @@ namespace vr
 					TFE_WARN("VR", "Unknown game state");
 				}
 
+				mCurrentScreenToVr = screenToVr;
+
 				mPointerMousePos = GetMousePosByPointer(screenToVr);
 
 				if (mPointerMousePos.x >= 0 && mPointerMousePos.y >= 0)
@@ -898,6 +961,11 @@ namespace vr
 		}
 
 		return mouseMoveEmulated;
+	}
+
+	TFE_Settings_Vr::ScreenToVr* GetCurrentScreenToVr()
+	{
+		return mCurrentScreenToVr;
 	}
 
 	Vec2i GetPointerMousePos()

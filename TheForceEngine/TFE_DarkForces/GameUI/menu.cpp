@@ -73,6 +73,11 @@ namespace TFE_DarkForces
 			s_cursorPos.x = clamp(s_cursorPosAccum.x * (s32)width / (s32)displayInfo.width, 0, (s32)width - 3);
 			s_cursorPos.z = clamp(s_cursorPosAccum.z * (s32)width / (s32)displayInfo.width, 0, (s32)height - 3);
 		}
+
+		if (TFE_Input::isTextInput())
+		{
+			s_cursorPos = { 9000, 9000 };
+		}
 	}
 
 	void menu_resetCursor()

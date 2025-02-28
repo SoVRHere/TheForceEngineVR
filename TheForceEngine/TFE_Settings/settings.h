@@ -54,6 +54,7 @@ struct TFE_Settings_Window
 {
 	s32 x = 0;
 	s32 y = 64;
+
 	u32 width = 1280;
 	u32 height = 720;
 	u32 baseWidth = 1280;
@@ -348,11 +349,15 @@ struct TFE_Settings_Vr
 	ScreenToVr overlayToVr;
 
 	float playerScale;
+
 	bool ignoreVrControllers;
 	bool rightControllerRotationInvertVertical;
 	bool rightControllerRotationInvertHorizontal;
 	float rightControllerRotationSensitivityVertical;
 	float rightControllerRotationSensitivityHorizontal;
+
+	uint32_t displayRefreshRate;
+
 	// debug
 	bool viewLeftControllerInfo;
 	bool viewRightControllerInfo;

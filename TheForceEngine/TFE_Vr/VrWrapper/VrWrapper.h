@@ -14,6 +14,10 @@
 #endif
 #endif
 
+#if defined(ANDROID)
+#include <android/native_activity.h>
+#endif
+
 #include <cstdint>
 
 namespace vrw
@@ -91,7 +95,9 @@ namespace vrw
 		enum class Feature : uint32_t
 		{
 			EyeTracking = 1 << 0,
-			Passthrough = 1 << 1
+			Passthrough = 1 << 1,
+			DisplayRefreshRate = 1 << 2,
+			VirtualKeyboard = 1 << 3
 		};
 
 		struct Options
@@ -102,6 +108,10 @@ namespace vrw
 			uint64_t			featuresToInitialize;
 			MessageCallback*	messageCallback;
 			MessageSeverity		messageLevel;
+#if defined(ANDROID)
+			jobject				activity;
+			JNIEnv*				env;
+#endif
 		};
 
 		enum class UpdateStatus : uint32_t
@@ -166,5 +176,16 @@ namespace vrw
 		virtual const Pose& GetPointerPose(Side side) = 0;
 		virtual const Pose& GetControllerPose(Side side) = 0;
 		virtual const ControllerState& GetControllerState(Side side) = 0;
+
+		virtual uint32_t EnumerateDisplayRefreshRates(float* refreshRates) = 0;
+		virtual float GetDisplayRefreshRate() = 0;
+		virtual bool SetDisplayRefreshRate(float displayRefreshRate) = 0;
+
+		virtual bool CreateVirtualKeyboard() = 0;
+		virtual void DestroyVirtualKeyboard() = 0;
+		virtual bool ShowVirtualKeyboard(bool show) = 0;
+		virtual bool IsVirtualKeyboardVisible() = 0;
+		virtual bool SetVirtualKeyboardText(const char* text) = 0;
+		virtual const char* GetVirtualKeyboardText() = 0;
 	};
 }

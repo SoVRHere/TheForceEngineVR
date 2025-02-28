@@ -15,7 +15,7 @@ The current release only supports Dark Forces. All weapons, AI, items, and all o
 [Discord](https://discord.gg/hpsJnY9)
 
 ## The Force Engine VR
-The Force Engine VR is a VR port of The Force Engine, currently PCVR only (you need a Window PC to play it) but ports to Meta Quest & other standalone VR headsets are in development/planned.
+The Force Engine VR is a VR (PCVR & Quest) port of The Force Engine.
 
 ## Requirements for VR
 - a copy of Dark Forces (Remaster) game ([GOG](https://www.gog.com/en/game/star_wars_dark_forces_remaster) or [Steam](https://store.steampowered.com/app/2292260/STAR_WARS_Dark_Forces_Remaster/)), non-Remaster version works too but Remaster is recommended for better visuals
@@ -25,20 +25,11 @@ PC version:
 - any GPU able to run the original with **GL_OVR_multiview2** OpenGL extension support, no iGPU tested yet however AMD APUs should work
 - any x64 CPUs able to run the original, no ARM CPUs tested yet
 
-Standalone version (sooner or later):
+Standalone version:
 - Meta Quest 2/Quest 3(S)/Quest Pro
 
 ## Current Status of VR
 Perfectly playable in 3DoF with keyboard + mouse / gamepad / VR controllers.
-
-## What's Next in VR
-- VR controllers support (done, v0.9.24-vr)
-- installer (Windows) (done, v0.8.23-vr)
-- porting to Android
-- porting to Meta Quest 2/Quest 3(S)/Quest Pro
-- 6DoF
-- mirroring to view your VR gameplay directly in game window on desktop, meanwhile you can use Oculus Mirror or SteamVR View instead
-- editor support
 
 ## Links
 Note: if you are in VR by clicking on links bellow a web browser and/Discord will be opened on your PC so the game window focus will be lost, just Alt-Tab back to game window to be able to use keyboard/mouse again.

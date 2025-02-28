@@ -71,6 +71,7 @@ namespace TFE_Input
 
 	void startTextInput();
 	void stopTextInput();
+	bool isTextInput();
 	
 	bool loadKeyNames(const char* path);
 	const char* getControllerAxisName(Axis axis);

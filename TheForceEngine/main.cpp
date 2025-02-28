@@ -642,13 +642,17 @@ void overrideVRSettings(bool firstRun)
 		//graphicsSettings->gameResolution = { 1600, 1200 };
 		//graphicsSettings->widescreen = false;
 
-		//graphicsSettings->reticleEnable = false;
-		//graphicsSettings->bloomEnabled = false;
-
 		TFE_Settings_Game* gameSettings = TFE_Settings::getGameSettings();
 		//gameSettings->df_pitchLimit = PitchLimit::PITCH_MAXIMUM;
 
 		TFE_System::setVsync(false);
+
+		TFE_Settings_Vr* vrSettings = TFE_Settings::getVrSettings();
+		if (vrSettings->displayRefreshRate > 0)
+		{
+			vr::SetDisplayRefreshRate((float)vrSettings->displayRefreshRate);
+			TFE_INFO("VR", "changing display refresh rate to {} Hz", vrSettings->displayRefreshRate);
+		}
 	}
 #endif
 }
@@ -777,6 +781,8 @@ int main(int argc, char* argv[])
 	TFE_FrontEndUI::init();
 	game_init();
 	inputMapping_startup();
+#if !defined(ENABLE_VR)
+	TFE_INFO("Main", "Num touch devices: {}", SDL_GetNumTouchDevices());
 	if (SDL_GetNumTouchDevices() > 0)
 	{
 #if defined(ANDROID)
@@ -784,9 +790,9 @@ int main(int argc, char* argv[])
 #else
 		bool enable = false;
 #endif
-		DisplayInfo displayInfo;
 		TFE_Input::initTouchControls(enable);
 	}
+#endif
 	TFE_SaveSystem::init();
 	TFE_A11Y::init();
 
@@ -1040,6 +1046,10 @@ int main(int argc, char* argv[])
 		else if (s_curState == APP_STATE_MENU)
 		{
 			updateVR();
+			if (!s_curGame)
+			{
+				TFE_RenderBackend::clearWindow();
+			}
 		}
 		else
 		{

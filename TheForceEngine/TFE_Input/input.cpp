@@ -2,10 +2,15 @@
 #include <TFE_FileSystem/filestream.h>
 #include <TFE_System/system.h>
 #include <TFE_System/parser.h>
+#include <TFE_Settings/settings.h>
 #include <SDL.h>
 #include <memory.h>
 #include <string.h>
 #include <assert.h>
+
+#if defined(ENABLE_VR)
+#include <TFE_Vr/vr.h>
+#endif
 
 namespace TFE_Input
 {
@@ -34,6 +39,8 @@ namespace TFE_Input
 	s32 s_mousePos[2] = { 0 };
 
 	bool s_relativeMode = false;
+
+	static bool s_textInput{ false };
 
 	static const char* const* s_controllerAxisNames;
 	static const char* const* s_controllerButtonNames;
@@ -356,7 +363,17 @@ namespace TFE_Input
 
 	void startTextInput()
 	{
-#if defined(ANDROID)
+#if defined(ENABLE_VR)
+		//if (TFE_Settings::getTempSettings()->vr && vr::IsVirtualKeyboardSupported())
+		//{
+		//	vr::ShowVirtualKeyboard(true);
+		//	return;
+		//}
+		if (TFE_Settings::getTempSettings()->vr && !TFE_Settings::getVrSettings()->ignoreVrControllers)
+		{
+			s_textInput = true; // see VirtualKeyboard
+		}
+#elif defined(ANDROID)
 		if (SDL_HasScreenKeyboardSupport())
 		{
 			SDL_StartTextInput();
@@ -366,12 +383,25 @@ namespace TFE_Input
 
 	void stopTextInput()
 	{
+		s_textInput = false;
+//#if defined(ENABLE_VR)
+//		if (TFE_Settings::getTempSettings()->vr && vr::IsVirtualKeyboardSupported())
+//		{
+//			vr::ShowVirtualKeyboard(false);
+//			return;
+//		}
+//#endif
 #if defined(ANDROID)
 		if (SDL_HasScreenKeyboardSupport())
 		{
 			SDL_StopTextInput();
 		}
 #endif
+	}
+
+	bool isTextInput()
+	{
+		return s_textInput;
 	}
 
 	bool loadKeyNames(const char* path)

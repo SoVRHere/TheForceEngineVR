@@ -36,6 +36,8 @@ void TFE_Settings_Vr::resetToDefaults()
 	rightControllerRotationSensitivityVertical = 8.0f;
 	rightControllerRotationSensitivityHorizontal = 8.0f;
 
+	displayRefreshRate = 0;
+
 	viewLeftControllerInfo = false;
 	viewRightControllerInfo = false;
 
@@ -53,7 +55,7 @@ void TFE_Settings_Vr::reset2DToDefaults()
 	weaponToVr = { 2.0f, { -1.0f, 0.0f, -2.0f }, false, false, false };
 
 	configToVr = { 2.0f, { 0.0f, 0.0f, -4.0f }, false, true, true };
-	configDotSize = 35.0f;
+	configDotSize = 20.0f;
 	configDotColorMouse = RGBA::fromFloats(1.0f, 0.0f, 0.0f, 0.5f);
 	configDotColorPointer = RGBA::fromFloats(1.0f, 0.0f, 0.0f, 0.5f);
 
@@ -566,6 +568,7 @@ namespace TFE_Settings
 		writeKeyValue_Float(settings, "rightControllerRotationSensitivityHorizontal", s_vrSettings.rightControllerRotationSensitivityHorizontal);
 		writeKeyValue_Bool(settings, "viewLeftControllerInfo", s_vrSettings.viewLeftControllerInfo);
 		writeKeyValue_Bool(settings, "viewRightControllerInfo", s_vrSettings.viewRightControllerInfo);
+		writeKeyValue_Int(settings, "displayRefreshRate", s_vrSettings.displayRefreshRate);
 	}
 
 	void writeSoundSettings(FileStream& settings)
@@ -1086,6 +1089,8 @@ namespace TFE_Settings
 			s_vrSettings.viewLeftControllerInfo = parseBool(value);
 		else if (strcasecmp("viewRightControllerInfo", key) == 0)
 			s_vrSettings.viewRightControllerInfo = parseBool(value);
+		else if (strcasecmp("displayRefreshRate", key) == 0)
+			s_vrSettings.displayRefreshRate = parseInt(value);
 	}
 
 	void parseSoundSettings(const char* key, const char* value)

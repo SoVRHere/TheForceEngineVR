@@ -22,6 +22,10 @@
 #include <unistd.h>
 #endif
 
+#if defined(ANDROID)
+#include <TFE_System/android.h>
+#endif
+
 namespace TFE_System
 {
 	f64 c_gameTimeScale = 1.02;	// Adjust game time to match DosBox.
@@ -263,5 +267,23 @@ namespace TFE_System
 		bool systemUiPostReq = s_systemUiRequestPosted;
 		s_systemUiRequestPosted = false;
 		return systemUiPostReq;
+	}
+
+
+	bool openURL(const std::string& url)
+	{
+#if defined(ANDROID)
+		return TFE_System::android::OpenURLInBrowser(url);
+#elif defined(WIN32)
+		return (INT_PTR)ShellExecuteA(nullptr, "open",
+			url.c_str(),
+			nullptr,
+			0, SW_SHOWNORMAL) > 32;
+
+#else
+		std::string command = "open " + url;
+		std::system(command.c_str());
+		return true;
+#endif
 	}
 }

@@ -5,6 +5,7 @@
 //////////////////////////////////////////////////////////////////////
 
 #include <ctype.h>
+#include <string>
 #include "types.h"
 
 #if defined(ANDROID)
@@ -70,6 +71,8 @@ namespace TFE_System
 	bool systemUiRequestPosted();
 
 	const char* getVersionString();
+
+	bool openURL(const std::string& url);
 
 	extern f64 c_gameTimeScale;
 }

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <TFE_System/math.h>
+#include <TFE_Settings/settings.h>
 #include <TFE_RenderBackend/Win32OpenGL/renderTarget.h>
 #include <TFE_Game/igame.h>
 #include <SDL.h>
@@ -65,6 +66,13 @@ namespace vr
 	const Vec2ui& GetRenderTargetSize();
 	RenderTarget& GetRenderTarget(Side eye);
 
+	std::vector<float> GetDisplayRefreshRates();
+	float GetDisplayRefreshRate();
+	bool SetDisplayRefreshRate(float displayRefreshRate);
+
+	bool IsVirtualKeyboardSupported();
+	void ShowVirtualKeyboard(bool show);
+
 	UpdateStatus UpdateFrame(float cameraNear, float cameraFar);
 	void UpdateView(Side eye);
 	void Commit(Side eye);
@@ -82,6 +90,8 @@ namespace vr
 	const Pose& GetPointerPose(Side hand);
 	const Pose& GetControllerPose(Side hand);
 	const ControllerState& GetControllerState(Side hand);
+
+	TFE_Settings_Vr::ScreenToVr* GetCurrentScreenToVr();
 
 	// functions for handling VR controllers:
 	// VR controller works as emulated TFE gamepad & mouse events,

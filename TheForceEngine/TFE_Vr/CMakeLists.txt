@@ -13,7 +13,6 @@ set(SOURCES
 if(VRW_BUILD_IN_VR_WRAPPER)
 list(APPEND SOURCES
 	${VR_WRAPPER_PATH}/VrWrapper.cpp
-	${VR_WRAPPER_PATH}/VrWrapper.h
 	${VR_WRAPPER_PATH}/VrMath.cpp
 	${VR_WRAPPER_PATH}/VrMath.h
 	${VR_WRAPPER_PATH}/Message.h
@@ -46,21 +45,21 @@ if(VRW_BUILD_IN_VR_WRAPPER)
 	target_include_directories(${PROJECT_NAME} PRIVATE "../SDL/include")
 	if(WIN32)
 		target_link_directories(${PROJECT_NAME} PRIVATE ${VR_WRAPPER_PATH}/Lib/Windows/x64)
-		target_link_libraries(${PROJECT_NAME} PRIVATE 
-			optimized openxr_loader.lib
-			debug openxr_loaderd.lib
-		)
+		target_link_libraries(${PROJECT_NAME} PRIVATE optimized openxr_loader.lib debug openxr_loaderd.lib)
+		target_link_libraries(${PROJECT_NAME} PRIVATE opengl32.lib)
 	elseif(ANDROID)
 		# target_link_directories(${PROJECT_NAME} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/${VR_WRAPPER_PATH}/Lib/Android/${ANDROID_ABI}")
 		# target_link_libraries(${PROJECT_NAME} PRIVATE openxr_loader)
 		# target_link_libraries(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/${VR_WRAPPER_PATH}/Lib/Android/arm64-v8a/openxr_loader)
 	endif()
-	if(WIN32)
-		target_link_libraries(${PROJECT_NAME} PRIVATE opengl32.lib)
-	endif()
 else()
-target_link_libraries(${PROJECT_NAME} PRIVATE 
-	optimized ${CMAKE_SOURCE_DIR}/TheForceEngine/TFE_Vr/VrWrapper/Lib/Windows/x64/VrWrapper.lib
-	debug ${CMAKE_SOURCE_DIR}/TheForceEngine/TFE_Vr/VrWrapper/Lib/Windows/x64/VrWrapper_d.lib
-)
+	if(WIN32)
+		#target_link_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/VrWrapper/Lib/Windows/x64)
+		target_link_libraries(${PROJECT_NAME} PRIVATE 
+			optimized ${CMAKE_CURRENT_SOURCE_DIR}/${VR_WRAPPER_PATH}/Lib/Windows/x64/VrWrapper.lib 
+			debug ${CMAKE_CURRENT_SOURCE_DIR}/${VR_WRAPPER_PATH}/Lib/Windows/x64/VrWrapper_d.lib)
+	elseif(ANDROID)
+		target_link_libraries(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/${VR_WRAPPER_PATH}/Lib/Android/arm64-v8a/libopenxr_loader.so)
+		target_link_libraries(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/${VR_WRAPPER_PATH}/Lib/Android/arm64-v8a/libVrWrapper.so)
+	endif()
 endif()

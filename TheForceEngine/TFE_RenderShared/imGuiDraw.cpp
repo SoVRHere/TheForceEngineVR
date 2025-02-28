@@ -171,13 +171,14 @@ namespace TFE_RenderShared
 			const Vec2ui& targetSize = vr::GetRenderTargetSize();
 			const ImGuiIO& io = ImGui::GetIO();
 			const TFE_Settings_Vr* vrSettings = TFE_Settings::getVrSettings();
+			const TFE_Settings_Vr::ScreenToVr& screenToVr = vr::GetCurrentScreenToVr() ? *vr::GetCurrentScreenToVr() : vrSettings->configToVr;
 
 			const vr::Pose& ctrlLeft = vr::GetPointerPose(vr::Side::Left);
 			const vr::Pose& ctrlRight = vr::GetPointerPose(vr::Side::Right);
 			const vr::ControllerState& ctrlStateLeft = vr::GetControllerState(vr::Side::Left);
 			const vr::ControllerState& ctrlStateRight = vr::GetControllerState(vr::Side::Right);
 
-			const bool ctrlLeftValid = ctrlLeft.mIsValid && !vrSettings->ignoreVrControllers;
+			const bool ctrlLeftValid = ctrlLeft.mIsValid && !vrSettings->ignoreVrControllers && !screenToVr.lockToCamera && screenToVr.holdInLeftHand;
 			const bool ctrlRightValid = ctrlRight.mIsValid && !vrSettings->ignoreVrControllers;
 			Mat4 ctrlMtx[2] = { ctrlLeftValid ? ctrlLeft.mTransformation : TFE_Math::getIdentityMatrix4(), ctrlRightValid ? ctrlRight.mTransformation : TFE_Math::getIdentityMatrix4() };
 			// no translation
@@ -210,8 +211,8 @@ namespace TFE_RenderShared
 			s_shader.setVariableArray(s_dotColorId, SVT_VEC4, cols[0].m, 2);
 			const Vec2f poss[2] = { Vec2f{f32(io.MousePos.x), f32(io.MousePos.y)}, screenPos };
 			s_shader.setVariableArray(s_mousePosId, SVT_VEC2, poss[0].m, 2);
-			s_shader.setVariable(s_ShiftId, SVT_VEC4, Vec4f{ vrSettings->configToVr.shift.x, vrSettings->configToVr.shift.y, vrSettings->configToVr.shift.z, vrSettings->configToVr.distance }.m);
-			s32 lock = vrSettings->configToVr.lockToCamera ? 1 : 0;
+			s_shader.setVariable(s_ShiftId, SVT_VEC4, Vec4f{ screenToVr.shift.x, screenToVr.shift.y, screenToVr.shift.z, screenToVr.distance }.m);
+			s32 lock = screenToVr.lockToCamera ? 1 : 0;
 			s_shader.setVariable(s_LockToCameraId, SVT_ISCALAR, &lock);
 			s_shader.setVariableArray(s_ControllerId, SVT_MAT4x4, ctrlMtx->data, 2);
 			s_shader.setVariableArray(s_CtrlGripTriggerId, SVT_SCALAR, ctrlGripTrigger, 2);

@@ -199,7 +199,11 @@ namespace TFE_RenderBackend
 			uiScale = 150;
 		}
 #if defined(ANDROID)
+#if defined(ENABLE_VR)
+		uiScale = 200;
+#else
 		uiScale = 225;
+#endif
 #endif
 
 	#ifndef _WIN32
