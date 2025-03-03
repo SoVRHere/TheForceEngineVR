@@ -378,65 +378,69 @@ namespace TFE_DarkForces
 		s_lifeCount = inv[31];
 
 		// Read Ammo, shields, health and energy.
-		s_playerInfo.ammoEnergy    = ammo[0];
-		s_playerInfo.ammoPower     = ammo[1];
-		s_playerInfo.ammoPlasma    = ammo[2];
-		s_playerInfo.ammoDetonator = ammo[3];
-		s_playerInfo.ammoShell     = ammo[4];
-		s_playerInfo.ammoMine      = ammo[5];
-		s_playerInfo.ammoMissile   = ammo[6];
-		s_playerInfo.shields = ammo[7];
-		s_playerInfo.health  = ammo[8];
-		s_batteryPower = ammo[9];
+		// ammo can be on unaligned address, s32* ammo = &levelData.ammo[(levelIndex - 1) * 10];
+		// so we must copy it instead of doing assignment to avoid 'signal 7 (SIGBUS), code 1 (BUS_ADRALN)' on some platforms
+		std::memcpy(&s_playerInfo.ammoEnergy, &ammo[0], sizeof(ammo[0]));
+		std::memcpy(&s_playerInfo.ammoPower, &ammo[1], sizeof(ammo[0]));
+		std::memcpy(&s_playerInfo.ammoPlasma, &ammo[2], sizeof(ammo[0]));
+		std::memcpy(&s_playerInfo.ammoDetonator, &ammo[3], sizeof(ammo[0]));
+		std::memcpy(&s_playerInfo.ammoShell, &ammo[4], sizeof(ammo[0]));
+		std::memcpy(&s_playerInfo.ammoMine, &ammo[5], sizeof(ammo[0]));
+		std::memcpy(&s_playerInfo.ammoMissile, &ammo[6], sizeof(ammo[0]));
+		std::memcpy(&s_playerInfo.shields, &ammo[7], sizeof(ammo[0]));
+		std::memcpy(&s_playerInfo.health, &ammo[8], sizeof(ammo[0]));
+		std::memcpy(&s_batteryPower, &ammo[9], sizeof(ammo[0]));
 	}
 
 	void player_writeInfo(u8* inv, s32* ammo)
 	{
 		// Write the inventory.
-		inv[0]  = s_playerInfo.itemPistol;
-		inv[1]  = s_playerInfo.itemRifle;
-		inv[2]  = s_itemUnknown1;
-		inv[3]  = s_playerInfo.itemAutogun;
-		inv[4]  = s_playerInfo.itemMortar;
-		inv[5]  = s_playerInfo.itemFusion;
-		inv[6]  = s_itemUnknown2;
-		inv[7]  = s_playerInfo.itemConcussion;
-		inv[8]  = s_playerInfo.itemCannon;
-		inv[9]  = s_playerInfo.itemRedKey;
-		inv[10] = s_playerInfo.itemYellowKey;
-		inv[11] = s_playerInfo.itemBlueKey;
-		inv[12] = s_playerInfo.itemGoggles;
-		inv[13] = s_playerInfo.itemCleats;
-		inv[14] = s_playerInfo.itemMask;
-		inv[15] = s_playerInfo.itemPlans;
-		inv[16] = s_playerInfo.itemPhrik;
-		inv[17] = s_playerInfo.itemNava;
-		inv[18] = s_playerInfo.itemDatatape;
-		inv[19] = s_playerInfo.itemUnused;
-		inv[20] = s_playerInfo.itemDtWeapon;
-		inv[21] = s_playerInfo.itemCode1;
-		inv[22] = s_playerInfo.itemCode2;
-		inv[23] = s_playerInfo.itemCode3;
-		inv[24] = s_playerInfo.itemCode4;
-		inv[25] = s_playerInfo.itemCode5;
-		inv[26] = s_playerInfo.itemCode6;
-		inv[27] = s_playerInfo.itemCode7;
-		inv[28] = s_playerInfo.itemCode8;
-		inv[29] = s_playerInfo.itemCode9;
-		inv[30] = s_playerInfo.curWeapon;
-		inv[31] = s_lifeCount;
+		inv[0] = (u8)s_playerInfo.itemPistol;
+		inv[1] = (u8)s_playerInfo.itemRifle;
+		inv[2] = (u8)s_itemUnknown1;
+		inv[3] = (u8)s_playerInfo.itemAutogun;
+		inv[4] = (u8)s_playerInfo.itemMortar;
+		inv[5] = (u8)s_playerInfo.itemFusion;
+		inv[6] = (u8)s_itemUnknown2;
+		inv[7] = (u8)s_playerInfo.itemConcussion;
+		inv[8] = (u8)s_playerInfo.itemCannon;
+		inv[9] = (u8)s_playerInfo.itemRedKey;
+		inv[10] = (u8)s_playerInfo.itemYellowKey;
+		inv[11] = (u8)s_playerInfo.itemBlueKey;
+		inv[12] = (u8)s_playerInfo.itemGoggles;
+		inv[13] = (u8)s_playerInfo.itemCleats;
+		inv[14] = (u8)s_playerInfo.itemMask;
+		inv[15] = (u8)s_playerInfo.itemPlans;
+		inv[16] = (u8)s_playerInfo.itemPhrik;
+		inv[17] = (u8)s_playerInfo.itemNava;
+		inv[18] = (u8)s_playerInfo.itemDatatape;
+		inv[19] = (u8)s_playerInfo.itemUnused;
+		inv[20] = (u8)s_playerInfo.itemDtWeapon;
+		inv[21] = (u8)s_playerInfo.itemCode1;
+		inv[22] = (u8)s_playerInfo.itemCode2;
+		inv[23] = (u8)s_playerInfo.itemCode3;
+		inv[24] = (u8)s_playerInfo.itemCode4;
+		inv[25] = (u8)s_playerInfo.itemCode5;
+		inv[26] = (u8)s_playerInfo.itemCode6;
+		inv[27] = (u8)s_playerInfo.itemCode7;
+		inv[28] = (u8)s_playerInfo.itemCode8;
+		inv[29] = (u8)s_playerInfo.itemCode9;
+		inv[30] = (u8)s_playerInfo.curWeapon;
+		inv[31] = (u8)s_lifeCount;
 
 		// Write Ammo, Shields, Health, and Energy.
-		ammo[0] = s_playerInfo.ammoEnergy;
-		ammo[1] = s_playerInfo.ammoPower;
-		ammo[2] = s_playerInfo.ammoPlasma;
-		ammo[3] = s_playerInfo.ammoDetonator;
-		ammo[4] = s_playerInfo.ammoShell;
-		ammo[5] = s_playerInfo.ammoMine;
-		ammo[6] = s_playerInfo.ammoMissile;
-		ammo[7] = s_playerInfo.shields;
-		ammo[8] = s_playerInfo.health;
-		ammo[9] = s_batteryPower;
+		// ammo can be on unaligned address, s32* ammo = &saveData.ammo[levelIndex * 10];
+		// so we must copy it instead of doing assignment to avoid 'signal 7 (SIGBUS), code 1 (BUS_ADRALN)' on some platforms
+		std::memcpy(&ammo[0], &s_playerInfo.ammoEnergy, sizeof(ammo[0]));
+		std::memcpy(&ammo[1], &s_playerInfo.ammoPower, sizeof(ammo[0]));
+		std::memcpy(&ammo[2], &s_playerInfo.ammoPlasma, sizeof(ammo[0]));
+		std::memcpy(&ammo[3], &s_playerInfo.ammoDetonator, sizeof(ammo[0]));
+		std::memcpy(&ammo[4], &s_playerInfo.ammoShell, sizeof(ammo[0]));
+		std::memcpy(&ammo[5], &s_playerInfo.ammoMine, sizeof(ammo[0]));
+		std::memcpy(&ammo[6], &s_playerInfo.ammoMissile, sizeof(ammo[0]));
+		std::memcpy(&ammo[7], &s_playerInfo.shields, sizeof(ammo[0]));
+		std::memcpy(&ammo[8], &s_playerInfo.health, sizeof(ammo[0]));
+		std::memcpy(&ammo[9], &s_batteryPower, sizeof(ammo[0]));
 	}
 
 	void player_setNextWeapon(s32 nextWpn)
@@ -2234,6 +2238,7 @@ namespace TFE_DarkForces
 
 		weapon->rollOffset = -s_playerRoll / 13;
 		weapon->pchOffset  = s_playerPitch / 64;
+		//s_playerPitch = 0;
 
 		// Handle camera lighting and night vision.
 		if (player->flags & OBJ_FLAG_EYE)
