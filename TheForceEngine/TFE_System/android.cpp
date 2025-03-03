@@ -268,4 +268,41 @@ namespace TFE_System::android
 		};
 		__android_log_print(GetAndroidLogType(), "TFE", "%s", message);
 	}
+
+	bool OpenURLInBrowser(const std::string& url)
+	{
+		JNIEnv* env = GetJNIEnv();
+		// Get the class of the activity
+		jclass activityClass = env->GetObjectClass(GetActivity());
+		if (!activityClass)
+		{
+			return false; // Error: Activity class not found
+		}
+
+		// Get the class of MainActivity (replace with your actual package name)
+		jclass mainActivityClass = env->FindClass("com/tfe/core/AndroidActivity");
+		if (!mainActivityClass)
+		{
+			return false; // Error: MainActivity class not found
+		}
+
+		// Get the static method ID of openWebPage(String)
+		jmethodID openWebPageMethod = env->GetStaticMethodID(mainActivityClass, "openWebPage", "(Ljava/lang/String;)V");
+		if (!openWebPageMethod)
+		{
+			return false; // Error: Method not found
+		}
+
+		// Convert C++ std::string to Java jstring
+		jstring jUrl = env->NewStringUTF(url.c_str());
+
+		// Call the static method
+		env->CallStaticVoidMethod(mainActivityClass, openWebPageMethod, jUrl);
+
+		// Cleanup
+		env->DeleteLocalRef(jUrl);
+		env->DeleteLocalRef(mainActivityClass);
+
+		return true;
+	}
 }

@@ -1,0 +1,60 @@
+# This starter workflow is for a CMake project running on a single platform. There is a different starter workflow if you need cross-platform coverage.
+# See: https://github.com/actions/starter-workflows/blob/main/ci/cmake-multi-platform.yml
+name: Android Legacy Build & publish version tagged commit
+
+on:
+  push:
+    tags: ['v*.*.*-android-legacy'] # This triggers the workflow only on version tags like v1.0.0-android, v2.21.52-android, etc.
+    # branches: [ "feature/vr" ]
+  # pull_request:
+     # branches: [ "feature/build_test" ]
+
+jobs:
+  build-android:
+    runs-on: windows-latest
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+      
+    - name: Update version file
+      run: |
+        "const char c_gitVersion[] = ""$(git describe --tags)"";" | Set-Content -Path ${{github.workspace}}/TheForceEngine/gitVersion.h
+
+    - name: Set up JDK 17
+      uses: actions/setup-java@v2
+      with:
+        distribution: 'temurin'
+        java-version: 17
+        
+    - name: Install CMake
+      uses: jwlawson/actions-setup-cmake@v1
+      with:
+        cmake-version: '3.28.2'
+
+    - name: Build with Gradle
+      run: |
+        cd ./TheForceEngine/Android
+        ./gradlew assembleAndroidLegacyDeveloper
+        
+    - name: Create GitHub release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
+      with:
+        # tag_name: ${{github.event.head_commit.message}}
+        # release_name: "Release ${{github.event.head_commit.message}}"
+        tag_name: ${{github.ref_name}}
+        release_name: "Release ${{github.ref_name}}"
+        draft: false
+        prerelease: false
+
+    - name: Upload Release asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
+      with:
+        upload_url: ${{steps.create_release.outputs.upload_url}}
+        asset_path: ./TheForceEngine/Android/tfe/build/outputs/apk/android/developer/tfe-androidLegacy-developer.apk  # Path to your artifact file(s)
+        asset_name: the-force-engine-android-legacy.apk  # Custom name for the artifact file
+        asset_content_type: application/vnd.android.package-archive  # Adjust based on file type

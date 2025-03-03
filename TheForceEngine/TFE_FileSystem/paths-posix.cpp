@@ -123,7 +123,17 @@ namespace TFE_Paths
 	bool setUserDocumentsPath(const char *append)
 	{
 #if defined(ANDROID)
-		s_paths[PATH_USER_DOCUMENTS] = TFE_System::android::GetExternalStorageDir() + "/";
+		TFE_ANDROID("external storage: {}, state: {}", SDL_AndroidGetExternalStoragePath(), SDL_AndroidGetExternalStorageState());
+		TFE_ANDROID("internal storage: {}", SDL_AndroidGetInternalStoragePath());
+		if (SDL_GetAndroidSDKVersion() <= 28) // <= Android 9
+		{
+			const fs::path externalDir = SDL_AndroidGetExternalStoragePath() / fs::path{ append } / "";
+			s_paths[PATH_USER_DOCUMENTS] = externalDir.string();
+		}
+		else
+		{
+			s_paths[PATH_USER_DOCUMENTS] = TFE_System::android::GetExternalStorageDir() + "/";
+		}
 		const fs::path dir = s_paths[PATH_USER_DOCUMENTS];
 		if (fs::exists(dir) && !fs::is_directory(dir))
 		{

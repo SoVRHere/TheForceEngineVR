@@ -8,9 +8,10 @@
 
 namespace TFE_System::android
 {
-	AAssetManager*	GetAAssetManager();
-	jobject 		GetActivity();
-	JNIEnv* 		GetJNIEnv();
-	void 			Log(LogWriteType type, const char* message);
-	const std::string& GetExternalStorageDir();
+	AAssetManager*		GetAAssetManager();
+	jobject 			GetActivity();
+	JNIEnv* 			GetJNIEnv();
+	void 				Log(LogWriteType type, const char* message);
+	const std::string&	GetExternalStorageDir();
+	bool				OpenURLInBrowser(const std::string& url);
 }

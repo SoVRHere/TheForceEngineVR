@@ -678,7 +678,7 @@ namespace TFE_Input
 		const float len = TFE_Math::length(diffInCm);
 		if (len <= mSize / 2.0f)
 		{
-			TFE_INFO("TOUCH", "{} is hit by finger {}", mName, finger.mID);
+			//TFE_INFO("TOUCH", "{} is hit by finger {}", mName, finger.mID);
 			return true;
 		}
 		return false;
@@ -722,7 +722,7 @@ namespace TFE_Input
 			finger.mStartPos.y >= mActiveArea.y && finger.mStartPos.y <= mActiveArea.w)
 		{
 			mPos = finger.mStartPos;
-			TFE_INFO("TOUCH", "{} is hit by finger {}", mName, finger.mID);
+			//TFE_INFO("TOUCH", "{} is hit by finger {}", mName, finger.mID);
 			return true;
 		}
 

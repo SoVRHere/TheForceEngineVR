@@ -106,7 +106,7 @@ if(ENABLE_TFE)
 		add_compile_definitions(START_VR)
 	endif()
 	
-	if(ENABLE_VR)
+	if(ENABLE_VR AND NOT ANDROID)
 		set_target_properties(tfe PROPERTIES OUTPUT_NAME "TheForceEngineVR")
 	else()
 		set_target_properties(tfe PROPERTIES OUTPUT_NAME "TheForceEngine")
@@ -140,8 +140,8 @@ if(ENABLE_TFE)
 		include_directories(TheForceEngine/sdl2_win32/include)
 	elseif(ANDROID)
 		target_link_libraries(tfe PRIVATE
-			${CMAKE_SOURCE_DIR}/TheForceEngine/sdl2_android/lib/arm64-v8a/libSDL2.a
-			${CMAKE_SOURCE_DIR}/TheForceEngine/sdl2_android/lib/arm64-v8a/libSDL2_image.a
+			${CMAKE_SOURCE_DIR}/TheForceEngine/sdl2_android/lib/${ANDROID_ABI}/libSDL2.a
+			${CMAKE_SOURCE_DIR}/TheForceEngine/sdl2_android/lib/${ANDROID_ABI}/libSDL2_image.a
 			android log egl GLESv2 GLESv1_CM OpenSLES
 		)
 		include_directories(TheForceEngine/sdl2_android/include)

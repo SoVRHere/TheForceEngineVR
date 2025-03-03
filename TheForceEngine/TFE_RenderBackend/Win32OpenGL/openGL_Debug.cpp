@@ -243,7 +243,7 @@ namespace OpenGL_Debug
 #undef DOCASE
 	}
 
-	void DebugCallback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar* message, const void* userParam)
+	void __stdcall DebugCallback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar* message, const void* userParam)
 	{
 		switch (severity)
 		{

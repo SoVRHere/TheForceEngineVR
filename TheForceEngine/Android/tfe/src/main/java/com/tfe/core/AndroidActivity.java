@@ -2,8 +2,10 @@ package com.tfe.core;
 
 import android.app.Activity;
 import android.content.Context;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.res.AssetManager;
+import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
 import android.util.Log;
@@ -72,6 +74,13 @@ public class AndroidActivity extends SDLActivity {
         AndroidActivity.onDestroyActivity();
         super.onDestroy();
         //super.nativeSendQuit();
+    }
+    public static void openWebPage(String url) {
+        Uri webpage = Uri.parse(url);
+        Intent intent = new Intent(Intent.ACTION_VIEW, webpage);
+        if (intent.resolveActivity(activity.getPackageManager()) != null) {
+            activity.startActivity(intent);
+        }
     }
 
     /**

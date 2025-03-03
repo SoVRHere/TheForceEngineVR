@@ -25,12 +25,11 @@ public class TfeActivity extends AndroidActivity {
      */
     @Override
     protected String[] getLibraries() {
-        return new String[] {
-                //"openxr_loader",
-                //"SDL2",
-                "TheForceEngine",
-                // "SDL2_image",
-                //"main"
-        };
+//        if (BuildConfig.IS_VR) {
+//            return new String[]{"TheForceEngineVR"};
+//        }
+//        else {
+            return new String[]{"TheForceEngine"};
+//        }
     }
 }
