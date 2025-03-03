@@ -203,6 +203,12 @@ namespace TFE_RenderBackend
 		uiScale = 200;
 #else
 		uiScale = 225;
+
+		float dpi = -1.0f;
+		if (SDL_GetDisplayDPI(0, nullptr, &dpi, nullptr) == 0 && dpi > 0.0f)
+		{
+			uiScale = (s32)(uiScale * dpi / 400.0f);
+		}
 #endif
 #endif
 

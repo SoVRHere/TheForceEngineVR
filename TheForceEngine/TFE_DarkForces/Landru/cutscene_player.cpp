@@ -215,7 +215,7 @@ namespace TFE_DarkForces
 		{
 			s_skipSceneInput = JTRUE;
 		}
-		else if (TFE_Input::keyPressed(KEY_SPACE) || TFE_Input::mousePressed(MBUTTON_LEFT))
+		else if (TFE_Input::keyPressed(KEY_SPACE) || TFE_Input::mousePressed(MBUTTON_LEFT) || TFE_Input::buttonPressed(CONTROLLER_BUTTON_A))
 		{
 			s_nextSceneInput = JTRUE;
 			if (TFE_A11Y::cutsceneCaptionsEnabled()) TFE_A11Y::clearActiveCaptions();

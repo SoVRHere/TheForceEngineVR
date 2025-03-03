@@ -9,7 +9,11 @@
 
 namespace TFE_Input
 {
+	s32 getNumTouchDevices();
 	void initTouchControls(bool enable);
+	bool isTouchControlsEnabled();
+	void enableTouchControls(bool enable);
+	void setDefaultTouchControls();
 	void destroyTouchControls();
 	void handleTouchEvents(const SDL_Event& event);
 	void drawTouchControls();

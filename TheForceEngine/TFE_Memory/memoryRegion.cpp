@@ -11,7 +11,7 @@
 #include <assert.h>
 #include <algorithm>
 
-// #define _VERIFY_MEMORY
+//#define _VERIFY_MEMORY
 
 #ifdef _VERIFY_MEMORY
 #define VERIFY_MEMORY() verifyMemory(region)
@@ -20,6 +20,10 @@
 #endif
 
 #if defined(ANDROID)
+#define USE_MMAP
+#endif
+
+#if defined(USE_MMAP)
 #include <sys/mman.h>
 #endif
 
@@ -198,7 +202,7 @@ namespace TFE_Memory
 		assert(region);
 		for (s32 i = 0; i < region->blockCount; i++)
 		{
-#if defined(ANDROID)
+#if defined(USE_MMAP)
 			if (munmap(region->memBlocks[i], sizeof(MemoryBlock) + region->blockSize))
 			{
 				TFE_CRITICAL("MemoryRegion", "munmap failed");
@@ -784,7 +788,7 @@ namespace TFE_Memory
 
 		u64 blockIndex = region->blockCount;
 		assert(blockIndex < region->blockArrCapacity);
-#if defined(ANDROID)
+#if defined(USE_MMAP)
 		region->memBlocks[blockIndex] = (MemoryBlock*)mmap(/*desired address*/0, sizeof(MemoryBlock) + region->blockSize, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 #else
 		region->memBlocks[blockIndex] = (MemoryBlock*)malloc(sizeof(MemoryBlock) + region->blockSize);

@@ -3,11 +3,16 @@
 #include <TFE_System/system.h>
 #include <TFE_Ui/imGUI/imgui.h>
 #include <vector>
+#include <chrono>
 
 extern bool s_inMenu;
 
 namespace TFE_Input
 {
+	using Clock = std::chrono::high_resolution_clock;
+	using TimePoint = Clock::time_point;
+	using Seconds = std::chrono::duration<double>;
+
 	class TouchContext
 	{
 	public:
@@ -15,6 +20,8 @@ namespace TFE_Input
 
 	public:
 		bool IsEnabled() const;
+		void Enable(bool enable);
+		TimePoint GetLastTouchTime() const;
 		Vec2f GetWindowSize() const;
 		Vec2f GetAbsolutePos(const Vec2f& rel) const;
 		float PixelsToCm(float pixels) const;
@@ -26,6 +33,7 @@ namespace TFE_Input
 
 	private:
 		bool mEnabled{ false };
+		TimePoint mLastTouchTime;
 		float mDpi = 400.0f;  // ~ fullHD on 6"
 
 	public:
@@ -260,6 +268,8 @@ namespace TFE_Input
 
 	void SetDefault()
 	{
+		s_TouchControls.clear();
+
 		const Vec2f displaySize = s_TouchContext->GetWindowSize();
 		const float aspectRatio = displaySize.x / displaySize.y;
 
@@ -326,7 +336,7 @@ namespace TFE_Input
 
 		{	// guide
 			constexpr float fromRight = 0.1f; // cm & from top
-			constexpr float btnSize = 0.5f; // cm
+			constexpr float btnSize = 0.75f; // cm
 			const float btnPosX = s_TouchContext->CmToPixels(fromRight + btnSize / 2.0f) / displaySize.x;
 			const Vec2f btnPos = { btnPosX, btnPosX * aspectRatio };
 			auto guideControl = std::make_unique<CircleButton>("btn_guide", Vec4f{ 0.0f, 0.0f, 1.0f, 1.0f }, btnPos, btnSize,
@@ -339,7 +349,7 @@ namespace TFE_Input
 
 		{	// start
 			constexpr float fromLeft = 0.1f; // cm & from top
-			constexpr float btnSize = 0.5f; // cm
+			constexpr float btnSize = 0.75f; // cm
 			const float btnPosX = (displaySize.x - s_TouchContext->CmToPixels(fromLeft + btnSize / 2.0f)) / displaySize.x;
 			const float btnPosY = s_TouchContext->CmToPixels(fromLeft + btnSize / 2.0f) / displaySize.y;
 			const Vec2f btnPos = { btnPosX, btnPosY };
@@ -428,18 +438,40 @@ namespace TFE_Input
 		}
 	}
 
+	s32 getNumTouchDevices()
+	{
+		return SDL_GetNumTouchDevices();
+	}
+
 	void initTouchControls(bool enable)
 	{
 		s_TouchContext = std::make_unique<TouchContext>(enable);
 		SetDefault();
 	}
 
-		void destroyTouchControls()
+	bool isTouchControlsEnabled()
+	{
+		return s_TouchContext && s_TouchContext->IsEnabled();
+	}
+
+	void enableTouchControls(bool enable)
+	{
+		if (s_TouchContext)
+		{
+			s_TouchContext->Enable(enable);
+		}
+	}
+
+	void setDefaultTouchControls()
+	{
+		SetDefault();
+	}
+
+	void destroyTouchControls()
 	{
 		s_TouchControls.clear();
 		s_TouchContext.reset();
 	}
-
 
 	void handleTouchEvents(const SDL_Event& event)
 	{
@@ -452,6 +484,13 @@ namespace TFE_Input
 	void drawTouchControls()
 	{
 		if (s_inMenu || !s_TouchContext || !s_TouchContext->IsEnabled())
+		{
+			return;
+		}
+
+		TimePoint now = Clock::now();
+		Seconds nonTouchTime = now - s_TouchContext->GetLastTouchTime();
+		if (nonTouchTime.count() > 5.0)
 		{
 			return;
 		}
@@ -477,6 +516,7 @@ namespace TFE_Input
 
 	TouchContext::TouchContext(bool enable)
 		: mEnabled{ enable }
+		, mLastTouchTime{ Clock::now() }
 	{
 		SDL_GetDisplayDPI(0, nullptr, &mDpi, nullptr);
 
@@ -486,6 +526,16 @@ namespace TFE_Input
 	bool TouchContext::IsEnabled() const
 	{
 		return mEnabled;
+	}
+
+	void TouchContext::Enable(bool enable)
+	{
+		mEnabled = enable;
+	}
+
+	TimePoint TouchContext::GetLastTouchTime() const
+	{
+		return mLastTouchTime;
 	}
 
 	Vec2f TouchContext::GetWindowSize() const
@@ -526,6 +576,8 @@ namespace TFE_Input
 		{
 			return;
 		}
+
+		mLastTouchTime = Clock::now();
 
 		const SDL_TouchFingerEvent& finger = event.tfinger;
 
