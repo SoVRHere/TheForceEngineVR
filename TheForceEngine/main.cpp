@@ -587,6 +587,16 @@ void updateVR()
 		// always enable relative mode for VR to avoid mouse clicks outside of the window leading to loosing window focus
 		TFE_Input::enableRelativeMode(true);
 
+		Vec2ui& requestedSize = TFE_Settings::getTempSettings()->vrRequestedTargetSize;
+		if (requestedSize.x > 0 && requestedSize.y > 0)
+		{
+			vr::CreateSwapchain(requestedSize);
+			TFE_Settings_Graphics* graphicsSettings = TFE_Settings::getGraphicsSettings();
+			graphicsSettings->gameResolution = { (s32)vr::GetRenderTargetSize().x, (s32)vr::GetRenderTargetSize().y };
+
+			requestedSize = { 0, 0 };
+		}
+
 		TFE_RenderBackend::s_VRUpdateStatus = vr::UpdateFrame(0.1f, 4096.0f/*TODO: extract from s_cameraProj*/);
 		vr::UpdateView(vr::Side::Left);
 
@@ -652,6 +662,12 @@ void overrideVRSettings(bool firstRun)
 		{
 			vr::SetDisplayRefreshRate((float)vrSettings->displayRefreshRate);
 			TFE_INFO("VR", "changing display refresh rate to {} Hz", vrSettings->displayRefreshRate);
+		}
+
+		if (vrSettings->resolutionWidth > 0 && vrSettings->resolutionHeight > 0)
+		{
+			TFE_Settings::getTempSettings()->vrRequestedTargetSize = { vrSettings->resolutionWidth, vrSettings->resolutionHeight };
+			TFE_INFO("VR", "requesting resolution {} x {}", vrSettings->resolutionWidth, vrSettings->resolutionHeight);
 		}
 	}
 #endif
@@ -782,15 +798,14 @@ int main(int argc, char* argv[])
 	game_init();
 	inputMapping_startup();
 #if !defined(ENABLE_VR)
-	TFE_INFO("Main", "Num touch devices: {}", SDL_GetNumTouchDevices());
-	if (SDL_GetNumTouchDevices() > 0)
+	TFE_INFO("Main", "Num touch devices: {}", TFE_Input::getNumTouchDevices());
+	if (TFE_Input::getNumTouchDevices() > 0)
 	{
 #if defined(ANDROID)
-		bool enable = true;
+		TFE_Input::initTouchControls(true);
 #else
-		bool enable = false;
+		TFE_Input::initTouchControls(false);
 #endif
-		TFE_Input::initTouchControls(enable);
 	}
 #endif
 	TFE_SaveSystem::init();

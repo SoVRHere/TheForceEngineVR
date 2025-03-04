@@ -37,6 +37,8 @@ void TFE_Settings_Vr::resetToDefaults()
 	rightControllerRotationSensitivityHorizontal = 8.0f;
 
 	displayRefreshRate = 0;
+	resolutionWidth = 0;
+	resolutionHeight = 0;
 
 	viewLeftControllerInfo = false;
 	viewRightControllerInfo = false;
@@ -569,6 +571,8 @@ namespace TFE_Settings
 		writeKeyValue_Bool(settings, "viewLeftControllerInfo", s_vrSettings.viewLeftControllerInfo);
 		writeKeyValue_Bool(settings, "viewRightControllerInfo", s_vrSettings.viewRightControllerInfo);
 		writeKeyValue_Int(settings, "displayRefreshRate", s_vrSettings.displayRefreshRate);
+		writeKeyValue_Int(settings, "resolutionWidth", s_vrSettings.resolutionWidth);
+		writeKeyValue_Int(settings, "resolutionHeight", s_vrSettings.resolutionHeight);
 	}
 
 	void writeSoundSettings(FileStream& settings)
@@ -1091,6 +1095,10 @@ namespace TFE_Settings
 			s_vrSettings.viewRightControllerInfo = parseBool(value);
 		else if (strcasecmp("displayRefreshRate", key) == 0)
 			s_vrSettings.displayRefreshRate = parseInt(value);
+		else if (strcasecmp("resolutionWidth", key) == 0)
+			s_vrSettings.resolutionWidth = parseInt(value);
+		else if (strcasecmp("resolutionHeight", key) == 0)
+			s_vrSettings.resolutionHeight = parseInt(value);
 	}
 
 	void parseSoundSettings(const char* key, const char* value)

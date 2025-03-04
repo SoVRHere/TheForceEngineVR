@@ -876,10 +876,14 @@ namespace TFE_FrontEndUI
 		}
 		if (!drawFrontEnd)
 		{
-			TFE_Input::drawTouchControls();
+			if (s_game && !s_game->isPaused())
+			{
+				TFE_Input::drawTouchControls();
 #if defined(ENABLE_VR)
-			drawVrControllersInfo(w);
+				drawVrControllersInfo(w);
 #endif
+			}
+
 			if (TFE_Input::isTextInput())
 			{	// during New Agent screen
 				s_virtualKeyboard.enabled = true;
@@ -892,6 +896,7 @@ namespace TFE_FrontEndUI
 				}
 				ImGui::PopFont();
 			}
+
 			if (showFps) { drawFps(w); }
 			return;
 		}
@@ -2282,6 +2287,7 @@ namespace TFE_FrontEndUI
 		if (ImGui::Button("Reset To Defaults"))
 		{
 			inputMapping_resetToDefaults();
+			TFE_Input::setDefaultTouchControls();
 		}
 		yNext += 32.0f*s_uiScale;
 
@@ -2299,6 +2305,21 @@ namespace TFE_FrontEndUI
 			if (s_controllerWinOpen)
 			{
 				ImGui::Spacing();
+
+				if (TFE_Input::getNumTouchDevices() > 0)
+				{
+					bool enable = TFE_Input::isTouchControlsEnabled();
+					if (ImGui::Checkbox("Touch controls", &enable))
+					{
+						TFE_Input::enableTouchControls(enable);
+					}
+					ImGui::SameLine();
+					if (ImGui::Button("Reset"))
+					{
+						TFE_Input::setDefaultTouchControls();
+					}
+				}
+
 				bool controllerEnable = (s_inputConfig->controllerFlags & CFLAG_ENABLE) != 0;
 				if (ImGui::Checkbox("Enable", &controllerEnable))
 				{
@@ -3183,6 +3204,7 @@ namespace TFE_FrontEndUI
 		if (ImGui::Button("Reset Vr To Defaults"))
 		{
 			vrSettings->resetToDefaults();
+			TFE_Settings::getTempSettings()->vrRequestedTargetSize = vr::GetRecommendedRenderTargetSize();
 		}
 		Tooltip("You can use --vrResetSettings CLI command to do it on start up, do not forget to remove it next time you want to run"
 			" the game as it will reset all your VR setting changes again.");
@@ -3192,63 +3214,128 @@ namespace TFE_FrontEndUI
 
 		// Display
 		{
-			ImGui::PushFont(s_dialogFont);
-			ImGui::LabelText("##ConfigLabel", "Display");
-			ImGui::PopFont();
-
-			const Vec2ui &res = vr::GetRenderTargetSize();
-			ImGui::TextWrapped("Resolution: %d x %d", res.x, res.y);
-
-			static std::vector<float> displayRefreshRates = vr::GetDisplayRefreshRates();
-			if (!displayRefreshRates.empty())
+			// resolution
 			{
-				auto GetDisplayRefreshRatesStrs = []() -> std::vector<std::string> {
-					std::vector<std::string> displayRefreshRatesStrs;
-					for (float rate: displayRefreshRates)
+				ImGui::PushFont(s_dialogFont);
+				ImGui::LabelText("##ConfigLabel", "Display");
+				ImGui::PopFont();
+
+				auto GetDisplayResolutions = []() -> std::vector<Vec2ui> {
+					std::vector<Vec2ui> resolutions;
+					const Vec2ui& resRecommended = vr::GetRecommendedRenderTargetSize();
+					resolutions.push_back(resRecommended);
+					float scale = 0.5f;
+					while (scale <= 1.51f)
 					{
-						displayRefreshRatesStrs.push_back(fmt::format("{} Hz", (uint32_t) (rate + 0.1f)));
-					}
-					return displayRefreshRatesStrs;
-				};
-				auto FindRefreshRate = [](float rate) -> size_t {
-					for (size_t i = 0; i < displayRefreshRates.size(); i++)
-					{
-						if ((uint32_t) (displayRefreshRates[i] + 0.1f) == (uint32_t) (rate + 0.1f))
+						const uint32_t w = ((uint32_t)(resRecommended.x * scale) + 15) & ~15;
+						const uint32_t h = ((uint32_t)(resRecommended.y * scale) + 15) & ~15;
+						if (w != resRecommended.x || h != resRecommended.y)
 						{
-							return i;
+							resolutions.push_back({ w, h });
 						}
+						scale += 0.1f;
 					}
-					return 0;
+					return resolutions;
 				};
-				static const std::vector<std::string> refreshRatesStrs = GetDisplayRefreshRatesStrs();
-				static const char *currentRefreshRate = nullptr;
-				auto it = std::find_if(displayRefreshRates.begin(), displayRefreshRates.end(), [](float rate) { return rate == vr::GetDisplayRefreshRate(); });
-				const int currentRefreshRateIndex = (it != displayRefreshRates.end()) ? (int) (it - displayRefreshRates.begin()) : -1;
-				currentRefreshRate = currentRefreshRateIndex >= 0 ? refreshRatesStrs[currentRefreshRateIndex].c_str() : nullptr;
-				if (ImGui::BeginCombo("Refresh rate", currentRefreshRate))
-				{
-					for (size_t n = 0; n < refreshRatesStrs.size(); n++)
+				auto GetDisplayResolutionsStrs = [](const std::vector<Vec2ui>& resolutions) -> std::vector<std::string> {
+					std::vector<std::string> resolutionsStrs;
+					resolutionsStrs.reserve(resolutions.size());
+					const Vec2ui& resRecommended = vr::GetRecommendedRenderTargetSize();
+					const uint32_t recommendedArea = resRecommended.x * resRecommended.y;
+					float scale = 0.5f;
+					for (const Vec2ui& res : resolutions)
 					{
-						bool is_selected = (currentRefreshRate == refreshRatesStrs[n].c_str());
-						if (ImGui::Selectable(refreshRatesStrs[n].c_str(), is_selected))
+						const uint32_t area = res.x * res.y;
+						resolutionsStrs.push_back(fmt::format("{} x {}, {:3}%", res.x, res.y, (uint32_t(100.0f * ((float)area / recommendedArea)))));
+					}
+					resolutionsStrs[0] = fmt::format("{} x {}, 100%, default", resRecommended.x, resRecommended.y);
+					return resolutionsStrs;
+				};
+
+				static const std::vector<Vec2ui> resolutions = GetDisplayResolutions();
+				static const std::vector<std::string> resolutionsStrs = GetDisplayResolutionsStrs(resolutions);
+				TFE_ASSERT(resolutions.size() == resolutionsStrs.size());
+
+				const Vec2ui& currentRes = vr::GetRenderTargetSize();
+				auto it = std::find_if(resolutions.begin(), resolutions.end(), [&currentRes](const Vec2ui& res) { return res == currentRes; });
+				const int currentResolutionIndex = (it != resolutions.end()) ? (int)(it - resolutions.begin()) : -1;
+				const char* currentResolution = currentResolutionIndex >= 0 ? resolutionsStrs[currentResolutionIndex].c_str() : nullptr;
+				if (ImGui::BeginCombo("Resolution", currentResolution))
+				{
+					for (size_t n = 0; n < resolutionsStrs.size(); n++)
+					{
+						bool isSelected = currentResolution == resolutionsStrs[n].c_str();
+						if (ImGui::Selectable(resolutionsStrs[n].c_str(), isSelected))
 						{
-							currentRefreshRate = refreshRatesStrs[n].c_str();
-							vr::SetDisplayRefreshRate(displayRefreshRates[n]);
-							vrSettings->displayRefreshRate = (uint32_t) (displayRefreshRates[n] + 0.1f);
+							currentResolution = resolutionsStrs[n].c_str();
+							TFE_Settings::getTempSettings()->vrRequestedTargetSize = resolutions[n];
+							vrSettings->resolutionWidth = resolutions[n].x;
+							vrSettings->resolutionHeight = resolutions[n].y;
 						}
 
-						if (is_selected)
+						if (isSelected)
 						{
 							ImGui::SetItemDefaultFocus();
 						}
 					}
+
 					ImGui::EndCombo();
 				}
-				Tooltip("If you use SideQuest or any other app to change your display refresh rate changing it here may have no effect."
+			}
+
+			// display refresh rate
+			{
+				static std::vector<float> displayRefreshRates = vr::GetDisplayRefreshRates();
+				if (!displayRefreshRates.empty())
+				{
+					auto GetDisplayRefreshRatesStrs = []() -> std::vector<std::string> {
+						std::vector<std::string> displayRefreshRatesStrs;
+						for (float rate : displayRefreshRates)
+						{
+							displayRefreshRatesStrs.push_back(fmt::format("{} Hz", (uint32_t)(rate + 0.1f)));
+						}
+						return displayRefreshRatesStrs;
+						};
+					auto FindRefreshRate = [](float rate) -> size_t {
+						for (size_t i = 0; i < displayRefreshRates.size(); i++)
+						{
+							if ((uint32_t)(displayRefreshRates[i] + 0.1f) == (uint32_t)(rate + 0.1f))
+							{
+								return i;
+							}
+						}
+						return 0;
+						};
+					static const std::vector<std::string> refreshRatesStrs = GetDisplayRefreshRatesStrs();
+					static const char* currentRefreshRate = nullptr;
+					auto it = std::find_if(displayRefreshRates.begin(), displayRefreshRates.end(), [](float rate) { return rate == vr::GetDisplayRefreshRate(); });
+					const int currentRefreshRateIndex = (it != displayRefreshRates.end()) ? (int)(it - displayRefreshRates.begin()) : -1;
+					currentRefreshRate = currentRefreshRateIndex >= 0 ? refreshRatesStrs[currentRefreshRateIndex].c_str() : nullptr;
+					if (ImGui::BeginCombo("Refresh rate", currentRefreshRate))
+					{
+						for (size_t n = 0; n < refreshRatesStrs.size(); n++)
+						{
+							bool isSelected = (currentRefreshRate == refreshRatesStrs[n].c_str());
+							if (ImGui::Selectable(refreshRatesStrs[n].c_str(), isSelected))
+							{
+								currentRefreshRate = refreshRatesStrs[n].c_str();
+								vr::SetDisplayRefreshRate(displayRefreshRates[n]);
+								vrSettings->displayRefreshRate = (uint32_t)(displayRefreshRates[n] + 0.1f);
+							}
+
+							if (isSelected)
+							{
+								ImGui::SetItemDefaultFocus();
+							}
+						}
+						ImGui::EndCombo();
+					}
+					Tooltip("If you use SideQuest or any other app to change your display refresh rate changing it here may have no effect."
 						" To solve it close your SideQuest app & restart the headset.");
 
-				ImGui::Separator();
-				ImGui::NewLine();
+					ImGui::Separator();
+					ImGui::NewLine();
+				}
 			}
 		}
 

@@ -156,6 +156,9 @@ namespace vrw
 		virtual bool IsFeatureSupported(Feature feature) = 0;
 		virtual const char* GetRuntimeInfo() = 0;
 
+		virtual bool CreateSwapchain(const Vec2ui& size) = 0;
+		virtual const Vec2ui& GetMaxSwapchainTextureSize() = 0;
+		virtual const Vec2ui& GetRecommendedSwapchainTextureSize() = 0;
 		virtual const Vec2ui& GetSwapchainTextureSize() = 0;
 		virtual uint32_t GetSwapchainLength() = 0;
 		virtual uint32_t GetSwapchainTextures(const Texture** textures) = 0;

@@ -48,6 +48,7 @@ struct TFE_Settings_Temp
 	bool vrMultiview = false;
 	bool vrResetSettings = false;
 	bool vrViewDebugInfo = false;
+	Vec2ui vrRequestedTargetSize = { 0, 0 };
 };
 
 struct TFE_Settings_Window
@@ -357,6 +358,8 @@ struct TFE_Settings_Vr
 	float rightControllerRotationSensitivityHorizontal;
 
 	uint32_t displayRefreshRate;
+	uint32_t resolutionWidth;
+	uint32_t resolutionHeight;
 
 	// debug
 	bool viewLeftControllerInfo;

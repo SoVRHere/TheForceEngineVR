@@ -17,6 +17,7 @@ namespace vr
 {
 	vrw::VrWrapper* g_VrWrapper = nullptr;
 
+	Vec2ui			 									mRecommendedTargetSize{ 0, 0 };
 	Vec2ui			 									mTargetSize{ 0, 0 };
 
 	std::array<Mat4, Side::Count>						mProjection{ TFE_Math::getIdentityMatrix4(), TFE_Math::getIdentityMatrix4() };
@@ -170,6 +171,53 @@ namespace vr
 		}
 	}
 
+	void CreateRenderTargets()
+	{
+		for (size_t eye = 0; eye < Side::Count; eye++)
+		{
+			mRenderTargets[eye].clear();
+		}
+
+		std::vector<const vrw::Texture*> textures;
+		const uint32_t numTextures = g_VrWrapper->GetSwapchainTextures(nullptr);
+		textures.resize(numTextures);
+		g_VrWrapper->GetSwapchainTextures(textures.data());
+		const uint32_t swapchainLength = g_VrWrapper->GetSwapchainLength();
+		const vrw::Vec2ui size = g_VrWrapper->GetSwapchainTextureSize();
+		mTargetSize = { size.x, size.y };
+		const uint32_t width = mTargetSize.x;
+		const uint32_t height = mTargetSize.y;
+
+		bool useMultiview = swapchainLength == numTextures;
+
+		size_t textureIndex = 0;
+		const size_t bufferCount = useMultiview ? 1 : 2;
+		for (size_t eye = 0; eye < bufferCount; eye++)
+		{
+			mRenderTargets[eye].reserve(swapchainLength);
+			for (size_t i = 0; i < swapchainLength; i++, textureIndex++)
+			{
+				std::unique_ptr<TextureGpu> colorTexture = std::make_unique<TextureGpu>(textures[textureIndex]->glHandle); // color texture is owned by VR API
+				std::unique_ptr<TextureGpu> depthTexture = std::make_unique<TextureGpu>();
+				if (useMultiview)
+				{
+					colorTexture->createArray(width, height, 2, TEX_RGBA8); // TODO: use image.image (pixelFormat) format
+					depthTexture->createArray(width, height, 2, TEX_DEPTH24_STENCIL8);
+				}
+				else
+				{
+					colorTexture->create(width, height, TEX_RGBA8); // TODO: use image.image (pixelFormat) format
+					depthTexture->create(width, height, TEX_DEPTH24_STENCIL8);
+				}
+
+				auto renderTarget = std::make_unique<RenderTarget>();
+				TextureGpu* colorTexture_ = colorTexture.release();
+				renderTarget->create(1, &colorTexture_, depthTexture.release(), useMultiview);
+				mRenderTargets[eye].push_back(std::move(renderTarget));
+			}
+		}
+	}
+
 	bool Initialize(bool useMultiview)
 	{
 		vrw::VrWrapper::Options options{
@@ -197,42 +245,10 @@ namespace vr
 		if (g_VrWrapper)
 		{
 			// create render targets from swapchain images
-			std::vector<const vrw::Texture*> textures;
-			const uint32_t numTextures = g_VrWrapper->GetSwapchainTextures(nullptr);
-			textures.resize(numTextures);
-			g_VrWrapper->GetSwapchainTextures(textures.data());
-			const uint32_t swapchainLength = g_VrWrapper->GetSwapchainLength();
-			const vrw::Vec2ui size = g_VrWrapper->GetSwapchainTextureSize();
-			mTargetSize = { size.x, size.y };
-			const uint32_t width = mTargetSize.x;
-			const uint32_t height = mTargetSize.y;
+			CreateRenderTargets();
 
-			size_t textureIndex = 0;
-			const size_t bufferCount = useMultiview ? 1 : 2;
-			for (size_t eye = 0; eye < bufferCount; eye++)
-			{
-				mRenderTargets[eye].reserve(swapchainLength);
-				for (size_t i = 0; i < swapchainLength; i++, textureIndex++)
-				{
-					std::unique_ptr<TextureGpu> colorTexture = std::make_unique<TextureGpu>(textures[textureIndex]->glHandle); // color texture is owned by VR API
-					std::unique_ptr<TextureGpu> depthTexture = std::make_unique<TextureGpu>();
-					if (useMultiview)
-					{
-						colorTexture->createArray(width, height, 2, TEX_RGBA8); // TODO: use image.image (pixelFormat) format
-						depthTexture->createArray(width, height, 2, TEX_DEPTH24_STENCIL8);
-					}
-					else
-					{
-						colorTexture->create(width, height, TEX_RGBA8); // TODO: use image.image (pixelFormat) format
-						depthTexture->create(width, height, TEX_DEPTH24_STENCIL8);
-					}
-
-					auto renderTarget = std::make_unique<RenderTarget>();
-					TextureGpu* colorTexture_ = colorTexture.release();
-					renderTarget->create(1, &colorTexture_, depthTexture.release(), useMultiview);
-					mRenderTargets[eye].push_back(std::move(renderTarget));
-				}
-			}
+			auto size = g_VrWrapper->GetRecommendedSwapchainTextureSize();
+			mRecommendedTargetSize = { size.x, size.y };
 
 			// controllers
 			mControllerButtonPressed.fill(false);
@@ -260,6 +276,25 @@ namespace vr
 	const char* GetRuntimeInfo()
 	{
 		return g_VrWrapper ? g_VrWrapper->GetRuntimeInfo() : "not available";
+	}
+
+	void CreateSwapchain(const Vec2ui& size)
+	{
+		if (mTargetSize.x == size.x && mTargetSize.y == size.y)
+		{
+			return;
+		}
+
+		if (IsInitialized())
+		{
+			g_VrWrapper->CreateSwapchain({ size.x, size.y });
+			CreateRenderTargets();
+		}
+	}
+
+	const Vec2ui& GetRecommendedRenderTargetSize()
+	{
+		return mRecommendedTargetSize;
 	}
 
 	const Vec2ui& GetRenderTargetSize()

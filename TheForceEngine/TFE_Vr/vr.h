@@ -63,6 +63,8 @@ namespace vr
 	void Shutdown();
 	const char* GetRuntimeInfo();
 
+	void CreateSwapchain(const Vec2ui& size);
+	const Vec2ui& GetRecommendedRenderTargetSize();
 	const Vec2ui& GetRenderTargetSize();
 	RenderTarget& GetRenderTarget(Side eye);
 

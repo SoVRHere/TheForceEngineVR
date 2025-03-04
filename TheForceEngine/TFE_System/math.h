@@ -30,6 +30,9 @@ constexpr Vec4f operator-(const Vec4f& v) { return { -v.x, -v.y, -v.z, -v.w }; }
 constexpr bool operator==(const Vec2i& a, const Vec2i& b) { return a.x == b.x && a.y == b.y; }
 constexpr bool operator!=(const Vec2i& a, const Vec2i& b) { return !operator==(a, b); }
 
+constexpr bool operator==(const Vec2ui& a, const Vec2ui& b) { return a.x == b.x && a.y == b.y; }
+constexpr bool operator!=(const Vec2ui& a, const Vec2ui& b) { return !operator==(a, b); }
+
 namespace TFE_Math
 {
 	inline f32 sign(f32 x)
