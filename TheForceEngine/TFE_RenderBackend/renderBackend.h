@@ -92,6 +92,7 @@ namespace TFE_RenderBackend
 {
 	bool init(const WindowState& state);
 	void destroy();
+	void* getWindow();
 	bool getVsyncEnabled();
 	void enableVsync(bool enable);
 

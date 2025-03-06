@@ -346,6 +346,11 @@ namespace TFE_RenderBackend
 		m_window = nullptr;
 	}
 
+	void* getWindow()
+	{
+		return m_window;
+	}
+
 	bool getVsyncEnabled()
 	{
 		return SDL_GL_GetSwapInterval() > 0;
