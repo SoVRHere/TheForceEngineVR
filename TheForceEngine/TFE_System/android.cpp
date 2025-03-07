@@ -201,9 +201,9 @@ JNIEXPORT void JNICALL TFE_JAVA_INTERFACE(onCreateActivity)(JNIEnv* env, jclass 
 
 	if (removeData)
 	{
-		LOGI("Removing assets, keeping 'Dark Forces' & 'Mods' folders");
+		LOGI("Removing assets, keeping 'Dark Forces', 'TheForceEngine' & 'Mods' folders");
 		const fs::path external = fs::path{ SDL_AndroidGetExternalStoragePath() };
-		ClearDirectory(external, { external / "Dark Forces", external / "Mods" });
+		ClearDirectory(external, { external / "Dark Forces", external / "TheForceEngine", external / "Mods" });
 		std::ofstream file{versionFilePath, std::ios::trunc };
 		file << c_gitVersion;
 		file.close();

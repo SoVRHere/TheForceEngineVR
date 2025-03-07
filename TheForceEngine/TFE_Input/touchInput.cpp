@@ -499,7 +499,7 @@ namespace TFE_Input
 		const Vec2f displaySize = s_TouchContext->GetWindowSize();
 		//TFE_INFO("TOUCH", "displaySize=[{}, {}]", displaySize.x, displaySize.y);
 
-		const uint32_t windowFlags = ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBackground;
+		const uint32_t windowFlags = ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoScrollbar;
 		//ImGui::PushFont(fpsFont);
 		ImGui::SetNextWindowSize(displaySize);
 		ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f));

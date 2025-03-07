@@ -18,7 +18,7 @@
         <meta-data android:name="com.oculus.vr.focusaware" android:value="true"/>
 
         <activity
-            android:name="TheForceEngineVR"
+            android:name="TfeActivity"
             android:exported="true"
             android:screenOrientation="landscape">
 

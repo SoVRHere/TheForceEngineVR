@@ -69,7 +69,7 @@ namespace TFE_Input
 	Axis getControllerAnalogDown();
 	MouseButton getMouseButtonPressed();
 
-	void startTextInput();
+	void startTextInput(bool forceVirtualKeyboard);
 	void stopTextInput();
 	bool isTextInput();
 	

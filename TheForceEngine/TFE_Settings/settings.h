@@ -267,6 +267,8 @@ struct TFE_Settings_A11y
 	// Photosensitivity settings
 	bool disableScreenFlashes = false;
 	bool disablePlayerWeaponLighting = false;
+
+	bool forceVirtualKeyboard = false;
 };
 
 enum ModSettingOverride

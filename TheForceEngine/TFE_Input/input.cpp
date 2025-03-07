@@ -361,17 +361,22 @@ namespace TFE_Input
 		return s_bufferedKey[key];
 	}
 
-	void startTextInput()
+	void startTextInput(bool forceVirtualKeyboard)
 	{
+		if (forceVirtualKeyboard)
+		{
+			s_textInput = true;
+			return;
+		}
 #if defined(ENABLE_VR)
 		//if (TFE_Settings::getTempSettings()->vr && vr::IsVirtualKeyboardSupported())
 		//{
-		//	vr::ShowVirtualKeyboard(true);
+		//	vr::ShowVirtualKeyboard(true); // TODO: doesn't work yet
 		//	return;
 		//}
 		if (TFE_Settings::getTempSettings()->vr && !TFE_Settings::getVrSettings()->ignoreVrControllers)
 		{
-			s_textInput = true; // see VirtualKeyboard
+			s_textInput = true;
 		}
 #elif defined(ANDROID)
 		if (SDL_HasScreenKeyboardSupport())

@@ -693,6 +693,17 @@ namespace TFE_FrontEndUI
 			return false;
 		}
 
+		if (!TFE_Settings::getTempSettings()->vr)
+		{
+			// during New Agent we are in relative mode so we need hack mouse pos a little bit
+			if (TFE_Input::relativeModeEnabled())
+			{
+				s32 w, h;
+				TFE_Input::getMousePos(&w, &h);
+				ImGui::GetIO().MousePos = { (float)w, (float)h };
+			}
+		}
+
 		struct Key
 		{
 			const char* label;
@@ -838,7 +849,37 @@ namespace TFE_FrontEndUI
 		}
 		ImGui::End();
 
+		if (isEnter)
+		{
+			state.enabled = false;
+		}
+
 		return isEnter;
+	}
+
+	void drawCursor()
+	{
+#if defined(ANDROID) && !defined(ENABLE_VR)
+		static float radius = 5.0f * s_uiScale;
+
+		s32 w, h;
+		TFE_Input::getMousePos(&w, &h);
+		const ImVec2 cursorPos = { (float)w, (float)h };
+		ImGui::SetNextWindowPos(cursorPos - 0.5f * radius, ImGuiCond_Always);
+
+		const uint32_t windowFlags = ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing;
+		ImGui::SetNextWindowSize({ 1.0f + 2.0f * radius, 1.0f + 2.0f * radius });
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+
+		ImVec2 curPos = ImGui::GetCursorPos();
+		ImGui::Begin("##CURSOR_WINDOW", nullptr, windowFlags);
+
+		ImGui::GetForegroundDrawList()->AddCircleFilled(cursorPos + ImVec2{1.0f, 1.0f}, radius, IM_COL32(0, 0, 0, 255), 32);
+		ImGui::GetForegroundDrawList()->AddCircleFilled(cursorPos, radius, IM_COL32(255, 255, 255, 255), 32);
+
+		ImGui::End();
+		ImGui::PopStyleVar();
+#endif
 	}
 
 	void draw(bool drawFrontEnd, bool noGameData, bool setDefaults, bool showFps)
@@ -889,12 +930,13 @@ namespace TFE_FrontEndUI
 				s_virtualKeyboard.enabled = true;
 				s_virtualKeyboard.sendEvents = true;
 				ImGui::PushFont(s_dialogFont);
-				VirtualKeyboard(s_virtualKeyboard);
-				if (!s_virtualKeyboard.enabled)
+				if (VirtualKeyboard(s_virtualKeyboard))
 				{
 					TFE_Input::stopTextInput();
 				}
 				ImGui::PopFont();
+
+				drawCursor();
 			}
 
 			if (showFps) { drawFps(w); }
@@ -1298,6 +1340,8 @@ namespace TFE_FrontEndUI
 
 			ImGui::End();
 		}
+
+		drawCursor();
 	}
 
 	void manual()
@@ -1864,7 +1908,7 @@ namespace TFE_FrontEndUI
 			sprintf(s_saveGameConfirmMsg, "Overwrite Save '%s'?###SaveConfirm", prevName);
 		}
 
-		TFE_Input::startTextInput();
+		TFE_Input::startTextInput(TFE_Settings::getA11ySettings()->forceVirtualKeyboard);
 		s_virtualKeyboard.enabled = TFE_Input::isTextInput();
 
 		ImGui::OpenPopup(s_saveGameConfirmMsg);
@@ -2108,9 +2152,9 @@ namespace TFE_FrontEndUI
 					s_virtualKeyboard.text = s_newSaveName;
 					s_virtualKeyboard.maxTextLength = sizeof(s_newSaveName) - 1;
 					s_virtualKeyboard.sendEvents = false;
-					if (isEnter = VirtualKeyboard(s_virtualKeyboard); isEnter)
+					if (VirtualKeyboard(s_virtualKeyboard))
 					{
-						s_virtualKeyboard.enabled = false;
+						isEnter = true;
 					}
 					std::strcpy(s_newSaveName, s_virtualKeyboard.text.c_str());
 				}
@@ -3842,6 +3886,14 @@ namespace TFE_FrontEndUI
 		Tooltip("Disable screen flashes when taking damage or collecting powerups.");
 		ImGui::Checkbox("Disable weapon lighting", &a11ySettings->disablePlayerWeaponLighting);
 		Tooltip("Disable illumination around the player caused by firing weapons.");
+
+		ImGui::Dummy(ImVec2(0.0f, 10.0f));
+		ImGui::Separator();
+		ImGui::PushFont(s_dialogFont);
+		ImGui::LabelText("##ConfigLabel6", "Input");
+		ImGui::PopFont();
+		ImGui::Checkbox("Force virtual keyboard", &a11ySettings->forceVirtualKeyboard);
+		Tooltip("E.g. if you want to play with game controller only, no keyboard/mouse touching, always on in VR.");
 	}
 
 	void pickCurrentResolution()

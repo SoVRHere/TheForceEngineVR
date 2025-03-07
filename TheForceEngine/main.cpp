@@ -276,6 +276,55 @@ void handleEvent(const SDL_Event& Event)
 	}
 }
 
+// emulate mouse move/click by controller if in any menu,
+// ImGui works with SDL events, Agent Menu & PDA with TFE_Input
+void emulateMouseByController(s32 mouseAbsX, s32 mouseAbsY)
+{
+	if (s_inMenu && !TFE_Settings::getTempSettings()->vr)
+	{
+		s32 moveX = (s32)(5.0f * TFE_Input::getAxis(Axis::AXIS_RIGHT_X));
+		s32 moveY = -(s32)(5.0f * TFE_Input::getAxis(Axis::AXIS_RIGHT_Y));
+
+		if (moveX != 0 || moveY != 0)
+		{
+			DisplayInfo displayInfo;
+			TFE_RenderBackend::getDisplayInfo(&displayInfo);
+			SDL_Window* wnd = (SDL_Window*)TFE_RenderBackend::getWindow();
+			s32 posX = mouseAbsX + moveX, posY = mouseAbsY + moveY;
+			posX = std::clamp(posX, 0, (s32)displayInfo.width);
+			posY = std::clamp(posY, 0, (s32)displayInfo.height);
+			SDL_WarpMouseInWindow(wnd, posX, posY);
+			TFE_Input::setMousePos(posX, posY);
+		}
+
+		static bool buttonPressed = false;
+		if (TFE_Input::buttonDown(Button::CONTROLLER_BUTTON_A) || TFE_Input::getAxis(AXIS_RIGHT_TRIGGER) > 0.5f)
+		{
+			if (!buttonPressed)
+			{
+				SDL_Event event;
+				event.type = SDL_MOUSEBUTTONDOWN;
+				event.button.which = 0;
+				event.button.button = SDL_BUTTON_LEFT;
+				handleEvent(event);
+				buttonPressed = true;
+			}
+		}
+		else
+		{
+			if (buttonPressed)
+			{
+				SDL_Event event;
+				event.type = SDL_MOUSEBUTTONUP;
+				event.button.which = 0;
+				event.button.button = SDL_BUTTON_LEFT;
+				handleEvent(event);
+				buttonPressed = false;
+			}
+		}
+	}
+}
+
 bool sdlInit()
 {
 	const int code = SDL_Init(SDL_INIT_TIMER | SDL_INIT_VIDEO | SDL_INIT_EVENTS | SDL_INIT_GAMECONTROLLER | SDL_INIT_AUDIO);
@@ -909,51 +958,7 @@ int main(int argc, char* argv[])
 			TFE_Input::setMousePos(mouseAbsX, mouseAbsY);
 		}
 
-		// emulate mouse move by controller if in any menu,
-		// ImGui needs SDL events, Agent Menu & PDA needs TFE_Input
-		if (s_inMenu)// && !TFE_Settings::getTempSettings()->vr)
-		{
-			s32 moveX = (s32)(5.0f * TFE_Input::getAxis(Axis::AXIS_RIGHT_X));
-			s32 moveY = -(s32)(5.0f * TFE_Input::getAxis(Axis::AXIS_RIGHT_Y));
-			
-			if (moveX != 0 || moveY != 0)
-			{
-				DisplayInfo displayInfo;
-				TFE_RenderBackend::getDisplayInfo(&displayInfo);
-				SDL_Window* wnd = (SDL_Window*)TFE_RenderBackend::getWindow();
-				s32 posX = mouseAbsX + moveX, posY = mouseAbsY + moveY;
-				posX = std::clamp(posX, 0, (s32)displayInfo.width);
-				posY = std::clamp(posY, 0, (s32)displayInfo.height);
-				SDL_WarpMouseInWindow(wnd, posX, posY);
-				TFE_Input::setMousePos(posX, posY);
-			}
-
-			static bool buttonPressed = false;
-			if (TFE_Input::buttonDown(Button::CONTROLLER_BUTTON_A) || TFE_Input::getAxis(AXIS_RIGHT_TRIGGER) > 0.5f)
-			{
-				if (!buttonPressed)
-				{
-					SDL_Event event;
-					event.type = SDL_MOUSEBUTTONDOWN;
-					event.button.which = 0;
-					event.button.button = SDL_BUTTON_LEFT;
-					handleEvent(event);
-					buttonPressed = true;
-				}
-			}
-			else
-			{
-				if (buttonPressed)
-				{
-					SDL_Event event;
-					event.type = SDL_MOUSEBUTTONUP;
-					event.button.which = 0;
-					event.button.button = SDL_BUTTON_LEFT;
-					handleEvent(event);
-					buttonPressed = false;
-				}
-			}
-		}
+		emulateMouseByController(mouseAbsX, mouseAbsY);
 
 		inputMapping_updateInput();
 

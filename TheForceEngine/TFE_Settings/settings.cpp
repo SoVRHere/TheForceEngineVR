@@ -625,6 +625,8 @@ namespace TFE_Settings
 		writeKeyValue_Bool(settings, "enableHeadwave", s_a11ySettings.enableHeadwave);
 		writeKeyValue_Bool(settings, "disableScreenFlashes", s_a11ySettings.disableScreenFlashes);
 		writeKeyValue_Bool(settings, "disablePlayerWeaponLighting", s_a11ySettings.disablePlayerWeaponLighting);
+
+		writeKeyValue_Bool(settings, "forceVirtualKeyboard", s_a11ySettings.forceVirtualKeyboard);
 	}
 
 	void writeGameSettings(FileStream& settings)
@@ -1246,6 +1248,10 @@ namespace TFE_Settings
 		else if (strcasecmp("disablePlayerWeaponLighting", key) == 0)
 		{
 			s_a11ySettings.disablePlayerWeaponLighting = parseBool(value);
+		}
+		else if (strcasecmp("forceVirtualKeyboard", key) == 0)
+		{
+			s_a11ySettings.forceVirtualKeyboard = parseBool(value);
 		}
 	}
 
