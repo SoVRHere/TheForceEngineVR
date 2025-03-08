@@ -282,8 +282,9 @@ void emulateMouseByController(s32 mouseAbsX, s32 mouseAbsY)
 {
 	if (s_inMenu && !TFE_Settings::getTempSettings()->vr)
 	{
-		s32 moveX = (s32)(5.0f * TFE_Input::getAxis(Axis::AXIS_RIGHT_X));
-		s32 moveY = -(s32)(5.0f * TFE_Input::getAxis(Axis::AXIS_RIGHT_Y));
+		const f64 elapsed = TFE_System::getDeltaTime();
+		const s32 moveX = (s32)(600.0f * elapsed * TFE_Input::getAxis(Axis::AXIS_RIGHT_X));
+		const s32 moveY = -(s32)(600.0f * elapsed * TFE_Input::getAxis(Axis::AXIS_RIGHT_Y));
 
 		if (moveX != 0 || moveY != 0)
 		{

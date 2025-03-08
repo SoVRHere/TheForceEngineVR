@@ -409,6 +409,20 @@ namespace TFE_Input
 		return s_textInput;
 	}
 
+	bool isControllerConnected()
+	{
+		int numJoysticks = SDL_NumJoysticks();
+		for (int i = 0; i < numJoysticks; ++i)
+		{
+			if (SDL_IsGameController(i))
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
 	bool loadKeyNames(const char* path)
 	{
 		FileStream file;

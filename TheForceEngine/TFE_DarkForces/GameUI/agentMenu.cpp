@@ -296,7 +296,7 @@ namespace TFE_DarkForces
 				{
 					case AGENT_NEW:
 					{
-						TFE_Input::startTextInput(TFE_Settings::getA11ySettings()->forceVirtualKeyboard);
+						TFE_Input::startTextInput(TFE_Settings::getA11ySettings()->forceVirtualKeyboard && TFE_Input::isControllerConnected());
 						s_newAgentDlg = JTRUE;
 						memset(s_newAgentName, 0, 32);
 						s_editBox.cursor = 0;

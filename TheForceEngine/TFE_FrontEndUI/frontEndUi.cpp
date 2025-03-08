@@ -859,7 +859,18 @@ namespace TFE_FrontEndUI
 
 	void drawCursor()
 	{
-#if defined(ANDROID) && !defined(ENABLE_VR)
+		if (TFE_Settings::getTempSettings()->vr || !TFE_Input::isControllerConnected())
+		{
+			return;
+		}
+
+#if !defined(ANDROID)
+		if (!TFE_Input::relativeModeEnabled())
+		{	// no need as we have desktop cursor visible in non relative mode
+			return;
+		}
+#endif
+
 		static float radius = 5.0f * s_uiScale;
 
 		s32 w, h;
@@ -879,7 +890,6 @@ namespace TFE_FrontEndUI
 
 		ImGui::End();
 		ImGui::PopStyleVar();
-#endif
 	}
 
 	void draw(bool drawFrontEnd, bool noGameData, bool setDefaults, bool showFps)
@@ -930,7 +940,7 @@ namespace TFE_FrontEndUI
 				s_virtualKeyboard.enabled = true;
 				s_virtualKeyboard.sendEvents = true;
 				ImGui::PushFont(s_dialogFont);
-				if (VirtualKeyboard(s_virtualKeyboard))
+				if (VirtualKeyboard(s_virtualKeyboard) || !s_virtualKeyboard.enabled)
 				{
 					TFE_Input::stopTextInput();
 				}
@@ -1908,7 +1918,7 @@ namespace TFE_FrontEndUI
 			sprintf(s_saveGameConfirmMsg, "Overwrite Save '%s'?###SaveConfirm", prevName);
 		}
 
-		TFE_Input::startTextInput(TFE_Settings::getA11ySettings()->forceVirtualKeyboard);
+		TFE_Input::startTextInput(TFE_Settings::getA11ySettings()->forceVirtualKeyboard && TFE_Input::isControllerConnected());
 		s_virtualKeyboard.enabled = TFE_Input::isTextInput();
 
 		ImGui::OpenPopup(s_saveGameConfirmMsg);
@@ -3893,7 +3903,8 @@ namespace TFE_FrontEndUI
 		ImGui::LabelText("##ConfigLabel6", "Input");
 		ImGui::PopFont();
 		ImGui::Checkbox("Force virtual keyboard", &a11ySettings->forceVirtualKeyboard);
-		Tooltip("E.g. if you want to play with game controller only, no keyboard/mouse touching, always on in VR.");
+		Tooltip("E.g. if you want to play with game controller only, no keyboard/mouse touching, implicitly disabled when no game controller is connected"
+			", implicitly enabled in VR.");
 	}
 
 	void pickCurrentResolution()

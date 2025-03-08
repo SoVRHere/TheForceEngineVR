@@ -72,6 +72,7 @@ namespace TFE_Input
 	void startTextInput(bool forceVirtualKeyboard);
 	void stopTextInput();
 	bool isTextInput();
+	bool isControllerConnected();
 	
 	bool loadKeyNames(const char* path);
 	const char* getControllerAxisName(Axis axis);
