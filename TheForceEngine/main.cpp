@@ -643,6 +643,7 @@ void updateVR()
 			vr::CreateSwapchain(requestedSize);
 			TFE_Settings_Graphics* graphicsSettings = TFE_Settings::getGraphicsSettings();
 			graphicsSettings->gameResolution = { (s32)vr::GetRenderTargetSize().x, (s32)vr::GetRenderTargetSize().y };
+			TFE_RenderBackend::resize(graphicsSettings->gameResolution.x, graphicsSettings->gameResolution.y);
 
 			requestedSize = { 0, 0 };
 		}
