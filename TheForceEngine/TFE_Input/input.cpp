@@ -1,4 +1,5 @@
 #include <TFE_Input/input.h>
+#include <TFE_Input/touchInput.h>
 #include <TFE_FileSystem/filestream.h>
 #include <TFE_System/system.h>
 #include <TFE_System/parser.h>
@@ -112,6 +113,11 @@ namespace TFE_Input
 
 	void setMouseButtonDown(MouseButton button)
 	{
+		if (button < 0 || button >= MouseButton::MBUTTON_COUNT)
+		{
+			TFE_WARN("Input", "invalid button={}", EnumValue(button));
+			return;
+		}
 		if (!s_mouseDown[button])
 		{
 			s_mousePressed[button] = 1;
@@ -121,6 +127,11 @@ namespace TFE_Input
 
 	void setMouseButtonUp(MouseButton button)
 	{
+		if (button < 0 || button >= MouseButton::MBUTTON_COUNT)
+		{
+			TFE_WARN("Input", "invalid button={}", EnumValue(button));
+			return;
+		}
 		s_mouseDown[button] = 0;
 	}
 
@@ -197,6 +208,8 @@ namespace TFE_Input
 	{
 		s_mouseMoveAccum[0] = 0;
 		s_mouseMoveAccum[1] = 0;
+
+		resetActiveFingers();
 	}
 
 	void getMousePos(s32* x, s32* y)

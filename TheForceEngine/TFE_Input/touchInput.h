@@ -17,6 +17,7 @@ namespace TFE_Input
 	void destroyTouchControls();
 	void handleTouchEvents(const SDL_Event& event);
 	void drawTouchControls();
+	void resetActiveFingers();
 
 	using FingerID = SDL_FingerID;
 	constexpr FingerID InvalidFingerID = -9999;

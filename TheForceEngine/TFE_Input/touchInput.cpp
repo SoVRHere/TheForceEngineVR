@@ -29,7 +29,9 @@ namespace TFE_Input
 		float CmToPixels(float cms) const;
 		Vec2f CmToPixels(const Vec2f& cms) const;
 
+		void ResetActiveFingers();
 		void HandleEvents(const SDL_Event& event);
+
 
 	private:
 		bool mEnabled{ false };
@@ -514,6 +516,14 @@ namespace TFE_Input
 		//ImGui::PopFont();
 	}
 
+	void resetActiveFingers()
+	{
+		if (s_TouchContext)
+		{
+			s_TouchContext->ResetActiveFingers();
+		}
+	}
+
 	TouchContext::TouchContext(bool enable)
 		: mEnabled{ enable }
 		, mLastTouchTime{ Clock::now() }
@@ -570,6 +580,11 @@ namespace TFE_Input
 		return { CmToPixels(cms.x), CmToPixels(cms.y) };
 	}
 
+	void TouchContext::ResetActiveFingers()
+	{
+		mActiveFingers.clear();
+	}
+
 	void TouchContext::HandleEvents(const SDL_Event& event)
 	{
 		if (!mEnabled)
@@ -589,7 +604,7 @@ namespace TFE_Input
 			{
 				if (auto it = mActiveFingers.find(finger.fingerId); it != mActiveFingers.end())
 				{
-					TFE_ERROR("TOUCH", "finger {} is already down!", finger.fingerId);
+					TFE_WARN("TOUCH", "finger {} is already down!", finger.fingerId);
 					return;
 				}
 
@@ -622,7 +637,7 @@ namespace TFE_Input
 				}
 				else
 				{
-					TFE_ERROR("TOUCH", "finger {} not registered!", finger.fingerId);
+					TFE_WARN("TOUCH", "finger {} not registered!", finger.fingerId);
 				}
 			} break;
 			default:
@@ -689,7 +704,7 @@ namespace TFE_Input
 				}
 			} break;
 			default:
-				TFE_ERROR("TOUCH", "{}, finger state {} not handled", mName, EnumValue(finger.mState));
+				TFE_WARN("TOUCH", "{}, finger state {} not handled", mName, EnumValue(finger.mState));
 				break;
 		}
 
