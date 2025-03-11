@@ -64,7 +64,8 @@ public class AndroidActivity extends SDLActivity {
 //            }
         }
 
-        File externalDir = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), "TheForceEngine");
+        //File externalDir = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), "TheForceEngine");
+        File externalDir = new File(context.getExternalFilesDir(null), "TheForceEngine");
         String externalPublicDir = externalDir.getAbsolutePath();
         AndroidActivity.onCreateActivity((Activity)this, getAssets(), assetList, externalPublicDir);
     }

@@ -46,11 +46,11 @@ static std::string gExternalStorageDir; // public dir, not removed when uninstal
 
 namespace fs = std::filesystem;
 
-static void ClearDirectory(const fs::path& dir, std::vector<fs::path> keep)
+static void ClearDirectory(const fs::path& path, std::vector<fs::path> keep)
 {
-	if (fs::exists(dir) && fs::is_directory(dir))
+	if (fs::exists(path) && fs::is_directory(path))
 	{
-		for (const auto& entry : fs::directory_iterator(dir))
+		for (const auto& entry : fs::directory_iterator(path))
 		{
 			if (auto it = std::find_if(keep.begin(), keep.end(), [&entry](const fs::path& path) { return fs::equivalent(path, entry); }); it == keep.end())
 			{
@@ -58,13 +58,36 @@ static void ClearDirectory(const fs::path& dir, std::vector<fs::path> keep)
 				{
 					fs::remove_all(entry);
 				}
-				catch (const std::filesystem::filesystem_error &e)
+				catch (const fs::filesystem_error &e)
 				{
 					LOGI("clearing folder %s with error %s", entry.path().c_str(), e.what());
 				}
 			}
 		}
 	}
+}
+
+using IterateDirectoryCallback = std::function<bool(const fs::path& path)>;
+
+static bool IterateDirectory(const fs::path& path, const IterateDirectoryCallback& callback)
+{
+	for (const auto& entry : fs::directory_iterator(path))
+	{
+		if (!callback(entry.path()))
+		{
+			return false;
+		}
+
+		if (fs::is_directory(entry.path()))
+		{
+			if (!IterateDirectory(entry.path(), callback))
+			{
+				return false;
+			}
+		}
+	}
+
+	return true;
 }
 
 static void CopyNewAssets(AAssetManager* assetManager, const std::vector<std::string>& assetItems)
@@ -210,6 +233,19 @@ JNIEXPORT void JNICALL TFE_JAVA_INTERFACE(onCreateActivity)(JNIEnv* env, jclass 
 	}
 
 	CopyNewAssets(gAAssetManager, ListString2Cpp(env, assetList));
+
+//	fs::path inputDir = newUserPath;
+//	inputDir += "Input";
+//	//inputDir /= "../../TFEInput";
+//	inputDir = fs::absolute(inputDir);
+//	if (fs::is_directory(inputDir))
+//	{
+//		auto fn = [](const fs::path &path) {
+//			LOGI(fmt::format("iterate {}={}", fs::is_regular_file(path), path.string()).c_str());
+//			return true;
+//		};
+//		IterateDirectory(inputDir, fn);
+//	}
 }
 
 JNIEXPORT void JNICALL TFE_JAVA_INTERFACE(onDestroyActivity)(JNIEnv* env, jclass jcls)
