@@ -3398,8 +3398,10 @@ namespace TFE_FrontEndUI
 			ImGui::PushFont(s_dialogFont);
 			ImGui::LabelText("##ConfigLabel", "Controllers");
 			ImGui::PopFont();
+#if !defined(ANDROID)
 			ImGui::Checkbox("Ignore", &vrSettings->ignoreVrControllers);
 			Tooltip("Ignore if you want to play with mouse + keyboard/gamepad");
+#endif
 
 			if (!vrSettings->ignoreVrControllers)
 			{

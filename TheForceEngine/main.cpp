@@ -709,6 +709,9 @@ void overrideVRSettings(bool firstRun)
 		TFE_System::setVsync(false);
 
 		TFE_Settings_Vr* vrSettings = TFE_Settings::getVrSettings();
+#if defined(ANDROID)
+		vrSettings->ignoreVrControllers = false;
+#endif
 		if (vrSettings->displayRefreshRate > 0)
 		{
 			vr::SetDisplayRefreshRate((float)vrSettings->displayRefreshRate);

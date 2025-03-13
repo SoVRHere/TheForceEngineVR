@@ -473,18 +473,22 @@ namespace TFE_RenderBackend
 	{
 		TFE_Settings_Window* windowSettings = TFE_Settings::getWindowSettings();
 
-		m_windowState.width = width;
-		m_windowState.height = height;
-
-		windowSettings->width = width;
-		windowSettings->height = height;
-		if (!(m_windowState.flags & WINFLAG_FULLSCREEN))
+		// in VR we do not want to change window size
+		if (!TFE_Settings::getTempSettings()->vr)
 		{
-			m_windowState.baseWindowWidth = width;
-			m_windowState.baseWindowHeight = height;
+			m_windowState.width = width;
+			m_windowState.height = height;
 
-			windowSettings->baseWidth = width;
-			windowSettings->baseHeight = height;
+			windowSettings->width = width;
+			windowSettings->height = height;
+			if (!(m_windowState.flags & WINFLAG_FULLSCREEN))
+			{
+				m_windowState.baseWindowWidth = width;
+				m_windowState.baseWindowHeight = height;
+
+				windowSettings->baseWidth = width;
+				windowSettings->baseHeight = height;
+			}
 		}
 		glViewport(0, 0, width, height);
 		setupPostEffectChain(!s_useRenderTarget, s_bloomEnable);
