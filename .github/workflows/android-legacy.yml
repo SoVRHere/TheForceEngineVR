@@ -4,7 +4,7 @@ name: Android Legacy Build & publish version tagged commit
 
 on:
   push:
-    tags: ['v*.*.*-android-legacy'] # This triggers the workflow only on version tags like v1.0.0-android, v2.21.52-android, etc.
+    tags: ['v*.*.*-android-legacy'] # This triggers the workflow only on version tags like v1.0.0-android-legacy, v2.21.52-android-legacy, etc.
     # branches: [ "feature/vr" ]
   # pull_request:
      # branches: [ "feature/build_test" ]
@@ -55,6 +55,6 @@ jobs:
         GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
       with:
         upload_url: ${{steps.create_release.outputs.upload_url}}
-        asset_path: ./TheForceEngine/Android/tfe/build/outputs/apk/android/developer/tfe-androidLegacy-developer.apk  # Path to your artifact file(s)
+        asset_path: ./TheForceEngine/Android/tfe/build/outputs/apk/androidLegacy/developer/tfe-androidLegacy-developer.apk  # Path to your artifact file(s)
         asset_name: the-force-engine-android-legacy.apk  # Custom name for the artifact file
         asset_content_type: application/vnd.android.package-archive  # Adjust based on file type
