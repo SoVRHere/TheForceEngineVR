@@ -52,7 +52,22 @@ static void ClearDirectory(const fs::path& path, std::vector<fs::path> keep)
 	{
 		for (const auto& entry : fs::directory_iterator(path))
 		{
-			if (auto it = std::find_if(keep.begin(), keep.end(), [&entry](const fs::path& path) { return fs::equivalent(path, entry); }); it == keep.end())
+			if (auto it = std::find_if(keep.begin(), keep.end(), [&entry](const fs::path& path) {
+				if (!fs::exists(path))
+				{
+					return true;
+				}
+
+				bool res = false;
+				try
+				{
+					res = fs::equivalent(path, entry);
+				}
+				catch(const fs::filesystem_error &e)
+				{
+					LOGE("exception %s in fs::equivalent(%s, %s)", e.what(), path.c_str(), entry.path().c_str());
+				}
+				return res; }); it == keep.end())
 			{
 				try
 				{
@@ -60,7 +75,7 @@ static void ClearDirectory(const fs::path& path, std::vector<fs::path> keep)
 				}
 				catch (const fs::filesystem_error &e)
 				{
-					LOGI("clearing folder %s with error %s", entry.path().c_str(), e.what());
+					LOGE("exception %s in fs::remove_all(%s)", e.what(), entry.path().c_str());
 				}
 			}
 		}
