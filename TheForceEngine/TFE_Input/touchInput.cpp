@@ -317,8 +317,8 @@ namespace TFE_Input
 			constexpr float fromSide = 3.0f; // cm
 			constexpr float fromTop = 0.1f; // cm
 			constexpr float btnSize = 0.75f; // cm
-			const float btnLeftPosX = (displaySize.x - s_TouchContext->CmToPixels(fromSide + btnSize / 2.0f)) / displaySize.x;
-			const float btnRightPosX = s_TouchContext->CmToPixels(fromSide + btnSize / 2.0f) / displaySize.x;
+			const float btnLeftPosX = s_TouchContext->CmToPixels(fromSide + btnSize / 2.0f) / displaySize.x;
+			const float btnRightPosX = (displaySize.x - s_TouchContext->CmToPixels(fromSide + btnSize / 2.0f)) / displaySize.x;
 			const float btnPosY = s_TouchContext->CmToPixels(fromTop + btnSize / 2.0f) / displaySize.y;
 			const Vec2f btnLeftPos = { btnLeftPosX, btnPosY };
 			const Vec2f btnRightPos = { btnRightPosX, btnPosY };
