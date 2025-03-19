@@ -45,7 +45,7 @@ namespace TFE_RenderShared
 	static s32 s_screenSizePosId = -1;
 	static s32 s_frustumId = -1;
 	static s32 s_EyeId = -1;
-	static s32 s_mousePosId = -1;
+	//static s32 s_mousePosId = -1;
 	static s32 s_dotSizeId = -1;
 	static s32 s_dotColorId = -1;
 	static s32 s_ShiftId = -1;
@@ -92,7 +92,7 @@ namespace TFE_RenderShared
 		s_screenSizePosId = s_shader.getVariableId("ScreenSize");
 		s_frustumId = s_shader.getVariableId("Frustum");
 		s_EyeId = s_shader.getVariableId("Eye");
-		s_mousePosId = s_shader.getVariableId("MousePos");
+		//s_mousePosId = s_shader.getVariableId("MousePos");
 		s_dotSizeId = s_shader.getVariableId("DotSize");
 		s_dotColorId = s_shader.getVariableId("DotColor");
 		s_ShiftId = s_shader.getVariableId("Shift");
@@ -188,6 +188,8 @@ namespace TFE_RenderShared
 			const float ctrlIndexTrigger[2] = { ctrlLeftValid ? ctrlStateLeft.mIndexTrigger : 0.0f, ctrlRightValid ? ctrlStateRight.mIndexTrigger : 0.0f };
 
 			Vec2i mp = vr::GetPointerMousePos();
+			// NOTE: always hide the mouse cursor here as it's rendered in drawCursor() (frontEndUi.cpp),
+			// it's better solution as it's visible even if there is no ImGui geometry
 			if (vrSettings->ignoreVrControllers)
 			{
 				mp = { -100, -100 };
@@ -210,7 +212,7 @@ namespace TFE_RenderShared
 			};
 			s_shader.setVariableArray(s_dotColorId, SVT_VEC4, cols[0].m, 2);
 			const Vec2f poss[2] = { Vec2f{f32(io.MousePos.x), f32(io.MousePos.y)}, screenPos };
-			s_shader.setVariableArray(s_mousePosId, SVT_VEC2, poss[0].m, 2);
+			//s_shader.setVariableArray(s_mousePosId, SVT_VEC2, poss[0].m, 2);
 			s_shader.setVariable(s_ShiftId, SVT_VEC4, Vec4f{ screenToVr.shift.x, screenToVr.shift.y, screenToVr.shift.z, screenToVr.distance }.m);
 			s32 lock = screenToVr.lockToCamera ? 1 : 0;
 			s_shader.setVariable(s_LockToCameraId, SVT_ISCALAR, &lock);

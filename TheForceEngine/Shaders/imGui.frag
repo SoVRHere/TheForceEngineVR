@@ -3,7 +3,7 @@
 uniform sampler2D Image;
 #ifdef OPT_VR
 uniform float DotSize;
-uniform vec2 MousePos[2]; // mouse / pointer
+//uniform vec2 MousePos[2]; // mouse / pointer
 uniform vec4 DotColor[2]; // mouse / pointer
 uniform vec4 ClipRect;
 #endif
@@ -24,15 +24,15 @@ void main()
 	{
 		Out_Color = vec4(0.0);
 	}
-	else
-	if (length(MousePos[0] - Frag_ScreenCoord) < 0.5 * DotSize)
-	{
-		Out_Color = vec4(DotColor[0].xyz * DotColor[0].w + Out_Color.xyz * (1.0 - DotColor[0].w), Out_Color.w);
-	}
-	else
-	if (length(MousePos[1] - Frag_ScreenCoord) < 0.5 * DotSize)
-	{
-		Out_Color = vec4(DotColor[1].xyz * DotColor[1].w + Out_Color.xyz * (1.0 - DotColor[1].w), Out_Color.w);
-	}
+	//else
+	//if (length(MousePos[0] - Frag_ScreenCoord) < 0.5 * DotSize)
+	//{
+	//	Out_Color = vec4(DotColor[0].xyz * DotColor[0].w + Out_Color.xyz * (1.0 - DotColor[0].w), Out_Color.w);
+	//}
+	//else
+	//if (length(MousePos[1] - Frag_ScreenCoord) < 0.5 * DotSize)
+	//{
+	//	Out_Color = vec4(DotColor[1].xyz * DotColor[1].w + Out_Color.xyz * (1.0 - DotColor[1].w), Out_Color.w);
+	//}
 #endif
 }

@@ -859,7 +859,7 @@ namespace TFE_FrontEndUI
 
 	void drawCursor()
 	{
-		if (TFE_Settings::getTempSettings()->vr || !TFE_Input::isControllerConnected())
+		if (!TFE_Settings::getTempSettings()->vr && !TFE_Input::isControllerConnected())
 		{
 			return;
 		}
@@ -874,18 +874,29 @@ namespace TFE_FrontEndUI
 		static float radius = 5.0f * s_uiScale;
 
 		s32 w, h;
-		TFE_Input::getMousePos(&w, &h);
+#if defined(ENABLE_VR)
+		if (TFE_Settings::getTempSettings()->vr && !TFE_Settings::getVrSettings()->ignoreVrControllers)
+		{
+			const Vec2i mp = vr::GetPointerMousePos();
+			w = mp.x;
+			h = mp.y;
+		}
+		else
+#endif
+		{
+			TFE_Input::getMousePos(&w, &h);
+		}
 		const ImVec2 cursorPos = { (float)w, (float)h };
 		ImGui::SetNextWindowPos(cursorPos - 0.5f * radius, ImGuiCond_Always);
 
 		const uint32_t windowFlags = ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing;
-		ImGui::SetNextWindowSize({ 1.0f + 2.0f * radius, 1.0f + 2.0f * radius });
+		ImGui::SetNextWindowSize({ 1.0f + 2.0f * radius, 2.0f + 2.0f * radius });
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
 
 		ImVec2 curPos = ImGui::GetCursorPos();
 		ImGui::Begin("##CURSOR_WINDOW", nullptr, windowFlags);
 
-		ImGui::GetForegroundDrawList()->AddCircleFilled(cursorPos + ImVec2{1.0f, 1.0f}, radius, IM_COL32(0, 0, 0, 255), 32);
+		ImGui::GetForegroundDrawList()->AddCircleFilled(cursorPos + ImVec2{2.0f, 2.0f}, radius, IM_COL32(0, 0, 0, 255), 32);
 		ImGui::GetForegroundDrawList()->AddCircleFilled(cursorPos, radius, IM_COL32(255, 255, 255, 255), 32);
 
 		ImGui::End();
@@ -3314,7 +3325,7 @@ namespace TFE_FrontEndUI
 				auto it = std::find_if(resolutions.begin(), resolutions.end(), [&currentRes](const Vec2ui& res) { return res == currentRes; });
 				const int currentResolutionIndex = (it != resolutions.end()) ? (int)(it - resolutions.begin()) : -1;
 				const char* currentResolution = currentResolutionIndex >= 0 ? resolutionsStrs[currentResolutionIndex].c_str() : nullptr;
-				if (ImGui::BeginCombo("Resolution", currentResolution))
+				if (ImGui::BeginCombo("Resolution (per eye)", currentResolution))
 				{
 					for (size_t n = 0; n < resolutionsStrs.size(); n++)
 					{
@@ -3481,10 +3492,10 @@ namespace TFE_FrontEndUI
 		{
 			vrSettings->configToVr.shift.z = 0.5f * vrSettings->configToVr.distance;
 		}
-		ImGui::SliderFloat("Dot size", &vrSettings->configDotSize, 2.0f, 50.0f, "%.2f");
-		RGBAFields("Dot color", &vrSettings->configDotColorMouse);
-		//RGBAFields("Dot color pointer", &vrSettings->configDotColorPointer);
-		vrSettings->configDotColorPointer = vrSettings->configDotColorMouse;
+		//ImGui::SliderFloat("Dot size", &vrSettings->configDotSize, 2.0f, 50.0f, "%.2f");
+		//RGBAFields("Dot color", &vrSettings->configDotColorMouse);
+		////RGBAFields("Dot color pointer", &vrSettings->configDotColorPointer);
+		//vrSettings->configDotColorPointer = vrSettings->configDotColorMouse;
 		ImGui::Separator();
 
 		ScreenToVR("Automap", vrSettings->automapToVr);

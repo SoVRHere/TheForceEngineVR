@@ -280,18 +280,32 @@ void handleEvent(const SDL_Event& Event)
 // ImGui works with SDL events, Agent Menu & PDA with TFE_Input
 void emulateMouseByController(s32 mouseAbsX, s32 mouseAbsY)
 {
-	if (s_inMenu && !TFE_Settings::getTempSettings()->vr)
+	if (s_inMenu && (!TFE_Settings::getTempSettings()->vr || TFE_Settings::getVrSettings()->ignoreVrControllers))
 	{
-		const f64 elapsed = TFE_System::getDeltaTime();
-		const s32 moveX = (s32)(600.0f * elapsed * TFE_Input::getAxis(Axis::AXIS_RIGHT_X));
-		const s32 moveY = -(s32)(600.0f * elapsed * TFE_Input::getAxis(Axis::AXIS_RIGHT_Y));
+		const f32 elapsed = (f32)TFE_System::getDeltaTime();
+		const f32 moveX = 600.0f * elapsed * TFE_Input::getAxis(Axis::AXIS_RIGHT_X);
+		const f32 moveY = -600.0f * elapsed * TFE_Input::getAxis(Axis::AXIS_RIGHT_Y);
 
-		if (moveX != 0 || moveY != 0)
+		if ((s32)moveX != 0 || (s32)moveY != 0)
 		{
+			s32 posX, posY;
+			
 			DisplayInfo displayInfo;
 			TFE_RenderBackend::getDisplayInfo(&displayInfo);
 			SDL_Window* wnd = (SDL_Window*)TFE_RenderBackend::getWindow();
-			s32 posX = mouseAbsX + moveX, posY = mouseAbsY + moveY;
+			if (TFE_Settings::getTempSettings()->vr)
+			{
+				s32 w, h;
+				SDL_GetWindowSize(wnd, &w, &h);
+
+				posX = s32((mouseAbsX + moveX) * ((float)w / (float)displayInfo.width));
+				posY = s32((mouseAbsY + moveY) * ((float)h / (float)displayInfo.height));
+			}
+			else
+			{
+				posX = s32(mouseAbsX + moveX);
+				posY = s32(mouseAbsY + moveY);
+			}
 			posX = std::clamp(posX, 0, (s32)displayInfo.width);
 			posY = std::clamp(posY, 0, (s32)displayInfo.height);
 			SDL_WarpMouseInWindow(wnd, posX, posY);
