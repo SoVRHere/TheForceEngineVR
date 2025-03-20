@@ -9,9 +9,9 @@
 #include <assert.h>
 
 static std::vector<u8> s_workBuffer;
-const GLenum c_channelFormat[] = { GL_UNSIGNED_BYTE, GL_UNSIGNED_BYTE, GL_FLOAT, GL_FLOAT, GL_UNSIGNED_INT_24_8 };
-const GLenum c_internalFormat[] = { GL_RGBA8, GL_R8, GL_RGBA16F, GL_R16F, GL_DEPTH24_STENCIL8 };
-const GLenum c_baseFormat[] = { GL_RGBA, GL_RED, GL_RGBA, GL_RED, GL_DEPTH_STENCIL };
+const GLenum c_channelFormat[] = { GL_UNSIGNED_BYTE, GL_UNSIGNED_BYTE, GL_FLOAT, GL_FLOAT, GL_FLOAT, GL_UNSIGNED_INT_24_8 };
+const GLenum c_internalFormat[] = { GL_RGBA8, GL_R8, GL_RGBA16F, GL_R11F_G11F_B10F, GL_R16F, GL_DEPTH24_STENCIL8 };
+const GLenum c_baseFormat[] = { GL_RGBA, GL_RED, GL_RGBA, GL_RGB, GL_RED, GL_DEPTH_STENCIL };
 const GLenum c_channelCount[] = { 4, 1, 4, 1, 1 };
 const GLenum c_bytesPerChannel[] = {1, 1, 2, 2, 4 };
 

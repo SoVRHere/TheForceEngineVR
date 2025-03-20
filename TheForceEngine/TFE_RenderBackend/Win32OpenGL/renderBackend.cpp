@@ -1171,17 +1171,20 @@ namespace TFE_RenderBackend
 		s32 index = s_bloomBufferCount;
 		s_bloomBufferCount++;
 
+		//const TexFormat texFormat = TexFormat::TEX_RGBAF16;
+		const TexFormat texFormat = TexFormat::TEX_R11F_G11F_B10F;
+
 		if (TFE_Settings::getTempSettings()->vrMultiview)
 		{
 			s_bloomTextures[index] = new TextureGpu();
-			s_bloomTextures[index]->createArray(width, height, 2, TexFormat::TEX_RGBAF16, false, MAG_FILTER_LINEAR);
+			s_bloomTextures[index]->createArray(width, height, 2, texFormat, false, MAG_FILTER_LINEAR);
 			s_bloomTargets[index] = new RenderTarget();
 			s_bloomTargets[index]->create(1, &s_bloomTextures[index], nullptr, true);
 		}
 		else
 		{
 			s_bloomTextures[index] = new TextureGpu();
-			s_bloomTextures[index]->create(width, height, TexFormat::TEX_RGBAF16, false, MAG_FILTER_LINEAR);
+			s_bloomTextures[index]->create(width, height, texFormat, false, MAG_FILTER_LINEAR);
 			s_bloomTargets[index] = new RenderTarget();
 			s_bloomTargets[index]->create(1, &s_bloomTextures[index], false);
 		}
@@ -1204,14 +1207,14 @@ namespace TFE_RenderBackend
 			if (TFE_Settings::getTempSettings()->vrMultiview)
 			{
 				s_bloomTextures[index] = new TextureGpu();
-				s_bloomTextures[index]->createArray(width, height, 2, TexFormat::TEX_RGBAF16, false, MAG_FILTER_LINEAR);
+				s_bloomTextures[index]->createArray(width, height, 2, texFormat, false, MAG_FILTER_LINEAR);
 				s_bloomTargets[index] = new RenderTarget();
 				s_bloomTargets[index]->create(1, &s_bloomTextures[index], nullptr, true);
 			}
 			else
 			{
 				s_bloomTextures[index] = new TextureGpu();
-				s_bloomTextures[index]->create(width, height, TexFormat::TEX_RGBAF16, false, MAG_FILTER_LINEAR);
+				s_bloomTextures[index]->create(width, height, texFormat, false, MAG_FILTER_LINEAR);
 				s_bloomTargets[index] = new RenderTarget();
 				s_bloomTargets[index]->create(1, &s_bloomTextures[index], false);
 			}
@@ -1236,14 +1239,14 @@ namespace TFE_RenderBackend
 			if (TFE_Settings::getTempSettings()->vrMultiview)
 			{
 				s_bloomTextures[index] = new TextureGpu();
-				s_bloomTextures[index]->createArray(width, height, 2, TexFormat::TEX_RGBAF16, false, MAG_FILTER_LINEAR);
+				s_bloomTextures[index]->createArray(width, height, 2, texFormat, false, MAG_FILTER_LINEAR);
 				s_bloomTargets[index] = new RenderTarget();
 				s_bloomTargets[index]->create(1, &s_bloomTextures[index], nullptr, true);
 			}
 			else
 			{
 				s_bloomTextures[index] = new TextureGpu();
-				s_bloomTextures[index]->create(width, height, TexFormat::TEX_RGBAF16, false, MAG_FILTER_LINEAR);
+				s_bloomTextures[index]->create(width, height, texFormat, false, MAG_FILTER_LINEAR);
 				s_bloomTargets[index] = new RenderTarget();
 				s_bloomTargets[index]->create(1, &s_bloomTextures[index], false);
 			}
