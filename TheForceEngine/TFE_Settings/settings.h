@@ -343,6 +343,7 @@ struct TFE_Settings_Vr
 	ScreenToVr hudToVr;
 	ScreenToVr messagesToVr;
 	ScreenToVr weaponToVr;
+	ScreenToVr gasmaskToVr;
 	ScreenToVr configToVr;
 	f32 configDotSize;
 	RGBA configDotColorMouse;
@@ -378,7 +379,7 @@ struct TFE_Settings_Vr
 
 	void resetToDefaults();
 	void reset2DToDefaults();
-	void setPreset(Preset preset);
+	void set2DPreset(Preset preset);
 
 	static const std::vector<std::string> presets; // must match TFE_Settings_Vr::Preset
 };

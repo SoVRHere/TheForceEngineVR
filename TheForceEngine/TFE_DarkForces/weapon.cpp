@@ -1206,27 +1206,26 @@ namespace TFE_DarkForces
 		const fixed16_16 weaponLightingZDist  = FIXED(6);
 		const fixed16_16 gasmaskLightingZDist = FIXED(2);
 
-#if defined(ENABLE_VR)
-		ScopeFunctions scopeFuncs{
-			[]() {
-				if (TFE_Settings::getTempSettings()->vr)
-				{
-					const TFE_Settings_Vr::ScreenToVr& toVr = TFE_Settings::getVrSettings()->weaponToVr;
-					static Vec4f shift;
-					shift = { toVr.shift.x, toVr.shift.y, toVr.shift.z, toVr.distance };
-					TFE_Jedi::ShiftVR = &shift;
-					TFE_Jedi::LockToCameraVR = toVr.lockToCamera;
-				}
-			},
-			[]() {
-				TFE_Jedi::ShiftVR = nullptr;
-			},
-		};
-#endif
-
 		PlayerWeapon* weapon = s_curPlayerWeapon;
 		if (weapon && !s_weaponOffAnim)
 		{
+#if defined(ENABLE_VR)
+			ScopeFunctions scopeFuncs{
+				[]() {
+					if (TFE_Settings::getTempSettings()->vr)
+					{
+						const TFE_Settings_Vr::ScreenToVr& toVr = TFE_Settings::getVrSettings()->weaponToVr;
+						static Vec4f shift;
+						shift = { toVr.shift.x, toVr.shift.y, toVr.shift.z, toVr.distance };
+						TFE_Jedi::ShiftVR = &shift;
+						TFE_Jedi::LockToCameraVR = toVr.lockToCamera;
+					}
+				},
+				[]() {
+					TFE_Jedi::ShiftVR = nullptr;
+				},
+			};
+#endif
 			s32 x = weapon->xPos[weapon->frame];
 			s32 y = weapon->yPos[weapon->frame];
 			if (weapon->flags & 1)
@@ -1301,8 +1300,26 @@ namespace TFE_DarkForces
 
 		if (s_wearingGasmask)
 		{
+#if defined(ENABLE_VR)
+			ScopeFunctions scopeFuncs{
+				[]() {
+					if (TFE_Settings::getTempSettings()->vr)
+					{
+						const TFE_Settings_Vr::ScreenToVr& toVr = TFE_Settings::getVrSettings()->gasmaskToVr;
+						static Vec4f shift;
+						shift = { toVr.shift.x, toVr.shift.y, toVr.shift.z, toVr.distance };
+						TFE_Jedi::ShiftVR = &shift;
+						TFE_Jedi::LockToCameraVR = toVr.lockToCamera;
+					}
+				},
+				[]() {
+					TFE_Jedi::ShiftVR = nullptr;
+				},
+			};
+#endif
 			s32 x = 105;
 			s32 y = 141;
+			if (!TFE_Settings::getTempSettings()->vr) // no gas mask waving in VR
 			if (weapon)
 			{
 				x -= (weapon->xWaveOffset >> 3);

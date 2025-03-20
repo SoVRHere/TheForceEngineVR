@@ -3189,11 +3189,7 @@ namespace TFE_FrontEndUI
 		Tooltip(tip.c_str());
 		//	"  Z value is limited to 50% of Distance to avoid moving it behind the camera");
 		
-		if (disableLockToCamera)
-		{ 
-			screenToVr.lockToCamera = false;
-		}
-		else
+		if (!disableLockToCamera)
 		{
 			ImGui::Checkbox("Lock to Camera", &screenToVr.lockToCamera);
 		}
@@ -3450,7 +3446,7 @@ namespace TFE_FrontEndUI
 			"Then we can adjust its position in space by Shift.");
 
 		const std::vector<std::string>& presets = TFE_Settings_Vr::presets;
-		static const char* currentPreset = nullptr;
+		/*static */const char* currentPreset = nullptr;
 		if (ImGui::BeginCombo("Preset", currentPreset))
 		{
 			for (size_t n = 0; n < presets.size(); n++)
@@ -3458,8 +3454,8 @@ namespace TFE_FrontEndUI
 				bool is_selected = (currentPreset == presets[n].c_str());
 				if (ImGui::Selectable(presets[n].c_str(), is_selected))
 				{
-					currentPreset = presets[n].c_str();
-					vrSettings->setPreset((TFE_Settings_Vr::Preset)n);
+					//currentPreset = presets[n].c_str();
+					vrSettings->set2DPreset((TFE_Settings_Vr::Preset)n);
 				}
 
 				if (is_selected)
@@ -3484,7 +3480,12 @@ namespace TFE_FrontEndUI
 		ScreenToVR("Messages", vrSettings->messagesToVr);
 		ImGui::Separator();
 
+		vrSettings->weaponToVr.lockToCamera = false;
 		ScreenToVR("Weapon", vrSettings->weaponToVr, true);
+		ImGui::Separator();
+
+		vrSettings->gasmaskToVr.lockToCamera = true;
+		ScreenToVR("Gasmask", vrSettings->gasmaskToVr, true);
 		ImGui::Separator();
 
 		ScreenToVR("Config (ImGui)", vrSettings->configToVr);

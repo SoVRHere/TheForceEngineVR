@@ -42,10 +42,6 @@ void TFE_Settings_Vr::resetToDefaults()
 
 	viewLeftControllerInfo = false;
 	viewRightControllerInfo = false;
-
-	//// non Vr settings:
-	//TFE_Settings_Graphics* graphicsSettings = TFE_Settings::getGraphicsSettings();
-	//graphicsSettings->reticleEnable = false;
 }
 
 void TFE_Settings_Vr::reset2DToDefaults()
@@ -55,6 +51,7 @@ void TFE_Settings_Vr::reset2DToDefaults()
 	hudToVr = { 2.0f, { 0.0f, -2.0f, -4.0f }, true, false, false };
 	messagesToVr = { 2.0f, { 0.0f, 0.0f, -4.0f }, true, false, false };
 	weaponToVr = { 2.0f, { -1.0f, 0.0f, -2.0f }, false, false, false };
+	gasmaskToVr = { 2.0f, { -0.75f, 0.0f, -1.0f }, true, false, false };
 
 	configToVr = { 2.0f, { 0.0f, 0.0f, -4.0f }, false, true, true };
 	configDotSize = 20.0f;
@@ -67,7 +64,7 @@ void TFE_Settings_Vr::reset2DToDefaults()
 	overlayToVr = { 2.0f, { 0.0f, 0.0f, 0.0f }, false, false, false };
 }
 
-void TFE_Settings_Vr::setPreset(Preset preset)
+void TFE_Settings_Vr::set2DPreset(Preset preset)
 {
 	reset2DToDefaults();
 	switch (preset)
@@ -555,6 +552,7 @@ namespace TFE_Settings
 		writeScreenToVr("hudToVr", s_vrSettings.hudToVr);
 		writeScreenToVr("messagesToVr", s_vrSettings.messagesToVr);
 		writeScreenToVr("weaponToVr", s_vrSettings.weaponToVr);
+		writeScreenToVr("gasmaskToVr", s_vrSettings.gasmaskToVr);
 		writeScreenToVr("configToVr", s_vrSettings.configToVr);
 		writeKeyValue_Float(settings, "configDotSize", s_vrSettings.configDotSize);
 		writeKeyValue_RGBA(settings, "configDotColorMouse", s_vrSettings.configDotColorMouse);
@@ -1068,6 +1066,7 @@ namespace TFE_Settings
 		else if (parseScreenToVr("hudToVr", s_vrSettings.hudToVr)) {}
 		else if (parseScreenToVr("messagesToVr", s_vrSettings.messagesToVr)) {}
 		else if (parseScreenToVr("weaponToVr", s_vrSettings.weaponToVr)) {}
+		else if (parseScreenToVr("gasmaskToVr", s_vrSettings.gasmaskToVr)) {}
 		else if (parseScreenToVr("configToVr", s_vrSettings.configToVr)) {}
 		else if (strcasecmp("configDotSize", key) == 0)
 			s_vrSettings.configDotSize = parseFloat(value);
