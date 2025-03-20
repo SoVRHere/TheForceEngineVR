@@ -3,7 +3,6 @@
 #include <TFE_RenderBackend/shader.h>
 #include <TFE_RenderBackend/vertexBuffer.h>
 #include <TFE_RenderBackend/indexBuffer.h>
-#include <TFE_Settings/settings.h>
 #include <TFE_System/math.h>
 #include <TFE_System/system.h>
 #include <vector>
@@ -83,7 +82,7 @@ namespace TFE_RenderShared
 	   
 	bool loadShaders()
 	{
-		ShaderDefine defines[3 + 2/*VR*/] = {};
+		ShaderDefine defines[3] = {};
 		u32 defineCount = 0;
 		if (s_shaderSettings.bloom)
 		{
@@ -92,15 +91,6 @@ namespace TFE_RenderShared
 			defineCount++;
 		}
 
-		if (TFE_Settings::getTempSettings()->vr)
-		{
-			defines[defineCount++] = { "OPT_VR", "1" };
-			if (TFE_Settings::getTempSettings()->vrMultiview)
-			{
-				defines[defineCount++] = { "OPT_VR_MULTIVIEW", "1" };
-			}
-		}
-		
 		if (!s_shaderParam[LINE_DRAW_SOLID].shader.load("Shaders/line2d.vert", "Shaders/line2d.frag", defineCount, defines, SHADER_VER_STD))
 		{
 			return false;

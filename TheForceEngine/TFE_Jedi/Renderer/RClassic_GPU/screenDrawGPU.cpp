@@ -92,8 +92,6 @@ namespace TFE_Jedi
 	{
 		bool bloom = false;
 		bool trueColor = false;
-		bool vr = false;
-		bool vrMultiview = false;
 	};
 	static ShaderSettingsSDGPU s_shaderSettings = {};
 
@@ -117,14 +115,6 @@ namespace TFE_Jedi
 			defines[defineCount].name = "OPT_TRUE_COLOR";
 			defines[defineCount].value = "1";
 			defineCount++;
-		}
-		if (s_shaderSettings.vr)
-		{
-			defines[defineCount++] = { "OPT_VR", "1" };
-			if (s_shaderSettings.vrMultiview)
-			{
-				defines[defineCount++] = { "OPT_VR_MULTIVIEW", "1" };
-			}
 		}
 
 		if (!s_scrQuadShader.load("Shaders/gpu_render_quad.vert", "Shaders/gpu_render_quad.frag", defineCount, defines, SHADER_VER_STD))
@@ -186,8 +176,6 @@ namespace TFE_Jedi
 			// Shaders and variables.
 			s_shaderSettings.bloom = TFE_Settings::getGraphicsSettings()->bloomEnabled;
 			s_shaderSettings.trueColor = TFE_Settings::getGraphicsSettings()->colorMode == COLORMODE_TRUE_COLOR;
-			s_shaderSettings.vr = TFE_Settings::getTempSettings()->vr;
-			s_shaderSettings.vrMultiview = TFE_Settings::getTempSettings()->vrMultiview;
 			screenGPU_loadShaders();
 		}
 		s_initialized = true;
@@ -245,14 +233,10 @@ namespace TFE_Jedi
 		// Update the shaders if needed.
 		bool bloomEnabled = TFE_Settings::getGraphicsSettings()->bloomEnabled;
 		bool trueColorEnabled = TFE_Settings::getGraphicsSettings()->colorMode == COLORMODE_TRUE_COLOR;
-		if (s_shaderSettings.bloom != bloomEnabled || s_shaderSettings.trueColor != trueColorEnabled ||
-			s_shaderSettings.vr != TFE_Settings::getTempSettings()->vr ||
-			s_shaderSettings.vrMultiview != TFE_Settings::getTempSettings()->vrMultiview)
+		if (s_shaderSettings.bloom != bloomEnabled || s_shaderSettings.trueColor != trueColorEnabled)
 		{
 			s_shaderSettings.bloom = bloomEnabled;
 			s_shaderSettings.trueColor = trueColorEnabled;
-			s_shaderSettings.vr = TFE_Settings::getTempSettings()->vr;
-			s_shaderSettings.vrMultiview = TFE_Settings::getTempSettings()->vrMultiview;
 			screenGPU_loadShaders();
 		}
 	}

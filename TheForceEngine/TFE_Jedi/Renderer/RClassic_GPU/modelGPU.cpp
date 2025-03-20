@@ -92,8 +92,6 @@ namespace TFE_Jedi
 		bool trueColor = false;
 		bool ditheredBilinear = false;
 		bool bloom = false;
-		bool vr = false;
-		bool vrMultiview = false;
 	};
 	
 	static const AttributeMapping c_modelAttrMapping[] =
@@ -120,11 +118,8 @@ namespace TFE_Jedi
 	struct ShaderInputsMGPU
 	{
 		s32 cameraPosId;
-		const ShaderUniform* cameraPos{ nullptr };
 		s32 cameraViewId;
-		const ShaderUniform* cameraView{ nullptr };
 		s32 cameraProjId;
-		const ShaderUniform* cameraProj{ nullptr };
 		s32 cameraDirId;
 		s32 lightDataId;
 		s32 textureOffsetId;
@@ -203,9 +198,9 @@ namespace TFE_Jedi
 		}
 		shader->enableClipPlanes(MAX_PORTAL_PLANES);
 
-		s_shaderInputs[variant].cameraPosId   = shader->getVariableId("CameraPos", &s_shaderInputs[variant].cameraPos);
-		s_shaderInputs[variant].cameraViewId  = shader->getVariableId("CameraView", &s_shaderInputs[variant].cameraView);
-		s_shaderInputs[variant].cameraProjId  = shader->getVariableId("CameraProj", &s_shaderInputs[variant].cameraProj);
+		s_shaderInputs[variant].cameraPosId   = shader->getVariableId("CameraPos");
+		s_shaderInputs[variant].cameraViewId  = shader->getVariableId("CameraView");
+		s_shaderInputs[variant].cameraProjId  = shader->getVariableId("CameraProj");
 		s_shaderInputs[variant].cameraDirId   = shader->getVariableId("CameraDir");
 		s_shaderInputs[variant].cameraRightId = shader->getVariableId("CameraRight");
 		s_shaderInputs[variant].modelMtxId    = shader->getVariableId("ModelMtx");
@@ -250,9 +245,7 @@ namespace TFE_Jedi
 			s_shaderSettings.ditheredBilinear != graphics->ditheredBilinear ||
 			s_shaderSettings.bloom != graphics->bloomEnabled ||
 			s_shaderSettings.colormapInterp != (graphics->colorMode == COLORMODE_8BIT_INTERP) ||
-			s_shaderSettings.trueColor != (graphics->colorMode == COLORMODE_TRUE_COLOR) ||
-			s_shaderSettings.vr != TFE_Settings::getTempSettings()->vr ||
-			s_shaderSettings.vrMultiview != TFE_Settings::getTempSettings()->vrMultiview;
+			s_shaderSettings.trueColor != (graphics->colorMode == COLORMODE_TRUE_COLOR);
 		if (!needsUpdate) { return true; }
 
 		// Then update the settings.
@@ -260,8 +253,6 @@ namespace TFE_Jedi
 		s_shaderSettings.bloom = graphics->bloomEnabled;
 		s_shaderSettings.colormapInterp = (graphics->colorMode == COLORMODE_8BIT_INTERP);
 		s_shaderSettings.trueColor = (graphics->colorMode == COLORMODE_TRUE_COLOR);
-		s_shaderSettings.vr = TFE_Settings::getTempSettings()->vr;
-		s_shaderSettings.vrMultiview = TFE_Settings::getTempSettings()->vrMultiview;
 
 		ShaderDefine defines[16] = {};
 
@@ -293,14 +284,6 @@ namespace TFE_Jedi
 			defines[defineCount].name = "OPT_TRUE_COLOR";
 			defines[defineCount].value = "1";
 			defineCount++;
-		}
-		if (s_shaderSettings.vr)
-		{
-			defines[defineCount++] = { "OPT_VR", "1" };
-			if (s_shaderSettings.vrMultiview)
-			{
-				defines[defineCount++] = { "OPT_VR_MULTIVIEW", "1" };
-			}
 		}
 
 		bool result = true;

@@ -16,20 +16,8 @@ void Overlay::destroy()
 
 bool Overlay::buildShaders()
 {
-	ShaderDefine defines[2] = {};
-	u32 defineCount = 0;
-
-	if (TFE_Settings::getTempSettings()->vr)
-	{
-		defines[defineCount++] = { "OPT_VR", "1" };
-		if (TFE_Settings::getTempSettings()->vrMultiview)
-		{
-			defines[defineCount++] = { "OPT_VR_MULTIVIEW", "1" };
-		}
-	}
-
 	// Base shader.
-	m_overlayShader.load("Shaders/overlay.vert", "Shaders/overlay.frag", defineCount, defines, SHADER_VER_STD);
+	m_overlayShader.load("Shaders/overlay.vert", "Shaders/overlay.frag");
 	m_overlayShader.bindTextureNameToSlot("Image", 0);
 	m_scaleOffsetId = m_overlayShader.getVariableId("ScaleOffset");
 	m_tintId = m_overlayShader.getVariableId("Tint");

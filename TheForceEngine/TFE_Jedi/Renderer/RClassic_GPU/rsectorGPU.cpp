@@ -96,11 +96,8 @@ namespace TFE_Jedi
 	struct ShaderInputsGPU
 	{
 		s32 cameraPosId;
-		const ShaderUniform* cameraPos{ nullptr };
 		s32 cameraViewId;
-		const ShaderUniform* cameraView{ nullptr };
 		s32 cameraProjId;
-		const ShaderUniform* cameraProj{ nullptr };
 		s32 cameraDirId;
 		s32 lightDataId;
 		s32 globalLightingId;
@@ -156,8 +153,6 @@ namespace TFE_Jedi
 		bool ditheredBilinear = false;
 		bool bloom = false;
 		bool trueColor = false;
-		bool vr = false;
-		bool vrMultiview = false;
 	};
 
 	static ShaderSettingsSGPU s_shaderSettings = {};
@@ -184,9 +179,9 @@ namespace TFE_Jedi
 		}
 		s_spriteShader.enableClipPlanes(MAX_PORTAL_PLANES);
 
-		s_shaderInputs[SPRITE_PASS].cameraPosId  = s_spriteShader.getVariableId("CameraPos", &s_shaderInputs[SPRITE_PASS].cameraPos);
-		s_shaderInputs[SPRITE_PASS].cameraViewId = s_spriteShader.getVariableId("CameraView", &s_shaderInputs[SPRITE_PASS].cameraView);
-		s_shaderInputs[SPRITE_PASS].cameraProjId = s_spriteShader.getVariableId("CameraProj", &s_shaderInputs[SPRITE_PASS].cameraProj);
+		s_shaderInputs[SPRITE_PASS].cameraPosId  = s_spriteShader.getVariableId("CameraPos");
+		s_shaderInputs[SPRITE_PASS].cameraViewId = s_spriteShader.getVariableId("CameraView");
+		s_shaderInputs[SPRITE_PASS].cameraProjId = s_spriteShader.getVariableId("CameraProj");
 		s_shaderInputs[SPRITE_PASS].cameraDirId  = s_spriteShader.getVariableId("CameraDir");
 		s_shaderInputs[SPRITE_PASS].lightDataId  = s_spriteShader.getVariableId("LightData");
 		s_shaderInputs[SPRITE_PASS].globalLightingId = s_spriteShader.getVariableId("GlobalLightData");
@@ -220,9 +215,9 @@ namespace TFE_Jedi
 		}
 		s_wallShader[index].enableClipPlanes(MAX_PORTAL_PLANES);
 
-		s_shaderInputs[index].cameraPosId  = s_wallShader[index].getVariableId("CameraPos", &s_shaderInputs[index].cameraPos);
-		s_shaderInputs[index].cameraViewId = s_wallShader[index].getVariableId("CameraView", &s_shaderInputs[index].cameraView);
-		s_shaderInputs[index].cameraProjId = s_wallShader[index].getVariableId("CameraProj", &s_shaderInputs[index].cameraProj);
+		s_shaderInputs[index].cameraPosId  = s_wallShader[index].getVariableId("CameraPos");
+		s_shaderInputs[index].cameraViewId = s_wallShader[index].getVariableId("CameraView");
+		s_shaderInputs[index].cameraProjId = s_wallShader[index].getVariableId("CameraProj");
 		s_shaderInputs[index].cameraDirId  = s_wallShader[index].getVariableId("CameraDir");
 		s_shaderInputs[index].lightDataId  = s_wallShader[index].getVariableId("LightData");
 		s_shaderInputs[index].globalLightingId = s_wallShader[index].getVariableId("GlobalLightData");
@@ -806,9 +801,7 @@ namespace TFE_Jedi
 			s_shaderSettings.ditheredBilinear != graphics->ditheredBilinear ||
 			s_shaderSettings.bloom != graphics->bloomEnabled ||
 			s_shaderSettings.colormapInterp != (graphics->colorMode == COLORMODE_8BIT_INTERP) ||
-			s_shaderSettings.trueColor != (graphics->colorMode == COLORMODE_TRUE_COLOR) ||
-			s_shaderSettings.vr != TFE_Settings::getTempSettings()->vr ||
-			s_shaderSettings.vrMultiview != TFE_Settings::getTempSettings()->vrMultiview;
+			s_shaderSettings.trueColor != (graphics->colorMode == COLORMODE_TRUE_COLOR);
 		if (!needsUpdate) { return true; }
 
 		// Then update the settings.
@@ -817,8 +810,6 @@ namespace TFE_Jedi
 		s_shaderSettings.bloom = graphics->bloomEnabled;
 		s_shaderSettings.colormapInterp = (graphics->colorMode == COLORMODE_8BIT_INTERP);
 		s_shaderSettings.trueColor = (graphics->colorMode == COLORMODE_TRUE_COLOR);
-		s_shaderSettings.vr = TFE_Settings::getTempSettings()->vr;
-		s_shaderSettings.vrMultiview = TFE_Settings::getTempSettings()->vrMultiview;
 
 		// Update the color map based on interpolation or true color settings.
 		updateColorMap();
@@ -2232,14 +2223,6 @@ namespace TFE_Jedi
 			defines[defineCount].value = "1";
 			defineCount++;
 		}
-		if (s_shaderSettings.vr)
-		{
-			defines[defineCount++] = { "OPT_VR", "1" };
-			if (s_shaderSettings.vrMultiview)
-			{
-				defines[defineCount++] = { "OPT_VR_MULTIVIEW", "1" };
-			}
-		}
 		bool success = loadShaderVariant(0, defineCount, defines);
 
 		// Load the transparent version of the shader.
@@ -2274,14 +2257,6 @@ namespace TFE_Jedi
 			defines[defineCount].value = "1";
 			defineCount++;
 		}
-		if (s_shaderSettings.vr)
-		{
-			defines[defineCount++] = { "OPT_VR", "1" };
-			if (s_shaderSettings.vrMultiview)
-			{
-				defines[defineCount++] = { "OPT_VR_MULTIVIEW", "1" };
-			}
-		}
 		success |= loadShaderVariant(1, defineCount, defines);
 
 		defineCount = 0;
@@ -2312,14 +2287,6 @@ namespace TFE_Jedi
 			defines[defineCount].name = "OPT_TRUE_COLOR";
 			defines[defineCount].value = "1";
 			defineCount++;
-		}
-		if (s_shaderSettings.vr)
-		{
-			defines[defineCount++] = { "OPT_VR", "1" };
-			if (s_shaderSettings.vrMultiview)
-			{
-				defines[defineCount++] = { "OPT_VR_MULTIVIEW", "1" };
-			}
 		}
 		success |= loadSpriteShader(defineCount, defines);
 

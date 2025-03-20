@@ -4,7 +4,6 @@
 #include <TFE_RenderBackend/vertexBuffer.h>
 #include <TFE_RenderBackend/indexBuffer.h>
 #include <TFE_System/system.h>
-#include <TFE_Settings/settings.h>
 #include <TFE_System/math.h>
 #include <TFE_Vr/vr.h>
 #include <TFE_Ui/imGUI/imgui.h>
@@ -68,18 +67,7 @@ namespace TFE_RenderShared
 		ImGuiIO& io = ImGui::GetIO();
 		io.BackendRendererName = "TFE_imgui_renderer";
 
-		u32 defineCount = 0;
-		ShaderDefine defines[2];
-		if (TFE_Settings::getTempSettings()->vr)
-		{
-			defines[defineCount++] = { "OPT_VR", "1" };
-			if (TFE_Settings::getTempSettings()->vrMultiview)
-			{
-				defines[defineCount++] = { "OPT_VR_MULTIVIEW", "1" };
-			}
-		}
-
-		if (!s_shader.load("Shaders/imGui.vert", "Shaders/imGui.frag", defineCount, defines, SHADER_VER_STD))
+		if (!s_shader.load("Shaders/imGui.vert", "Shaders/imGui.frag", 0, nullptr, SHADER_VER_STD))
 		{
 			return false;
 		}

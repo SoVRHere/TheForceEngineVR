@@ -43,66 +43,43 @@ void Blit::destroy()
 		m_featureShaders[i].destroy();
 	}
 }
-u32 addVRDefines(size_t index, ShaderDefine defines[])
-{
-	u32 added = 0;
-	if (TFE_Settings::getTempSettings()->vr)
-	{
-		defines[index++] = { "OPT_VR", "1" };
-		added++;
-
-		if (TFE_Settings::getTempSettings()->vrMultiview)
-		{
-			defines[index++] = { "OPT_VR_MULTIVIEW", "1" };
-			added++;
-		}
-	}
-	return added;
-}
 
 bool Blit::buildShaders()
 {
-	ShaderDefine defines[BLIT_FEATURE_COUNT + 2/*VR*/];
-
 	// Base shader.
-	u32 added = addVRDefines(0, defines);
-	m_featureShaders[0].load("Shaders/blit.vert", "Shaders/blit.frag", added, defines, SHADER_VER_STD);
+	m_featureShaders[0].load("Shaders/blit.vert", "Shaders/blit.frag");
 	m_featureShaders[0].bindTextureNameToSlot("VirtualDisplay", 0);
 
+	ShaderDefine defines[BLIT_FEATURE_COUNT];
 	// BLIT_GPU_COLOR_CONVERSION feature
 	defines[0] = { "ENABLE_GPU_COLOR_CONVERSION", "1" };
-	added = addVRDefines(1, defines);
-	m_featureShaders[1].load("Shaders/blit.vert", "Shaders/blit.frag", 1 + added, defines, SHADER_VER_STD);
+	m_featureShaders[1].load("Shaders/blit.vert", "Shaders/blit.frag", 1, defines);
 	m_featureShaders[1].bindTextureNameToSlot("VirtualDisplay", 0);
 	m_featureShaders[1].bindTextureNameToSlot("Palette", 1);
 
 	// BLIT_GPU_COLOR_CORRECTION feature
 	defines[0] = { "ENABLE_GPU_COLOR_CORRECTION", "1" };
-	added = addVRDefines(1, defines);
-	m_featureShaders[2].load("Shaders/blit.vert", "Shaders/blit.frag", 1 + added, defines, SHADER_VER_STD);
+	m_featureShaders[2].load("Shaders/blit.vert", "Shaders/blit.frag", 1, defines);
 	m_featureShaders[2].bindTextureNameToSlot("VirtualDisplay", 0);
 
 	// BLIT_GPU_COLOR_CONVERSION + BLIT_GPU_COLOR_CORRECTION features
 	defines[0] = { "ENABLE_GPU_COLOR_CONVERSION", "1" };
 	defines[1] = { "ENABLE_GPU_COLOR_CORRECTION", "1" };
-	added = addVRDefines(2, defines);
-	m_featureShaders[3].load("Shaders/blit.vert", "Shaders/blit.frag", 2 + added, defines, SHADER_VER_STD);
+	m_featureShaders[3].load("Shaders/blit.vert", "Shaders/blit.frag", 2, defines);
 	m_featureShaders[3].bindTextureNameToSlot("VirtualDisplay", 0);
 	m_featureShaders[3].bindTextureNameToSlot("Palette", 1);
 
 
 	// BLIT_BLOOM feature
 	defines[0] = { "ENABLE_BLOOM", "1" };
-	added = addVRDefines(1, defines);
-	m_featureShaders[4].load("Shaders/blit.vert", "Shaders/blit.frag", 1 + added, defines, SHADER_VER_STD);
+	m_featureShaders[4].load("Shaders/blit.vert", "Shaders/blit.frag", 1, defines);
 	m_featureShaders[4].bindTextureNameToSlot("VirtualDisplay", 0);
 	m_featureShaders[4].bindTextureNameToSlot("Bloom", 1);
 
 	// BLIT_BLOOM + BLIT_GPU_COLOR_CORRECTION feature
 	defines[0] = { "ENABLE_BLOOM", "1" };
 	defines[1] = { "ENABLE_GPU_COLOR_CORRECTION", "1" };
-	added = addVRDefines(2, defines);
-	m_featureShaders[5].load("Shaders/blit.vert", "Shaders/blit.frag", 2 + added, defines, SHADER_VER_STD);
+	m_featureShaders[5].load("Shaders/blit.vert", "Shaders/blit.frag", 2, defines);
 	m_featureShaders[5].bindTextureNameToSlot("VirtualDisplay", 0);
 	m_featureShaders[5].bindTextureNameToSlot("Bloom", 1);
 

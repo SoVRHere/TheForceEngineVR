@@ -159,6 +159,16 @@ bool Shader::create(const char* vertexShaderGLSL, const char* fragmentShaderGLSL
 #endif
 		vertex_shader_parts.push_back(vertexShaderDefine);
 		vertex_shader_parts.push_back(defaultPrecisions);
+
+		if (TFE_Settings::getTempSettings()->vr)
+		{
+			vertex_shader_parts.push_back("#define OPT_VR 1\r\n");
+			if (TFE_Settings::getTempSettings()->vrMultiview)
+			{
+				vertex_shader_parts.push_back("#define OPT_VR_MULTIVIEW 1\r\n");
+			}
+		}
+
 		if (defineString)
 		{
 			vertex_shader_parts.push_back(defineString);
@@ -198,6 +208,16 @@ bool Shader::create(const char* vertexShaderGLSL, const char* fragmentShaderGLSL
 #endif
 		fragment_shader_parts.push_back(fragmentShaderDefine);
 		fragment_shader_parts.push_back(defaultPrecisions);
+
+		if (TFE_Settings::getTempSettings()->vr)
+		{
+			fragment_shader_parts.push_back("#define OPT_VR 1\r\n");
+			if (TFE_Settings::getTempSettings()->vrMultiview)
+			{
+				fragment_shader_parts.push_back("#define OPT_VR_MULTIVIEW 1\r\n");
+			}
+		}
+
 		if (defineString)
 		{
 			fragment_shader_parts.push_back(defineString);
