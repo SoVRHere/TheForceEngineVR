@@ -274,13 +274,15 @@ namespace TFE_RenderBackend
 		s_postEffectBlit->init();
 		s_postEffectBlit->enableFeatures(BLIT_GPU_COLOR_CONVERSION);
 
-		s_bloomTheshold = new BloomThreshold();
+		bool optimized = TFE_Settings::getGraphicsSettings()->bloomUseOptimizedShaders;
+
+		s_bloomTheshold = new BloomThreshold{ optimized };
 		s_bloomTheshold->init();
 
-		s_bloomDownsample = new BloomDownsample();
+		s_bloomDownsample = new BloomDownsample{ optimized };
 		s_bloomDownsample->init();
 
-		s_bloomMerge = new BloomMerge();
+		s_bloomMerge = new BloomMerge{ optimized /*TODO: ignored inside*/};
 		s_bloomMerge->init();
 		
 		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
@@ -419,6 +421,7 @@ namespace TFE_RenderBackend
 				vr::Commit(vr::Side::Left);
 				vr::SubmitFrame();
 				TFE_RenderBackend::s_VRUpdateStatus = vr::UpdateStatus::ShouldNotRender;
+				//TFE_RenderBackend::invalidateRenderTarget(); TODO:
 			}
 		}
 		else // to be able to capture frame in NVIDIA Nsight we have to swap buffers or change Frame Delimiter in Nsight settings
@@ -1047,6 +1050,15 @@ namespace TFE_RenderBackend
 		}
 	}
 
+	void invalidateRenderTarget()
+	{
+		if (TFE_Settings::getTempSettings()->vr)
+		{
+			RenderTarget& renderTarget = vr::GetRenderTarget(vr::Side::Left);
+			renderTarget.invalidate();
+		}
+	}
+
 	void setViewport(s32 x, s32 y, s32 w, s32 h)
 	{
 		glViewport(x, y, w, h);
@@ -1171,8 +1183,7 @@ namespace TFE_RenderBackend
 		s32 index = s_bloomBufferCount;
 		s_bloomBufferCount++;
 
-		//const TexFormat texFormat = TexFormat::TEX_RGBAF16;
-		const TexFormat texFormat = TexFormat::TEX_R11F_G11F_B10F;
+		const TexFormat texFormat = TFE_Settings::getGraphicsSettings()->bloomUseHalfFloatFormat ? TexFormat::TEX_R11F_G11F_B10F : TexFormat::TEX_RGBAF16;
 
 		if (TFE_Settings::getTempSettings()->vrMultiview)
 		{
@@ -1345,6 +1356,25 @@ namespace TFE_RenderBackend
 			};
 			TFE_PostProcess::appendEffect(s_postEffectBlit, TFE_ARRAYSIZE(blitInputs), blitInputs, nullptr, x, y, w, h);
 		}
+	}
+
+	void resetBloom()
+	{
+		bool optimized = TFE_Settings::getGraphicsSettings()->bloomUseOptimizedShaders;
+
+		delete s_bloomTheshold;
+		s_bloomTheshold = new BloomThreshold{ optimized };
+		s_bloomTheshold->init();
+
+		delete s_bloomDownsample;
+		s_bloomDownsample = new BloomDownsample{ optimized };
+		s_bloomDownsample->init();
+
+		delete s_bloomMerge;
+		s_bloomMerge = new BloomMerge{ optimized /*TODO: ignored inside*/ };
+		s_bloomMerge->init();
+
+		setupPostEffectChain(false, TFE_Settings::getGraphicsSettings()->bloomEnabled);
 	}
 
 	void updateVRCamera()

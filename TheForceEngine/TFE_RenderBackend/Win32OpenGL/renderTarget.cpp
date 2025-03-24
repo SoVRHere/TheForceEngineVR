@@ -150,6 +150,23 @@ void RenderTarget::bind()
 	OpenGL_Debug::CheckRenderTargetStatus(GL_FRAMEBUFFER);
 }
 
+void RenderTarget::invalidate()
+{
+	glBindFramebuffer(GL_FRAMEBUFFER, m_gpuHandle);
+	GLsizei numAttachments = 0;
+	GLenum attachments[8];
+	for (u32 i = 0; i < m_textureCount; i++)
+	{
+		attachments[numAttachments++] = GL_COLOR_ATTACHMENT0 + i;
+	}
+	if (m_depthBufferHandle || m_depth)
+	{
+		attachments[numAttachments++] = GL_DEPTH_STENCIL_ATTACHMENT;
+	}
+	glInvalidateFramebuffer(GL_FRAMEBUFFER, numAttachments, attachments);
+	TFE_ASSERT_GL;
+}
+
 void RenderTarget::clear(const f32* color, f32 depth, u8 stencil, bool clearColor)
 {
 	OpenGL_Debug::CheckRenderTargetStatus(GL_FRAMEBUFFER);

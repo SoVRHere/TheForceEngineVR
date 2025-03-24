@@ -41,4 +41,7 @@ public:
 public:
 	Shader* m_shader;
 	s32 m_scaleOffsetId;
+
+	u32 inputCount{ 0 };
+	PostEffectInput* inputs{ nullptr };
 };

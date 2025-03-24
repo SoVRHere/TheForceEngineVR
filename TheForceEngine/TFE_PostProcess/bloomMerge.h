@@ -9,6 +9,8 @@
 class BloomMerge : public PostProcessEffect
 {
 public:
+	BloomMerge(bool optimized) : m_optimized(optimized) {}
+
 	// Load shaders, setup geometry.
 	bool init() override;
 	// Free GPU assets.
@@ -18,6 +20,8 @@ public:
 	void setEffectState() override;
 
 private:
+	bool m_optimized{ false };
+
 	Shader m_shaderInternal;
 	s32 m_bloomSpreadId;
 

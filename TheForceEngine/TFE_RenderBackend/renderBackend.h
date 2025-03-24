@@ -150,6 +150,7 @@ namespace TFE_RenderBackend
 	void clearRenderTargetDepth(RenderTargetHandle handle, f32 clearDepth = 1.0f);
 	void copyRenderTarget(RenderTargetHandle dst, RenderTargetHandle src);
 	void unbindRenderTarget();
+	void invalidateRenderTarget();
 	const TextureGpu* getRenderTargetTexture(RenderTargetHandle rtHandle);
 	void getRenderTargetDim(RenderTargetHandle rtHandle, u32* width, u32* height);
 	void setViewport(s32 x, s32 y, s32 w, s32 h);
@@ -166,6 +167,7 @@ namespace TFE_RenderBackend
 
 	// Toggle bloom - but only the final post process.
 	void bloomPostEnable(bool enable = true);
+	void resetBloom();
 
 	// Generic triangle draw.
 	// triCount : number of triangles to draw.

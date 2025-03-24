@@ -3117,12 +3117,29 @@ namespace TFE_FrontEndUI
 			{
 				graphics->bloomStrength = 0.4f;
 				graphics->bloomSpread = 0.6f;
+#if defined (ANDROID)
+				graphics->bloomUseHalfFloatFormat = true;
+				graphics->bloomUseOptimizedShaders = true;
+#else
+				graphics->bloomUseHalfFloatFormat = false;
+				graphics->bloomUseOptimizedShaders = false;
+#endif
+				TFE_RenderBackend::resetBloom();
 			}
 
 			ImGui::SetNextItemWidth(196 * s_uiScale);
 			ImGui::SliderFloat("Strength", &graphics->bloomStrength, 0.0f, 1.0f);
 			ImGui::SetNextItemWidth(196 * s_uiScale);
 			ImGui::SliderFloat("Spread", &graphics->bloomSpread, 0.0f, 1.0f);
+			ImGui::Text("Optimizations:");
+			if (ImGui::Checkbox("Use Half Float Format", &graphics->bloomUseHalfFloatFormat))
+			{
+				TFE_RenderBackend::resetBloom();
+			}
+			if (ImGui::Checkbox("Use Optimized Shaders", &graphics->bloomUseOptimizedShaders))
+			{
+				TFE_RenderBackend::resetBloom();
+			}
 		}
 
 		const ColorCorrection colorCorrection = { graphics->brightness, graphics->contrast, graphics->saturation, graphics->gamma };

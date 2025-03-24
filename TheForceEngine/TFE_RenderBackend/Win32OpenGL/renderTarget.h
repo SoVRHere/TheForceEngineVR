@@ -16,6 +16,7 @@ public:
 	bool create(s32 textureCount, TextureGpu** textures, bool depthBuffer);
 	bool create(s32 textureCount, TextureGpu** texture, TextureGpu* depthTexture, bool multiview);
 	void bind();
+	void invalidate();
 	void clear(const f32* color, f32 depth, u8 stencil = 0, bool clearColor = true);
 	void clearDepth(f32 depth);
 	void clearStencil(u8 stencil);

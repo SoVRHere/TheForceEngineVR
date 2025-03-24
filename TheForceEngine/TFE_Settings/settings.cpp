@@ -508,6 +508,8 @@ namespace TFE_Settings
 		writeKeyValue_Bool(settings, "bloomEnabled", s_graphicsSettings.bloomEnabled);
 		writeKeyValue_Float(settings, "bloomStrength", s_graphicsSettings.bloomStrength);
 		writeKeyValue_Float(settings, "bloomSpread", s_graphicsSettings.bloomSpread);
+		writeKeyValue_Bool(settings, "bloomUseHalfFloatFormat", s_graphicsSettings.bloomUseHalfFloatFormat);
+		writeKeyValue_Bool(settings, "bloomUseOptimizedShaders", s_graphicsSettings.bloomUseOptimizedShaders);
 
 		writeKeyValue_Int(settings, "renderer", s_graphicsSettings.rendererIndex);
 		writeKeyValue_Int(settings, "colorMode", s_graphicsSettings.colorMode);
@@ -949,6 +951,14 @@ namespace TFE_Settings
 		else if (strcasecmp("bloomSpread", key) == 0)
 		{
 			s_graphicsSettings.bloomSpread = parseFloat(value);
+		}
+		else if (strcasecmp("bloomUseHalfFloatFormat", key) == 0)
+		{
+			s_graphicsSettings.bloomUseHalfFloatFormat = parseBool(value);
+		}
+		else if (strcasecmp("bloomUseOptimizedShaders", key) == 0)
+		{
+			s_graphicsSettings.bloomUseOptimizedShaders = parseBool(value);
 		}
 		else if (strcasecmp("renderer", key) == 0)
 		{

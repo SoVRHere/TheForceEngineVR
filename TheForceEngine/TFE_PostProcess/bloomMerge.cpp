@@ -20,8 +20,12 @@ void BloomMerge::destroy()
 
 bool BloomMerge::buildShaders()
 {
+	ShaderDefine defines[1];
+	defines[0].name = "OPT_OPTIMIZED";
+	defines[0].value = "1";
+
 	// Base shader.
-	if (!m_shaderInternal.load("Shaders/bloom.vert", "Shaders/bloomMerge.frag", 0u, nullptr, SHADER_VER_STD))
+	if (!m_shaderInternal.load("Shaders/bloom.vert", "Shaders/bloomMerge.frag", /*m_optimized ? 1 : */0, defines, SHADER_VER_STD))
 	{
 		return false;
 	}

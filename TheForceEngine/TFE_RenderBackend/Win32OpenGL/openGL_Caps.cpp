@@ -29,6 +29,7 @@ namespace OpenGL_Caps
 	static s32 m_textureBufferMaxSize = 0;
 	static f32 m_maxAnisotropy = 1.0f;
 	static s32 m_maxClipDistances = 0;
+	static s32 m_maxInterpolators = 0;
 
 	enum SpecMinimum
 	{
@@ -98,7 +99,7 @@ namespace OpenGL_Caps
 		{
 			glGetIntegerv(GL_MAX_CLIP_DISTANCES, &m_maxClipDistances);
 			TFE_ASSERT_GL;
-			TFE_INFO("GL", "Max Clip Distances: {}", m_maxClipDistances);
+			TFE_INFO("GL", "Max clip distances: {}", m_maxClipDistances);
 			if (m_maxClipDistances >= 8)
 			{
 				m_supportFlags |= CAP_CLIP_DISTANCES;
@@ -116,6 +117,10 @@ namespace OpenGL_Caps
 			m_maxClipDistances = 8;
 		}
 #endif
+
+		glGetIntegerv(GL_MAX_VARYING_VECTORS, &m_maxInterpolators);
+		TFE_ASSERT_GL;
+		TFE_INFO("GL", "Max varying vectors: {}", m_maxInterpolators);
 
 #if defined(ANDROID)
 		if (SDL_GL_ExtensionSupported("GL_NV_shader_noperspective_interpolation"))

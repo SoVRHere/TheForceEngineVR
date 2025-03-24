@@ -107,6 +107,13 @@ struct TFE_Settings_Graphics
 	bool bloomEnabled = false;
 	f32  bloomStrength = 0.4f;
 	f32  bloomSpread = 0.6f;
+#if defined (ANDROID)
+	bool bloomUseHalfFloatFormat = true;
+	bool bloomUseOptimizedShaders = true;
+#else
+	bool bloomUseHalfFloatFormat = false;
+	bool bloomUseOptimizedShaders = false;
+#endif
 
 	// Sky (Ignored when using the software renderer)
 	s32  skyMode = SKYMODE_CYLINDER;

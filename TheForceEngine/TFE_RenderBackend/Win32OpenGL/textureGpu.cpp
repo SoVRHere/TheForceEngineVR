@@ -26,6 +26,7 @@ static const char* c_texFormatStr[] =
 	"TEX_RGBA8",
 	"TEX_R8",
 	"TEX_RGBAF16",
+	"TEX_R11F_G11F_B10F",
 	"TEX_R16F",
 	"TEX_DEPTH24_STENCIL8"
 };

@@ -307,6 +307,9 @@ namespace TFE_PostProcess
 				}
 			}
 
+			effect->inputCount = effectInst->inputCount;
+			effect->inputs = effectInst->inputs;
+
 			// Setup any effect specific state.
 			effect->setEffectState();
 
