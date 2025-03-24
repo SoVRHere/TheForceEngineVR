@@ -37,6 +37,7 @@
 #include <TFE_System/system.h>
 #include <TFE_System/tfeMessage.h>
 #include <TFE_Input/inputMapping.h>
+#include <TFE_Input/replay.h>
 
 using namespace TFE_Jedi;
 using namespace TFE_Input;
@@ -443,7 +444,9 @@ namespace TFE_DarkForces
 						reticle_enable(true);
 					}
 					s_flatLighting = JFALSE;
-					s_nightvisionActive = JFALSE;
+					// Note: I am not sure why this is there but it overrides all player settings
+					// By default the player load disables night vision so it won't carry over from previous maps.
+					// s_nightvisionActive = JFALSE;
 				}
 			}
 			else // Loading from save.
@@ -501,6 +504,17 @@ namespace TFE_DarkForces
 
 	void mission_exitLevel()
 	{
+		// Force the game to exit the replay modes in case you try to exit through the menu / console
+		if (isDemoPlayback())
+		{
+			endReplay();
+		}
+
+		if (isRecording())
+		{
+			endRecording();
+		}
+
 		s_exitLevel = JTRUE;
 	}
 
@@ -545,13 +559,13 @@ namespace TFE_DarkForces
 			// Grab the current framebuffer in case in changed.
 			s_framebuffer = vfb_getCpuBuffer();
 			TFE_Jedi::beginRender();
-
+						
 			// Handle delta time.
 			s_deltaTime = div16(intToFixed16(s_curTick - s_prevTick), FIXED(TICKS_PER_SECOND));
 			s_deltaTime = min(s_deltaTime, MAX_DELTA_TIME);
 			s_prevTick  = s_curTick;
 			s_playerTick = s_curTick;
-
+						
 			if (!escapeMenu_isOpen() && !pda_isOpen())
 			{
 				player_setupCamera();
@@ -562,6 +576,9 @@ namespace TFE_DarkForces
 				}
 				else if (s_missionMode == MISSION_MODE_MAIN)
 				{
+					// TFE - Level Script Support.
+					updateLevelScript(fixed16ToFloat(s_deltaTime));
+					// Dark Forces Draw.
 					updateScreensize();
 					if (s_playerEye)
 					{
@@ -571,7 +588,7 @@ namespace TFE_DarkForces
 					handleVisionFx();
 				}
 			}
-
+						
 			if (!escapeMenu_isOpen() && !pda_isOpen())
 			{
 				handleGeneralInput();
@@ -661,7 +678,10 @@ namespace TFE_DarkForces
 				}
 			} while (msg != MSG_FREE_TASK && msg != MSG_RUN_TASK);
 		}
-
+		if (TFE_Input::isRecording())
+		{
+			endRecording();
+		}
 		s_mainTask = nullptr;
 		task_makeActive(s_missionLoadTask);
 		task_end;
@@ -935,16 +955,16 @@ namespace TFE_DarkForces
 		s_visionFxCountdown = 2;
 	}
 
-	void disableNightvisionInternal()
+	void disableNightVisionInternal()
 	{
 		s_flatLighting = JFALSE;
 		s_visionFxEndCountdown = 3;
 	}
 		
-	void disableNightvision()
+	void disableNightVision()
 	{
-		disableNightvisionInternal();
-		s_nightvisionActive = JFALSE;
+		disableNightVisionInternal();
+		s_nightVisionActive = JFALSE;
 		hud_sendTextMessage(9);
 	}
 
@@ -956,11 +976,11 @@ namespace TFE_DarkForces
 		{
 			hud_sendTextMessage(11);
 			sound_play(s_nightVisionDeactiveSoundSource);
-			s_nightvisionActive = JFALSE;
+			s_nightVisionActive = JFALSE;
 			return;
 		}
 
-		s_nightvisionActive = JTRUE;
+		s_nightVisionActive = JTRUE;
 		beginNightVision(16);
 		hud_sendTextMessage(10);
 		sound_play(s_nightVisionActiveSoundSource);
@@ -1061,7 +1081,8 @@ namespace TFE_DarkForces
 
 	void executeCheat(CheatID cheatID)
 	{
-		if (cheatID == CHEAT_NONE)
+		// Do not allow cheats while recording
+		if (cheatID == CHEAT_NONE || isRecording())
 		{
 			return;
 		}
@@ -1302,9 +1323,9 @@ namespace TFE_DarkForces
 			}
 			if (inputMapping_getActionState(IADF_NIGHT_VISION_TOG) == STATE_PRESSED && s_playerInfo.itemGoggles)
 			{
-				if (s_nightvisionActive)
+				if (s_nightVisionActive)
 				{
-					disableNightvision();
+					disableNightVision();
 				}
 				else
 				{
@@ -1368,6 +1389,20 @@ namespace TFE_DarkForces
 			if (inputMapping_getActionState(IADF_HOLSTER_WEAPON) == STATE_PRESSED)
 			{
 				weapon_holster();
+			}
+
+			if (inputMapping_getActionState(IADF_HD_ASSET_TOGGLE) == STATE_PRESSED)
+			{
+				const char* msg = TFE_System::getMessage(TFE_MSG_HD);
+				if (msg)
+				{
+					hud_sendTextMessage(msg, 1);	// HD assets
+				}
+
+				// Ensure the return state is in the game otherwise it won't render in FrontEndUI 
+				// Does the render call need the state check?
+				TFE_FrontEndUI::setMenuReturnState(APP_STATE_GAME);
+				TFE_FrontEndUI::toggleEnhancements();
 			}
 
 			if (inputMapping_getActionState(IADF_AUTOMOUNT_TOGGLE) == STATE_PRESSED)

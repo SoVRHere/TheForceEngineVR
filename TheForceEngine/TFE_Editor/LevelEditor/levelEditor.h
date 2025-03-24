@@ -59,10 +59,16 @@ namespace LevelEditor
 	void update();
 	bool menu();
 
+	bool levelIsDirty();
+	void levelSetClean();
+
 	bool levelLighting();
 	bool userPreferences();
+	bool testOptions();
 
 	void selectNone();
+	void selectAll();
+	void selectInvert();
 	s32 getSectorNameLimit();
 
 	void setSelectMode(SelectMode mode = SELECTMODE_NONE);
@@ -79,13 +85,12 @@ namespace LevelEditor
 	// Shared Edit Commands
 	void edit_moveSelectedFlats(f32 delta);
 	bool edit_splitWall(s32 sectorId, s32 wallIndex, Vec2f newPos);
-	void edit_deleteSector(s32 sectorId);
-	void edit_tryAdjoin(s32 sectorId, s32 wallId, bool exactMatch = false);
+	void edit_deleteSector(s32 sectorId, bool addToHistory = true);
+	bool edit_tryAdjoin(s32 sectorId, s32 wallId, bool exactMatch = false);
 	void edit_removeAdjoin(s32 sectorId, s32 wallId);
 	void edit_clearSelections(bool endTransform = true);
 	bool edit_createSectorFromRect(const f32* heights, const Vec2f* vtx, bool allowSubsectorExtrude=true);
 	bool edit_createSectorFromShape(const f32* heights, s32 vertexCount, const Vec2f* vtx, bool allowSubsectorExtrude=true);
-	void edit_moveSelectedTextures(s32 count, const FeatureId* featureList, Vec2f delta);
 	// Return true if the assigned texture is new.
 	AppendTexList& edit_getTextureAppendList();
 	void edit_clearTextureAppendList();
@@ -94,9 +99,13 @@ namespace LevelEditor
 	void edit_deleteObject(EditorSector* sector, s32 index);
 	void edit_deleteLevelNote(s32 index);
 	void edit_setEditMode(LevelEditMode mode);
-	void edit_cleanSectorList(const std::vector<s32>& selectedSectors);
+	void edit_cleanSectorList(std::vector<s32>& selectedSectors, bool addToHistory = true);
 	EditorSector* edit_getHoverSector2dAtCursor();
 	Vec3f edit_viewportCoordToWorldDir3d(Vec2i vCoord);
+	bool edit_viewportHovered(s32 mx, s32 my);
+
+	bool edit_hasItemsInClipboard();
+	void edit_clearClipboard();
 
 	// Drag Select: TODO Move?
 	void startDragSelect(s32 mx, s32 my, DragSelectMode mode);
@@ -110,7 +119,9 @@ namespace LevelEditor
 	void adjustGridHeight(EditorSector* sector);
 
 	s32 getDefaultTextureIndex(WallPart part);
-	Vec3f moveAlongRail(Vec3f dir);
+	Vec3f moveAlongRail(Vec3f dir, bool adjustPosByView = true);
 	Vec3f moveAlongXZPlane(f32 yHeight);
 	bool isUiModal();
+	bool isTextureAssignDirty();
+	void setTextureAssignDirty(bool dirty = true);
 }

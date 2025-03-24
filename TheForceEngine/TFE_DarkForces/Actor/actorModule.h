@@ -24,19 +24,27 @@ struct Task;
 
 enum LogicAnimFlags
 {
-	AFLAG_PLAYED = FLAG_BIT(0),
-	AFLAG_READY  = FLAG_BIT(1),
+	AFLAG_PLAYONCE = FLAG_BIT(0),	// Indicates an animation will play through once only and not loop back to first frame
+	AFLAG_READY    = FLAG_BIT(1),
+	AFLAG_BIT3	   = FLAG_BIT(3),	// Unknown, seems to be set but never read
 };
 
 enum LogicAnimState : u32
 {
+	//GENERAL
 	STATE_DELAY = 0u,
-	STATE_ANIMATEATTACK,
-	STATE_FIRE1,
-	STATE_ANIMATE1,
-	STATE_FIRE2,
-	STATE_ANIMATE2,
-	STATE_COUNT
+	//ATTACK MODULE
+	STATE_DECIDE,			// Decide whether to attack and which attack to use
+	STATE_ATTACK1,			// Primary attack (can be melee or ranged)
+	STATE_ANIMATE1,			// Animation played after attack (eg. weapon recoil)
+	STATE_ATTACK2,			// Secondary attack (always ranged)
+	STATE_ANIMATE2,			// Animation played after secondary attack
+	STATE_COUNT,
+	//THINKER MODULE
+	// Move towards our destination
+	STATE_MOVE = 1u,
+	// Update our destination (generally moving towards the player).
+	STATE_TURN = 2u,
 };
 
 typedef JBool(*ActorFunc)(ActorModule*, MovementModule*);
@@ -52,7 +60,7 @@ struct LogicAnimation
 	Tick prevTick;
 	fixed16_16 frame;
 	fixed16_16 startFrame;
-	u32 flags;
+	u32 flags;			// see LogicAnimFlags enum
 	s32 animId;
 	LogicAnimState state;
 };
@@ -99,13 +107,21 @@ enum AttackFlags
 	ATTFLAG_ALL       = ATTFLAG_MELEE | ATTFLAG_RANGED | ATTFLAG_LIT_MELEE | ATTFLAG_LIT_RNG
 };
 
+enum ActorCollisionFlags
+{
+	ACTORCOL_NO_Y_MOVE	= FLAG_BIT(0),		// When _not_ set, an actor can move vertically. Set for non-flying enemies.
+	ACTORCOL_GRAVITY	= FLAG_BIT(1),
+	ACTORCOL_BIT2		= FLAG_BIT(2),		// Alters the way collision is handled. This is generally set for flying enemies and bosses
+	ACTORCOL_ALL		= ACTORCOL_NO_Y_MOVE | ACTORCOL_GRAVITY | ACTORCOL_BIT2
+};
+
 struct ActorModule
 {
 	ActorModuleType type;
 
 	ActorFunc       func;
 	ActorMsgFunc    msgFunc;
-	ActorAttribFunc attribFunc;
+	ActorAttribFunc attribFunc;		// Never used?
 	ActorFreeFunc   freeFunc;
 
 	Tick nextTick;
@@ -158,7 +174,7 @@ struct MovementModule
 	vec3_fixed delta;
 	RWall* collisionWall;
 	u32 unused;	// member in structure but not actually used, other than being initialized.
-	u32 collisionFlags;
+	u32 collisionFlags;		// see ActorCollisionFlags
 };
 
 struct ThinkerModule
@@ -182,7 +198,7 @@ struct ThinkerModule
 
 struct DamageModule
 {
-	AttackModule attackMod;
+	AttackModule attackMod;		// A DamageModule starts with an AttackModule, which it uses for animation but the remainder of the struct is unused.
 	fixed16_16 hp;
 	ItemId itemDropId;
 
@@ -196,6 +212,10 @@ struct DamageModule
 	HitEffectID dieEffect;
 };
 
+// "PhysicsActor" is the core actor used for bosses, mousebots, turrets and welders
+// It only has a movement module
+// Damage, attack and other behaviour is coded specifically for each AI
+// Consider changing to a more suitable name?
 struct PhysicsActor
 {
 	MovementModule moveMod;
@@ -212,3 +232,4 @@ struct PhysicsActor
 	JBool alive;
 	s32 state;
 };
+

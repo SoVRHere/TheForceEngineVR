@@ -40,10 +40,14 @@ namespace LevelEditor
 	void viewport_clearRail();
 	void viewport_setRail(const Vec3f* rail, s32 dirCount = 1, Vec3f* moveDir = nullptr);
 
+	// Compute the bounding planes for an object based on the viewport and object transform.
+	void viewport_computeEntityBoundingPlanes(const EditorSector* sector, const EditorObject* obj, Vec4f* boundingPlanes);
+
 	extern SectorDrawMode s_sectorDrawMode;
 	extern Vec2i s_viewportSize;
 	extern Vec3f s_viewportPos;
 	extern Vec4f s_viewportTrans2d;
 	extern f32 s_gridOpacity;
 	extern f32 s_zoom2d;
+	extern f32 s_viewDepth[];
 }

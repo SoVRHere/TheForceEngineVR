@@ -5,6 +5,7 @@
 #include <TFE_System/types.h>
 #include <TFE_FileSystem/paths.h>
 #include <TFE_Input/input.h>
+#include <TFE_Input/replay.h>
 
 namespace TFE_Input
 {
@@ -76,6 +77,18 @@ namespace TFE_Input
 		// Saving
 		IAS_QUICK_SAVE,
 		IAS_QUICK_LOAD,
+
+		// HD Toggle
+		IADF_HD_ASSET_TOGGLE,
+
+		// Screenshot and GIF record
+		IADF_SCREENSHOT,
+		IADF_GIF_RECORD,
+		IADF_GIF_RECORD_NO_COUNTDOWN,
+
+		// Demo handling
+		IADF_DEMO_SPEEDUP,
+		IADF_DEMO_SLOWDOWN,
 
 		IA_COUNT,
 		IAS_COUNT = IAS_SYSTEM_MENU + 1,
@@ -173,10 +186,16 @@ namespace TFE_Input
 		
 	void inputMapping_addBinding(InputBinding* binding);
 	void inputMapping_removeBinding(u32 index);
+	bool isBindingPressed(InputAction action);
 	ActionState inputMapping_getActionState(InputAction action);
 	f32  inputMapping_getAnalogAxis(AnalogAxis axis);
 	void inputMapping_updateInput();
 	void inputMapping_removeState(InputAction action);
+
+	ActionState inputMapping_getAction(InputAction act);
+
+	void inputMapping_setStateDown(InputAction action);
+	void inputMapping_setStatePress(InputAction action);
 	void inputMapping_clearKeyBinding(KeyboardCode key);
 	void inputMapping_endFrame();
 
@@ -186,4 +205,11 @@ namespace TFE_Input
 	
 	f32 inputMapping_getHorzMouseSensitivity();
 	f32 inputMapping_getVertMouseSensitivity();
+
+	// Handle inputMapping event playback
+	void inputMapping_resetCounter();
+	int inputMapping_getCounter();
+	void inputMapping_setReplayCounter(int counter);
+	bool inputMapping_handleInputs();
+	void inputMapping_setMaxCounter(int counter);
 }  // TFE_Input

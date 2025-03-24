@@ -107,7 +107,7 @@ namespace TFE_DarkForces
 
 			if (local(physicsActor)->hp <= 0)
 			{
-				local(physicsActor)->state = 5;
+				local(physicsActor)->state = DRAGONSTATE_DYING;
 				msg = MSG_RUN_TASK;
 			}
 			else
@@ -119,10 +119,10 @@ namespace TFE_DarkForces
 				{
 					task_localBlockBegin;
 						ActorTarget* target = &local(physicsActor)->moveMod.target;
-						target->flags |= 8;
+						target->flags |= TARGET_FREEZE;
 						memcpy(&local(tmpAnim), local(anim), sizeof(LogicAnimation) - 4);
 
-						local(anim)->flags |= AFLAG_PLAYED;
+						local(anim)->flags |= AFLAG_PLAYONCE;
 						actor_setupBossAnimation(local(obj), 12, local(anim));
 						local(anim)->frameRate = 8;
 					task_localBlockEnd;
@@ -137,7 +137,7 @@ namespace TFE_DarkForces
 						actor_setupBossAnimation(local(obj), local(anim)->animId, local(anim));
 
 						ActorTarget* target = &local(physicsActor)->moveMod.target;
-						target->flags &= 0xfffffff7;
+						target->flags &= ~TARGET_FREEZE;
 					task_localBlockEnd;
 				}
 				msg = MSG_DAMAGE;
@@ -184,7 +184,7 @@ namespace TFE_DarkForces
 
 			if (local(physicsActor)->hp <= 0)
 			{
-				local(physicsActor)->state = 5;
+				local(physicsActor)->state = DRAGONSTATE_DYING;
 				local(physicsActor)->vel = local(vel);
 				msg = MSG_RUN_TASK;
 			}
@@ -209,7 +209,7 @@ namespace TFE_DarkForces
 					memcpy(&local(tmp), local(anim), sizeof(LogicAnimation) - 4);
 
 					// Set the animation to 12.
-					local(anim)->flags |= AFLAG_PLAYED;
+					local(anim)->flags |= AFLAG_PLAYONCE;
 					actor_setupBossAnimation(local(obj), 12, local(anim));
 					local(anim)->frameRate = 8;
 
@@ -305,13 +305,13 @@ namespace TFE_DarkForces
 		fixed16_16 sinYaw, cosYaw;
 		sinCosFixed(obj->yaw, &sinYaw, &cosYaw);
 
-		target->flags |= 4;
+		target->flags |= TARGET_MOVE_ROT;
 		target->speedRotation = 6826;
 
 		fixed16_16 animSpeed = s_kellDragonAnim[dragon->animIndex].speed;
 		target->pos.x = obj->posWS.x + mul16(sinYaw, animSpeed);
 		target->pos.z = obj->posWS.z + mul16(cosYaw, animSpeed);
-		target->flags |= 1;
+		target->flags |= TARGET_MOVE_XZ;
 	}
 
 	void kellDragon_handleState1(MessageType msg)
@@ -336,7 +336,7 @@ namespace TFE_DarkForces
 		local(prevColTick) = 0;
 		local(yawAligned) = JFALSE;
 
-		local(anim)->flags &= ~AFLAG_PLAYED;
+		local(anim)->flags &= ~AFLAG_PLAYONCE;
 		actor_setupBossAnimation(local(obj), 0, local(anim));
 
 		task_localBlockBegin;
@@ -348,7 +348,7 @@ namespace TFE_DarkForces
 			}
 		task_localBlockEnd;
 
-		while (local(physicsActor)->state == 1)
+		while (local(physicsActor)->state == DRAGONSTATE_CHARGE)
 		{
 			do
 			{
@@ -364,7 +364,7 @@ namespace TFE_DarkForces
 					task_callTaskFunc(kellDragon_handleExplosion);
 				}
 			} while (msg != MSG_RUN_TASK);
-			if (local(physicsActor)->state != 1) { break; }
+			if (local(physicsActor)->state != DRAGONSTATE_CHARGE) { break; }
 
 			if (!s_playerDying && kellDragon_canSeePlayer(local(dragon)))
 			{
@@ -386,21 +386,21 @@ namespace TFE_DarkForces
 				fixed16_16 dist = dy + distApprox(s_playerObject->posWS.x, s_playerObject->posWS.z, local(obj)->posWS.x, local(obj)->posWS.z);
 				if (dist <= FIXED(20) && local(obj)->yaw == local(target)->yaw)
 				{
-					local(physicsActor)->state = 4;
+					local(physicsActor)->state = DRAGONSTATE_ATTACK;
 				}
 				else if (dist <= FIXED(55) && jump && local(obj)->yaw == local(target)->yaw)
 				{
 					if (dy <= FIXED(10))
 					{
-						local(physicsActor)->state = 3;
+						local(physicsActor)->state = DRAGONSTATE_JUMPING;
 					}
 				}
 			}
 			else if (!s_playerDying)
 			{
-				local(physicsActor)->state = 6;
+				local(physicsActor)->state = DRAGONSTATE_SEARCH;
 			}
-			if (local(physicsActor)->state != 1) { break; }
+			if (local(physicsActor)->state != DRAGONSTATE_CHARGE) { break; }
 
 			if (kellDragon_setAnimIndex(local(dragon), 0))
 			{
@@ -462,7 +462,7 @@ namespace TFE_DarkForces
 		local(physicsActor) = &local(dragon)->actor;
 		local(anim) = &local(physicsActor)->anim;
 		local(target) = &local(physicsActor)->moveMod.target;
-		local(anim)->flags &= ~AFLAG_PLAYED;
+		local(anim)->flags &= ~AFLAG_PLAYONCE;
 
 		task_localBlockBegin;
 			actor_setupBossAnimation(local(obj), 0, local(anim));
@@ -474,7 +474,7 @@ namespace TFE_DarkForces
 			}
 		task_localBlockEnd;
 
-		while (local(physicsActor)->state == 2)
+		while (local(physicsActor)->state == DRAGONSTATE_RETREAT)
 		{
 			do
 			{
@@ -490,7 +490,7 @@ namespace TFE_DarkForces
 					task_callTaskFunc(kellDragon_handleExplosion);
 				}
 			} while (msg != MSG_RUN_TASK);
-			if (local(physicsActor)->state != 2) { break; }
+			if (local(physicsActor)->state != DRAGONSTATE_RETREAT) { break; }
 
 			if (!local(dragon)->retreat)
 			{
@@ -514,7 +514,7 @@ namespace TFE_DarkForces
 			}
 			else if (s_curTick >= local(dragon)->nextTick)
 			{
-				local(physicsActor)->state = 1;
+				local(physicsActor)->state = DRAGONSTATE_CHARGE;
 				local(dragon)->retreat = JFALSE;
 			}
 		}  // while (state == 2)
@@ -541,7 +541,7 @@ namespace TFE_DarkForces
 		local(anim) = &local(physicsActor)->anim;
 		local(target) = &local(physicsActor)->moveMod.target;
 		
-		while (local(physicsActor)->state == 3)
+		while (local(physicsActor)->state == DRAGONSTATE_JUMPING)
 		{
 			do
 			{
@@ -557,9 +557,9 @@ namespace TFE_DarkForces
 					task_callTaskFunc(kellDragon_handleExplosion);
 				}
 			} while (msg != MSG_RUN_TASK);
-			if (local(physicsActor)->state != 3) { break; }
+			if (local(physicsActor)->state != DRAGONSTATE_JUMPING) { break; }
 
-			local(anim)->flags |= AFLAG_PLAYED;
+			local(anim)->flags |= AFLAG_PLAYONCE;
 			actor_setupBossAnimation(local(obj), 9, local(anim));
 			local(anim)->frameRate = 8;
 			sound_playCued(s_shared.kellSound1, local(obj)->posWS);
@@ -641,12 +641,12 @@ namespace TFE_DarkForces
 			{
 				player_applyDamage(FIXED(20), 0, JTRUE);
 			}
-			local(physicsActor)->state = 1;
+			local(physicsActor)->state = DRAGONSTATE_CHARGE;
 		}  // while (state == 3)
 		task_end;
 	}
 
-	void kellDragon_handleState4(MessageType msg)
+	void kellDragon_handleAttack(MessageType msg)
 	{
 		struct LocalContext
 		{
@@ -664,7 +664,7 @@ namespace TFE_DarkForces
 		local(anim) = &local(physicsActor)->anim;
 		local(target) = &local(physicsActor)->moveMod.target;
 
-		while (local(physicsActor)->state == 4)
+		while (local(physicsActor)->state == DRAGONSTATE_ATTACK)
 		{
 			do
 			{
@@ -680,15 +680,15 @@ namespace TFE_DarkForces
 					task_callTaskFunc(kellDragon_handleExplosion);
 				}
 			} while (msg != MSG_RUN_TASK);
-			if (local(physicsActor)->state != 4) { break; }
+			if (local(physicsActor)->state != DRAGONSTATE_ATTACK) { break; }
 
 			if (s_playerDying)
 			{
-				local(physicsActor)->state = 1;
+				local(physicsActor)->state = DRAGONSTATE_CHARGE;
 				break;
 			}
 
-			local(anim)->flags |= AFLAG_PLAYED;
+			local(anim)->flags |= AFLAG_PLAYONCE;
 			actor_setupBossAnimation(local(obj), 1, local(anim));
 			local(anim)->frameRate = 8;
 
@@ -717,12 +717,12 @@ namespace TFE_DarkForces
 				player_applyDamage(FIXED(20), 0, JTRUE);
 				if (random(100) <= 30)
 				{
-					local(physicsActor)->state = 2;
+					local(physicsActor)->state = DRAGONSTATE_RETREAT;
 				}
 			}
 			else
 			{
-				local(physicsActor)->state = 1;
+				local(physicsActor)->state = DRAGONSTATE_CHARGE;
 			}
 		}
 
@@ -751,7 +751,7 @@ namespace TFE_DarkForces
 		local(target)->flags |= TARGET_FREEZE;
 		sound_playCued(s_shared.kellSound3, local(obj)->posWS);
 
-		local(anim)->flags |= AFLAG_PLAYED;
+		local(anim)->flags |= AFLAG_PLAYONCE;
 		actor_setupBossAnimation(local(obj), 2, local(anim));
 		local(anim)->frameRate = 8;
 
@@ -787,7 +787,7 @@ namespace TFE_DarkForces
 		task_end;
 	}
 
-	void kellDragon_handleState6(MessageType msg)
+	void kellDragon_lookForPlayer(MessageType msg)
 	{
 		struct LocalContext
 		{
@@ -819,12 +819,12 @@ namespace TFE_DarkForces
 		local(delay) = 72;
 		local(speedRotation) = local(target)->speedRotation;
 
-		local(anim)->flags &= ~AFLAG_PLAYED;
+		local(anim)->flags &= ~AFLAG_PLAYONCE;
 		actor_setupBossAnimation(local(obj), 0, local(anim));
 		local(target)->flags &= ~TARGET_FREEZE;
 		local(target)->speedRotation = 0x3000;
 
-		while (local(physicsActor)->state == 6)
+		while (local(physicsActor)->state == DRAGONSTATE_SEARCH)
 		{
 			do
 			{
@@ -840,14 +840,14 @@ namespace TFE_DarkForces
 					task_callTaskFunc(kellDragon_handleExplosion);
 				}
 			} while (msg != MSG_RUN_TASK);
-			if (local(physicsActor)->state != 6 || s_playerDying) { break; }
+			if (local(physicsActor)->state != DRAGONSTATE_SEARCH || s_playerDying) { break; }
 
 			JBool canSee = actor_canSeeObject(local(obj), s_playerObject);
 			if (canSee)
 			{
 				local(physicsActor)->lastPlayerPos.x = s_playerObject->posWS.x;
 				local(physicsActor)->lastPlayerPos.z = s_playerObject->posWS.z;
-				local(physicsActor)->state = 1;
+				local(physicsActor)->state = DRAGONSTATE_CHARGE;
 				break;
 			}
 
@@ -923,39 +923,39 @@ namespace TFE_DarkForces
 		while (local(physicsActor)->alive)
 		{
 			msg = MSG_RUN_TASK;
-			if (local(physicsActor)->state == 1)
+			if (local(physicsActor)->state == DRAGONSTATE_CHARGE)
 			{
 				s_curDragon = local(dragon);
 				task_callTaskFunc(kellDragon_handleState1);
 			}
-			else if (local(physicsActor)->state == 2)
+			else if (local(physicsActor)->state == DRAGONSTATE_RETREAT)
 			{
 				s_curDragon = local(dragon);
 				task_callTaskFunc(kellDragon_handleRetreat);
 			}
-			else if (local(physicsActor)->state == 3)
+			else if (local(physicsActor)->state == DRAGONSTATE_JUMPING)
 			{
 				s_curDragon = local(dragon);
 				task_callTaskFunc(kellDragon_handleJumping);
 			}
-			else if (local(physicsActor)->state == 4)
+			else if (local(physicsActor)->state == DRAGONSTATE_ATTACK)
 			{
 				s_curDragon = local(dragon);
-				task_callTaskFunc(kellDragon_handleState4);
+				task_callTaskFunc(kellDragon_handleAttack);
 			}
-			else if (local(physicsActor)->state == 5)
+			else if (local(physicsActor)->state == DRAGONSTATE_DYING)
 			{
 				s_curDragon = local(dragon);
 				task_callTaskFunc(kellDragon_handleDyingState);
 			}
-			else if (local(physicsActor)->state == 6)
+			else if (local(physicsActor)->state == DRAGONSTATE_SEARCH)
 			{
 				s_curDragon = local(dragon);
-				task_callTaskFunc(kellDragon_handleState6);
+				task_callTaskFunc(kellDragon_lookForPlayer);
 			}
 			else
 			{
-				while (local(physicsActor)->state == 0)
+				while (local(physicsActor)->state == DRAGONSTATE_DEFAULT)
 				{
 					do
 					{
@@ -965,16 +965,16 @@ namespace TFE_DarkForces
 
 						if (msg == MSG_DAMAGE || msg == MSG_EXPLOSION)
 						{
-							local(physicsActor)->state = 1;	// Pain State
+							local(physicsActor)->state = DRAGONSTATE_CHARGE;	// Pain State
 							task_makeActive(local(physicsActor)->actorTask);
 							task_yield(TASK_NO_DELAY);
 						}
 					} while (msg != MSG_RUN_TASK);
-					if (local(physicsActor)->state == 0 && kellDragon_canSeePlayer(local(dragon)))
+					if (local(physicsActor)->state == DRAGONSTATE_DEFAULT && kellDragon_canSeePlayer(local(dragon)))
 					{
 						SecObject* obj = local(dragon)->logic.obj;
 						sound_playCued(s_shared.kellSound0, obj->posWS);
-						local(physicsActor)->state = 1;
+						local(physicsActor)->state = DRAGONSTATE_CHARGE;
 					}
 				}  // while (state == 0)
 			}
@@ -1084,7 +1084,7 @@ namespace TFE_DarkForces
 		PhysicsActor* physicsActor = &dragon->actor;
 		physicsActor->alive = JTRUE;
 		physicsActor->hp = FIXED(180);
-		physicsActor->state = 0;
+		physicsActor->state = DRAGONSTATE_DEFAULT;
 		physicsActor->actorTask = task;
 		dragon->logic.obj = obj;
 		dragon->animIndex = 0;
@@ -1103,17 +1103,17 @@ namespace TFE_DarkForces
 		physics->botOffset = 0x60000;
 		physics->yPos = 0x80000;
 		physics->width = obj->worldWidth;
-		physicsActor->moveMod.collisionFlags |= 7;
+		physicsActor->moveMod.collisionFlags |= ACTORCOL_ALL;
 		physics->height = obj->worldHeight + HALF_16;
 
 		ActorTarget* target = &physicsActor->moveMod.target;
-		target->flags &= 0xfffffff0;
+		target->flags &= ~TARGET_ALL;
 		target->speedRotation = 43546;	// 956.8 degrees per second.
 		target->speed = FIXED(10);
 
 		LogicAnimation* anim = &physicsActor->anim;
 		anim->frameRate = 5;
-		anim->flags = (anim->flags | AFLAG_READY) & (~AFLAG_PLAYED);
+		anim->flags = (anim->flags | AFLAG_READY) & (~AFLAG_PLAYONCE);
 		anim->frameCount = ONE_16;
 		anim->prevTick = 0;
 		actor_setupBossAnimation(obj, 5, anim);

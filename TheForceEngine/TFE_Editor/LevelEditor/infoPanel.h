@@ -48,6 +48,9 @@ namespace LevelEditor
 	void commitCurEntityChanges();
 
 	void selectAndScrollToSector(EditorSector* sector);
+	void scrollToSector(EditorSector* sector);
 
 	void infoPanel_clearSelection();
+
+	void infoPanelOpenGroup(s32 groupId);
 }

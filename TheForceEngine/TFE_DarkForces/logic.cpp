@@ -16,6 +16,7 @@
 #include <TFE_DarkForces/generator.h>
 #include <TFE_DarkForces/random.h>
 #include <TFE_System/system.h>
+#include <TFE_Settings/settings.h>
 
 // Regular Enemies
 #include <TFE_DarkForces/Actor/exploders.h>
@@ -128,7 +129,19 @@ namespace TFE_DarkForces
 			if (key == KW_TYPE || key == KW_LOGIC)
 			{
 				KEYWORD logicId = getKeywordIndex(s_objSeqArg1);
-				if (logicId == KW_PLAYER)  // Player Logic.
+				
+				// First, search the externally defined logics for a match (if the setting is enabled)
+				TFE_ExternalData::CustomActorLogic* customLogic = (logicId != KW_PLAYER)
+					? tryFindCustomActorLogic(s_objSeqArg1)
+					: nullptr;		// do not allow "LOGIC: PLAYER" to be overridden !!
+
+				if (TFE_Settings::jsonAiLogics() && customLogic)
+				{
+					newLogic = obj_setCustomActorLogic(obj, customLogic);
+					setupFunc = nullptr;
+				}
+				// Then go to the hardcoded logics
+				else if (logicId == KW_PLAYER)  // Player Logic.
 				{
 					player_setupObject(obj);
 					setupFunc = nullptr;
@@ -154,7 +167,7 @@ namespace TFE_DarkForces
 				else if (logicId == KW_GENERATOR)	// Enemy generator, used for in-level enemy spawning.
 				{
 					KEYWORD genType = getKeywordIndex(s_objSeqArg2);
-					newLogic = obj_createGenerator(obj, &setupFunc, genType);
+					newLogic = obj_createGenerator(obj, &setupFunc, genType, s_objSeqArg2);
 				}
 				else if (logicId == KW_DISPATCH)
 				{
@@ -168,6 +181,11 @@ namespace TFE_DarkForces
 					}
 					ItemId itemId = getPickupItemId(s_objSeqArg2);
 					obj_createPickup(obj, itemId);
+					setupFunc = nullptr;
+				}
+				else if (TFE_Settings::enableUnusedItem() && strcasecmp(s_objSeqArg1, "ITEM10") == 0)
+				{
+					obj_createPickup(obj, ITEM_UNUSED);
 					setupFunc = nullptr;
 				}
 			}
@@ -438,5 +456,37 @@ namespace TFE_DarkForces
 			if (logic) { logic->type = LOGIC_UNKNOWN; }
 			assert(0);
 		}
+	}
+
+
+	///////////////////////////////////////////////////
+	// Custom logics
+	///////////////////////////////////////////////////
+	Logic* obj_setCustomActorLogic(SecObject* obj, TFE_ExternalData::CustomActorLogic* customLogic)
+	{
+		obj->flags |= OBJ_FLAG_AIM;
+		obj->entityFlags = ETFLAG_AI_ACTOR;
+
+		if (customLogic->isFlying) { obj->entityFlags |= ETFLAG_FLYING; }
+		if (customLogic->hasGravity) { obj->entityFlags |= ETFLAG_HAS_GRAVITY; }
+
+		LogicSetupFunc* setupFunc = nullptr;
+		return custom_actor_setup(obj, customLogic, setupFunc);
+	}
+
+	TFE_ExternalData::CustomActorLogic* tryFindCustomActorLogic(const char* logicName)
+	{
+		TFE_ExternalData::ExternalLogics* externalLogics = TFE_ExternalData::getExternalLogics();
+		u32 actorCount = (u32)externalLogics->actorLogics.size();
+
+		for (u32 a = 0; a < actorCount; a++)
+		{
+			if (strcasecmp(logicName, externalLogics->actorLogics[a].logicName) == 0)
+			{
+				return &externalLogics->actorLogics[a];
+			}
+		}
+
+		return nullptr;
 	}
 }  // TFE_DarkForces

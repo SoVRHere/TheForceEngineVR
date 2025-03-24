@@ -43,6 +43,7 @@ namespace LevelEditor
 				// Choose the selected feature over the hovered feature.
 				if (sector)
 				{
+					selection_clearHovered();
 					edit_deleteVertex(sector->id, featureIndex, LName_DeleteVertex);
 				}
 			} break;
@@ -52,12 +53,14 @@ namespace LevelEditor
 				{
 					if (part == HP_FLOOR || part == HP_CEIL)
 					{
+						selection_clearHovered();
 						edit_deleteSector(sector->id);
 					}
 					else if (part == HP_SIGN)
 					{
 						if (featureIndex >= 0)
 						{
+							selection_clearHovered();
 							// Clear the selections when deleting a sign -
 							// otherwise the source wall will still be selected.
 							edit_clearSelections();
@@ -68,6 +71,7 @@ namespace LevelEditor
 					}
 					else
 					{
+						selection_clearHovered();
 						// Deleting a wall is the same as deleting vertex 0.
 						// So re-use the same command, but with the delete wall name.
 						const s32 vertexIndex = sector->walls[featureIndex].idx[0];
@@ -79,6 +83,7 @@ namespace LevelEditor
 			{
 				if (sector)
 				{
+					selection_clearHovered();
 					edit_deleteSector(sector->id);
 				}
 			} break;
@@ -107,13 +112,13 @@ namespace LevelEditor
 		const bool selToggle = TFE_Input::keyModDown(KEYMOD_CTRL);
 		const bool selToggleDrag = selAdd && selToggle;
 
-		const bool moveToFloor = TFE_Input::keyPressed(KEY_F);
-		const bool moveToCeil  = TFE_Input::keyPressed(KEY_C);
+		const bool moveToFloor = isShortcutPressed(SHORTCUT_MOVE_TO_FLOOR);
+		const bool moveToCeil = isShortcutPressed(SHORTCUT_MOVE_TO_CEIL);
 
 		const bool mousePressed = s_singleClick;
 		const bool mouseDown = TFE_Input::mouseDown(MouseButton::MBUTTON_LEFT);
 
-		const bool del = TFE_Input::keyPressed(KEY_DELETE);
+		const bool del = isShortcutPressed(SHORTCUT_DELETE);
 		const bool hasHovered = selection_hasHovered();
 		const bool hasFeature = selection_getCount() > 0;
 
@@ -163,12 +168,6 @@ namespace LevelEditor
 					s_curVtxPos = s_cursor3d;
 					adjustGridHeight(sector);
 					s_editMove = true;
-
-					if (s_editMode == LEDIT_WALL)
-					{
-						// TODO: Hotkeys...
-						edit_setWallMoveMode(TFE_Input::keyDown(KEY_N) ? WMM_NORMAL : WMM_FREE);
-					}
 				}
 				else if (!s_editMove)
 				{

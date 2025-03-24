@@ -1,4 +1,5 @@
 #include "enemies.h"
+#include "flyers.h"
 #include "actorModule.h"
 #include "animTables.h"
 #include "../logic.h"
@@ -48,7 +49,7 @@ namespace TFE_DarkForces
 		ThinkerModule* thinkerMod = actor_createThinkerModule(dispatch);
 		thinkerMod->target.speedRotation = 0x7fff;
 		thinkerMod->target.speed = FIXED(13);
-		thinkerMod->anim.flags &= 0xfffffffe;
+		thinkerMod->anim.flags &= ~AFLAG_PLAYONCE;
 		thinkerMod->startDelay = TICKS(2);
 		actor_addModule(dispatch, (ActorModule*)thinkerMod);
 
@@ -56,7 +57,7 @@ namespace TFE_DarkForces
 		dispatch->moveMod = moveMod;
 		dispatch->animTable = s_reeyeesAnimTable;
 
-		moveMod->collisionFlags |= 1;
+		moveMod->collisionFlags |= ACTORCOL_NO_Y_MOVE;
 		moveMod->physics.width = obj->worldWidth;
 		actor_setupInitAnimation();
 
@@ -86,7 +87,7 @@ namespace TFE_DarkForces
 		ThinkerModule* thinkerMod = actor_createThinkerModule(dispatch);
 		thinkerMod->target.speedRotation = 0x7fff;
 		thinkerMod->target.speed = FIXED(13);
-		thinkerMod->anim.flags &= 0xfffffffe;
+		thinkerMod->anim.flags &= ~AFLAG_PLAYONCE;
 		thinkerMod->startDelay = TICKS(2);
 		actor_addModule(dispatch, (ActorModule*)thinkerMod);
 
@@ -94,7 +95,7 @@ namespace TFE_DarkForces
 		dispatch->moveMod = moveMod;
 		dispatch->animTable = s_reeyeesAnimTable;
 
-		moveMod->collisionFlags |= 1;
+		moveMod->collisionFlags |= ACTORCOL_NO_Y_MOVE;
 		moveMod->physics.width = obj->worldWidth;
 		actor_setupInitAnimation();
 
@@ -128,7 +129,7 @@ namespace TFE_DarkForces
 		thinkerMod->delay = 0;
 		thinkerMod->target.speedRotation = 0x3fff;
 		thinkerMod->target.speed = FIXED(12);
-		thinkerMod->anim.flags &= 0xfffffffe;
+		thinkerMod->anim.flags &= ~AFLAG_PLAYONCE;
 		thinkerMod->startDelay = TICKS(2);
 		actor_addModule(dispatch, (ActorModule*)thinkerMod);
 
@@ -136,7 +137,7 @@ namespace TFE_DarkForces
 		dispatch->moveMod = moveMod;
 		dispatch->animTable = s_gamorAnimTable;
 
-		moveMod->collisionFlags |= 1;
+		moveMod->collisionFlags |= ACTORCOL_NO_Y_MOVE;
 		moveMod->physics.width = obj->worldWidth;
 		actor_setupInitAnimation();
 
@@ -169,7 +170,7 @@ namespace TFE_DarkForces
 		thinkerMod->target.speedRotation = 0x7fff;
 		thinkerMod->target.speed = FIXED(9);
 		thinkerMod->delay = 0;
-		thinkerMod->anim.flags &= 0xfffffffe;
+		thinkerMod->anim.flags &= ~AFLAG_PLAYONCE;
 		thinkerMod->startDelay = TICKS(2);
 		actor_addModule(dispatch, (ActorModule*)thinkerMod);
 
@@ -177,10 +178,88 @@ namespace TFE_DarkForces
 		dispatch->moveMod = moveMod;
 		dispatch->animTable = s_bosskAnimTable;
 
-		moveMod->collisionFlags |= 1;
+		moveMod->collisionFlags |= ACTORCOL_NO_Y_MOVE;
 		moveMod->physics.width = obj->worldWidth;
 		actor_setupInitAnimation();
 
 		return (Logic*)dispatch;
 	}
+
+	// SETUP CUSTOM LOGIC
+	Logic* custom_actor_setup(SecObject* obj, TFE_ExternalData::CustomActorLogic* cust, LogicSetupFunc* setupFunc)
+	{
+		ActorDispatch* dispatch = actor_createDispatch(obj, setupFunc);
+		dispatch->alertSndSrc = sound_load(cust->alertSound, SOUND_PRIORITY_MED5);
+		dispatch->fov = cust->fov;
+		dispatch->awareRange = FIXED(cust->awareRange);
+
+		// Damage Module
+		DamageModule* damageMod = actor_createDamageModule(dispatch);
+		damageMod->hp = FIXED(cust->hitPoints);
+		damageMod->itemDropId = (ItemId)cust->dropItem;
+		damageMod->dieEffect = (HitEffectID)cust->dieEffect;
+		damageMod->hurtSndSrc = sound_load(cust->painSound, SOUND_PRIORITY_MED5);
+		damageMod->dieSndSrc = sound_load(cust->dieSound, SOUND_PRIORITY_MED5);
+		actor_addModule(dispatch, (ActorModule*)damageMod);
+
+		// Attack Module
+		AttackModule* attackMod = actor_createAttackModule(dispatch);
+		attackMod->attackFlags = 0;
+		if (cust->hasMeleeAttack) { attackMod->attackFlags |= ATTFLAG_MELEE; }
+		if (cust->hasRangedAttack) { attackMod->attackFlags |= ATTFLAG_RANGED; }
+		if (cust->litWithMeleeAttack) { attackMod->attackFlags |= ATTFLAG_LIT_MELEE; }
+		if (cust->litWithRangedAttack) { attackMod->attackFlags |= ATTFLAG_LIT_RNG; }
+		attackMod->projType = (ProjectileType)cust->projectile;
+		attackMod->attackPrimSndSrc = sound_load(cust->attack1Sound, SOUND_PRIORITY_LOW0);
+		attackMod->attackSecSndSrc = sound_load(cust->attack2Sound, SOUND_PRIORITY_LOW0);
+		attackMod->timing.rangedDelay = cust->rangedAttackDelay;
+		attackMod->timing.meleeDelay = cust->meleeAttackDelay;
+		attackMod->timing.losDelay = cust->losDelay;
+		attackMod->maxDist = FIXED(cust->maxAttackDist);
+		attackMod->meleeRange = FIXED(cust->meleeRange);
+		attackMod->meleeDmg = FIXED(cust->meleeDamage);
+		attackMod->meleeRate = FIXED(cust->meleeRate);
+		attackMod->minDist = FIXED(cust->minAttackDist);
+		attackMod->fireSpread = FIXED(cust->fireSpread);
+		s_actorState.attackMod = attackMod;
+		actor_addModule(dispatch, (ActorModule*)attackMod);
+
+		// Thinker Module
+		ThinkerModule* thinkerMod = actor_createThinkerModule(dispatch);
+		thinkerMod->target.speedRotation = cust->rotationSpeed;
+		thinkerMod->target.speed = FIXED(cust->speed);
+		thinkerMod->anim.flags &= ~AFLAG_PLAYONCE;		// Ensures that walking animations will loop
+		thinkerMod->startDelay = TICKS(2);
+		actor_addModule(dispatch, (ActorModule*)thinkerMod);
+
+		// Flying Thinker Module (if flying enemy)
+		if (cust->isFlying)
+		{
+			ThinkerModule* flyingMod = actor_createFlyingModule((Logic*)dispatch);
+			flyingMod->target.speedRotation = cust->rotationSpeed;
+			flyingMod->target.speed = FIXED(cust->speed);
+			flyingMod->target.speedVert = FIXED(cust->verticalSpeed);
+			actor_addModule(dispatch, (ActorModule*)flyingMod);
+		}
+
+		// Movement Module
+		MovementModule* moveMod = actor_createMovementModule(dispatch);
+		dispatch->moveMod = moveMod;
+		moveMod->physics.width = obj->worldWidth;
+		if (cust->isFlying)
+		{
+			moveMod->collisionFlags = (moveMod->collisionFlags & ~ACTORCOL_ALL) | ACTORCOL_BIT2;	// Remove bits 0, 1 and set bit 2
+			moveMod->physics.yPos = FIXED(200);
+		}
+		else
+		{
+			moveMod->collisionFlags |= ACTORCOL_NO_Y_MOVE;
+		}
+
+		dispatch->animTable = s_customAnimTable;
+		actor_setupInitAnimation();
+
+		return (Logic*)dispatch;
+	}
+
 }  // namespace TFE_DarkForces

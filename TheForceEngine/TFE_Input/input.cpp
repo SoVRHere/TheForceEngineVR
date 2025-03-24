@@ -33,6 +33,7 @@ namespace TFE_Input
 	s32 s_mousePos[2] = { 0 };
 
 	bool s_relativeMode = false;
+	bool s_isRepeating = false;
 
 	static const char* const* s_controllerAxisNames;
 	static const char* const* s_controllerButtonNames;
@@ -84,8 +85,29 @@ namespace TFE_Input
 		s_buttonDown[button] = 0;
 	}
 
+	void setKeyPress(KeyboardCode key)
+	{
+		s_keyPressed[key] = 1;
+	}
+
+	void setKeyPressRepeat(KeyboardCode key)
+	{
+		s_keyPressedRepeat[key] = 1;
+	}
+
+	void setRepeating(bool repeat)
+	{
+		s_isRepeating = repeat;
+	}
+
+	bool isRepeating()
+	{
+		return s_isRepeating;
+	}
+
 	void setKeyDown(KeyboardCode key, bool repeat)
 	{
+
 		if (!s_keyDown[key] && !repeat)
 		{
 			s_keyPressed[key] = 1;
@@ -98,7 +120,7 @@ namespace TFE_Input
 	}
 
 	void setKeyUp(KeyboardCode key)
-	{
+	{		
 		s_keyDown[key] = 0;
 	}
 
@@ -173,6 +195,12 @@ namespace TFE_Input
 		*x = s_mouseMove[0];
 		*y = s_mouseMove[1];
 	}
+
+	void getMouseMoveAccum(s32* x, s32* y)
+	{
+		*x = s_mouseMoveAccum[0];
+		*y = s_mouseMoveAccum[1];
+	}
 		
 	void getAccumulatedMouseMove(s32* x, s32* y)
 	{
@@ -236,10 +264,15 @@ namespace TFE_Input
 		s_mousePressed[btn] = 0;
 	}
 		
-	KeyboardCode getKeyPressed()
+	KeyboardCode getKeyPressed(bool ignoreModKeys)
 	{
 		for (s32 i = 0; i < KEY_COUNT; i++)
 		{
+			if (ignoreModKeys && (i == KEY_LSHIFT || i == KEY_RSHIFT || i == KEY_LALT || i == KEY_RALT || i == KEY_LCTRL || i == KEY_RCTRL))
+			{
+				continue;
+			}
+
 			if (s_keyPressed[i])
 			{
 				return KeyboardCode(i);

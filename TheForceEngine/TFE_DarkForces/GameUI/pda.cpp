@@ -1,5 +1,4 @@
 #include <cstring>
-
 #include "pda.h"
 #include "menu.h"
 #include "missionBriefing.h"
@@ -30,7 +29,8 @@
 #include <TFE_Jedi/Level/rfont.h>
 #include <TFE_Jedi/Renderer/jediRenderer.h>
 #include <TFE_Settings/settings.h>
-#include <TFE_System/system.h>
+#include <TFE_Input/replay.h>
+#include <TFE_Input/inputMapping.h>
 
 using namespace TFE_Jedi;
 using namespace TFE_Input;
@@ -103,6 +103,8 @@ namespace TFE_DarkForces
 
 	static s32 s_briefingMaxY;
 	static s16 s_briefY;
+	static s32 mouseOldPosX = 0, mouseOldPosZ = 0;
+	static bool mouseMoveReset = true;
 		
 	void pda_handleInput();
 	void pda_drawCommonButtons();
@@ -125,7 +127,7 @@ namespace TFE_DarkForces
 		// TFE
 		reticle_enable(false);
 		s_mouseAccum = { 0 };
-
+		mouseOldPosX = 0, mouseOldPosZ = 0;
 		pauseLevelSound();
 		if (!s_pdaLoaded)
 		{
@@ -159,6 +161,7 @@ namespace TFE_DarkForces
 					s_briefingMaxY = -BRIEF_VERT_MARGIN;
 				}
 				s_briefY = -BRIEF_VERT_MARGIN;
+				
 			}
 			s_overlayRect = s_pdaRect;
 			
@@ -168,7 +171,7 @@ namespace TFE_DarkForces
 			}
 			s_framebuffer = ldraw_getBitmap();
 			lcanvas_getBounds(&s_viewBounds);
-
+				
 			s_pdaArt = lactorAnim_load("pda", &s_viewBounds, 0, 0, 0);
 			s_palette = lpalette_load("menu");
 			lactor_setTime(s_pdaArt, -1, -1);
@@ -209,6 +212,12 @@ namespace TFE_DarkForces
 		pda_resetState();
 	}
 
+	// Reset the tab to the map to support replay consistency. 
+	void pda_resetTab()
+	{
+		s_pdaMode = PDA_MODE_MAP;
+	}
+
 	void pda_resetState()
 	{
 		s_pdaOpen   = JFALSE;
@@ -245,6 +254,7 @@ namespace TFE_DarkForces
 			TFE_Jedi::renderer_setType(RendererType(graphics->rendererIndex));
 			TFE_Jedi::renderer_setLimits();
 		}
+
 	}
 			
 	void pda_update()
@@ -254,7 +264,10 @@ namespace TFE_DarkForces
 			return;
 		}
 		
-		if (inputMapping_getActionState(IADF_PDA_TOGGLE) == STATE_PRESSED || TFE_Input::keyPressed(KEY_ESCAPE))
+		// Special case to support Escape during demo playback
+		if (inputMapping_getActionState(IADF_PDA_TOGGLE) == STATE_PRESSED 
+			|| TFE_Input::keyPressed(KEY_ESCAPE) 
+			|| inputMapping_getAction(IADF_MENU_TOGGLE) == STATE_PRESSED)
 		{
 			pda_close();
 			return;
@@ -276,10 +289,10 @@ namespace TFE_DarkForces
 		u32 outWidth, outHeight;
 		vfb_getResolution(&outWidth, &outHeight);
 		memset(vfb_getCpuBuffer(), 0, outWidth * outHeight);
-
+		
 		// Draw the overlay *behind* the main view - which means we must blit it to the view.
 		pda_drawOverlay();
-
+		
 		// Finally draw the PDA background and UI controls.
 		lcanvas_eraseRect(&s_viewBounds);
 		lactor_setState(s_pdaArt, 0, 0);
@@ -350,7 +363,37 @@ namespace TFE_DarkForces
 		// Ensure that mouse movements are not lost between updates.
 		pda_handleMouseAccum(&wdx, &wdy);
 
-		if (TFE_Input::mousePressed(MBUTTON_LEFT) || s_simulatePressed >= 0 || wdy)
+		// Ensure PDA key presses handle replay data
+		bool mouseDown = TFE_Input::isDemoPlayback() && inputMapping_getAction(IADF_PRIMARY_FIRE) == STATE_DOWN || TFE_Input::mouseDown(MBUTTON_LEFT);
+		bool mousePressed = TFE_Input::isDemoPlayback() && inputMapping_getAction(IADF_PRIMARY_FIRE) == STATE_PRESSED || TFE_Input::mousePressed(MBUTTON_LEFT);
+		
+		// Handle Mouse Panning
+		if (mouseDown)
+		{
+			s32 mouseX, mouseZ;
+			TFE_Input::getMousePos(&mouseX, &mouseZ);
+			
+			// Calculate deltas
+			fixed16_16 deltaX = (mouseX - mouseOldPosX) << 16;
+			fixed16_16 deltaZ = (mouseZ - mouseOldPosZ) << 16;
+
+			mouseOldPosX = mouseX;
+			mouseOldPosZ = mouseZ;
+
+			// Don't bother if this is the first time 
+			if (!mouseMoveReset)
+			{
+				automap_updateDeltaCoords(deltaX, deltaZ);
+			}
+			mouseMoveReset = false;
+		}
+		else
+		{
+			// Mouse Up - reset the offsets.
+			mouseMoveReset = true;
+		}
+
+		if (s_simulatePressed >= 0 || wdy || mousePressed)
 		{
 			s_buttonPressed = -1;
 			s32 count = (s_pdaMode == PDA_MODE_MAP || s_pdaMode == PDA_MODE_BRIEF) ? PDA_BTN_COUNT : PDA_BTN_EXIT + 1;
@@ -359,8 +402,8 @@ namespace TFE_DarkForces
 				lactor_setState(s_pdaArt, 2 * (1 + i), 0);
 				LRect buttonRect;
 				lactorAnim_getFrame(s_pdaArt, &buttonRect);
-
-				if (!TFE_Input::mousePressed(MBUTTON_LEFT))
+				
+				if (!TFE_Input::mousePressed(MBUTTON_LEFT) && !mousePressed)
 				{
 					if (i == s_simulatePressed)
 					{
@@ -381,7 +424,7 @@ namespace TFE_DarkForces
 				}
 			}
 						
-			if (s_pdaMode == PDA_MODE_MAP && (s_buttonPressed || wdy) && s_frameReady)
+			if (s_pdaMode == PDA_MODE_MAP && (s_buttonPressed || wdy || mousePressed) && s_frameReady)
 			{
 				// Add support for mouse wheel scrolling.
 				if (wdy < 0)
@@ -437,7 +480,7 @@ namespace TFE_DarkForces
 					} break;
 				}
 			}
-			else if (s_pdaMode == PDA_MODE_BRIEF && (s_buttonPressed || wdy) && s_frameReady)
+			else if (s_pdaMode == PDA_MODE_BRIEF && (s_buttonPressed || wdy || mousePressed) && s_frameReady)
 			{
 				// Add support for mouse wheel scrolling.
 				if (wdy > 0) // up
@@ -479,7 +522,7 @@ namespace TFE_DarkForces
 				}
 			}
 		}
-		else if (TFE_Input::mouseDown(MBUTTON_LEFT) && s_buttonPressed >= 0)
+		else if (mouseDown && s_buttonPressed >= 0)
 		{
 			lactor_setState(s_pdaArt, 2 * (1 + s_buttonPressed), 0);
 			LRect buttonRect;
@@ -823,7 +866,7 @@ namespace TFE_DarkForces
 		u32 outWidth, outHeight;
 		vfb_getResolution(&outWidth, &outHeight);
 		memset(vfb_getCpuBuffer(), 0, outWidth * outHeight);
-
+		
 		u32 palette[256] = { 0 };
 		vfb_setPalette(palette);
 	}

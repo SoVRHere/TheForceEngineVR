@@ -1,12 +1,15 @@
 #include "levelEditorData.h"
 #include "levelDataSnapshot.h"
+#include "levelEditorHistory.h"
 #include "levelEditor.h"
+#include "editGeometry.h"
 #include "selection.h"
 #include "entity.h"
 #include "error.h"
 #include "shell.h"
 #include "levelEditorInf.h"
 #include "sharedState.h"
+#include "guidelines.h"
 #include <TFE_Editor/snapshotReaderWriter.h>
 #include <TFE_Editor/history.h>
 #include <TFE_Editor/errorMessages.h>
@@ -21,6 +24,8 @@
 #include <TFE_Editor/EditorAsset/editorFrame.h>
 #include <TFE_Editor/EditorAsset/editorSprite.h>
 #include <TFE_Editor/AssetBrowser/assetBrowser.h>
+#include <TFE_Editor/LevelEditor/Rendering/grid.h>
+#include <TFE_Archive/zipArchive.h>
 #include <TFE_Jedi/Level/rwall.h>
 #include <TFE_Jedi/Level/rsector.h>
 #include <TFE_Jedi/Level/rtexture.h>
@@ -46,6 +51,7 @@
 #include <vector>
 #include <string>
 #include <map>
+#include <set>
 
 using namespace TFE_Editor;
 using namespace TFE_Jedi;
@@ -95,7 +101,6 @@ namespace LevelEditor
 	EditorLevel s_level = {};
 
 	extern AssetList s_levelTextureList;
-	bool loadFromTFL(const char* name);
 
 	enum Constants
 	{
@@ -105,6 +110,8 @@ namespace LevelEditor
 	};
 	
 	EditorSector* findSectorDf(const Vec3f pos);
+	EditorSector* findSectorDf(const Vec2f pos);
+	void gatherAssetList(const char* name, const char* levFile, const char* objFile, std::vector<Asset*>& assetList);
 
 	AssetHandle loadTexture(const char* bmTextureName)
 	{
@@ -252,7 +259,7 @@ namespace LevelEditor
 		}
 	}
 		
-	bool loadLevelObjFromAsset(Asset* asset)
+	bool loadLevelObjFromAsset(const Asset* asset)
 	{
 		char objFile[TFE_MAX_PATH];
 		s_fileData.clear();
@@ -495,8 +502,25 @@ namespace LevelEditor
 
 		return true;
 	}
+
+	void levelClear()
+	{
+		// Clear the INF data.
+		s_levelInf.elevator.clear();
+		s_levelInf.teleport.clear();
+		s_levelInf.trigger.clear();
+
+		// Clear selection state.
+		selection_clear();
+		selection_clearHovered();
+		s_featureTex = {};
+
+		// Clear notes.
+		s_level.notes.clear();
+		levelSetClean();
+	}
 		
-	bool loadLevelFromAsset(Asset* asset)
+	bool loadLevelFromAsset(const Asset* asset)
 	{
 		EditorLevel* level = &s_level;
 		char slotName[256];
@@ -514,6 +538,7 @@ namespace LevelEditor
 
 		// Clear notes.
 		s_level.notes.clear();
+		levelSetClean();
 
 		// First check to see if there is a "tfl" version of the level.
 		if (loadFromTFL(slotName))
@@ -867,17 +892,43 @@ namespace LevelEditor
 		return note.id;
 	}
 
-	bool loadFromTFL(const char* name)
+	void updateBoundsWithSector(EditorSector* sector)
 	{
-		// If there is no project, then the TFL can't exist.
-		Project* project = project_get();
-		if (!project)
-		{
-			return false;
-		}
-		char filePath[TFE_MAX_PATH];
-		sprintf(filePath, "%s/%s.tfl", project->path, name);
+		s_level.bounds[0].x = min(s_level.bounds[0].x, sector->bounds[0].x);
+		s_level.bounds[0].y = min(s_level.bounds[0].y, sector->bounds[0].y);
+		s_level.bounds[0].z = min(s_level.bounds[0].z, sector->bounds[0].z);
 
+		s_level.bounds[1].x = max(s_level.bounds[1].x, sector->bounds[1].x);
+		s_level.bounds[1].y = max(s_level.bounds[1].y, sector->bounds[1].y);
+		s_level.bounds[1].z = max(s_level.bounds[1].z, sector->bounds[1].z);
+
+		s_level.layerRange[0] = min(s_level.layerRange[0], sector->layer);
+		s_level.layerRange[1] = max(s_level.layerRange[1], sector->layer);
+	}
+
+	void updateLevelBounds(EditorSector* sector)
+	{
+		if (!sector)
+		{
+			s_level.bounds[0] = { FLT_MAX,  FLT_MAX,  FLT_MAX };
+			s_level.bounds[1] = { -FLT_MAX, -FLT_MAX, -FLT_MAX };
+			s_level.layerRange[0] = INT_MAX;
+			s_level.layerRange[1] = -INT_MAX;
+			const size_t count = s_level.sectors.size();
+			sector = s_level.sectors.data();
+			for (size_t i = 0; i < count; i++, sector++)
+			{
+				updateBoundsWithSector(sector);
+			}
+		}
+		else
+		{
+			updateBoundsWithSector(sector);
+		}
+	}
+
+	bool loadFromTFLWithPath(const char* filePath)
+	{
 		// Then try to open it based on the path, if it fails load the LEV file.
 		FileStream file;
 		if (!file.open(filePath, FileStream::MODE_READ))
@@ -1048,9 +1099,12 @@ namespace LevelEditor
 			file.read(&guidelineCount);
 			s_level.guidelines.resize(guidelineCount);
 
-			Guideline* guideline = s_level.guidelines.data();
-			for (s32 i = 0; i < guidelineCount; i++, guideline++)
+			Guideline* guidelines = s_level.guidelines.data();
+			s32 validGuidelineCount = 0;
+			for (s32 i = 0; i < guidelineCount; i++)
 			{
+				Guideline* guideline = &guidelines[validGuidelineCount];
+
 				// Counts
 				s32 vtxCount = 0;
 				s32 knotCount = 0;
@@ -1060,7 +1114,7 @@ namespace LevelEditor
 				file.read(&knotCount);
 				file.read(&edgeCount);
 				file.read(&offsetCount);
-
+								
 				guideline->id = i;
 				guideline->vtx.resize(vtxCount);
 				guideline->knots.resize(knotCount);
@@ -1080,26 +1134,49 @@ namespace LevelEditor
 				file.read(&guideline->maxHeight);
 				file.read(&guideline->minHeight);
 				file.read(&guideline->maxSnapRange);
+
+				guideline->subDivLen = 0.0f;
+				if (version >= LEF_GuidelineV2)
+				{
+					file.read(&guideline->subDivLen);
+				}
+
+				// Deal with broken guidelines from earlier versions...
+				if (vtxCount > 0 && edgeCount > 0)
+				{
+					validGuidelineCount++;
+				}
+				// Compute the subdivion data.
+				guideline_computeSubdivision(guideline);
+			}
+			if (validGuidelineCount != guidelineCount)
+			{
+				s_level.guidelines.resize(validGuidelineCount);
 			}
 		}
 
 		file.close();
-
+		
 		return true;
 	}
-			
-	// Save in the binary editor format.
-	bool saveLevel()
+
+	bool loadFromTFL(const char* name)
 	{
+		// If there is no project, then the TFL can't exist.
 		Project* project = project_get();
-		if (!project)
-		{
-			LE_ERROR("Cannot save if no project is open.");
-			return false;
-		}
+		if (!project) { return false; }
 
 		char filePath[TFE_MAX_PATH];
-		sprintf(filePath, "%s/%s.tfl", project->path, s_level.slot.c_str());
+		sprintf(filePath, "%s/%s.tfl", project->path, name);
+		return loadFromTFLWithPath(filePath);
+	}
+
+	bool saveLevelToPath(const char* filePath, bool cleanLevel)
+	{
+		if (cleanLevel)
+		{
+			levelSetClean();
+		}
 		LE_INFO("Saving level to '%s'", filePath);
 
 		FileStream file;
@@ -1108,6 +1185,9 @@ namespace LevelEditor
 			LE_ERROR("Cannot open '%s' for writing.", filePath);
 			return false;
 		}
+
+		// Update the level bounds.
+		updateLevelBounds();
 
 		// Version.
 		const u32 version = LEF_CurVersion;
@@ -1236,12 +1316,28 @@ namespace LevelEditor
 			file.write(&guideline->maxHeight);
 			file.write(&guideline->minHeight);
 			file.write(&guideline->maxSnapRange);
+			file.write(&guideline->subDivLen);
 		}
 
 		file.close();
 
 		LE_INFO("Save Complete");
 		return true;
+	}
+			
+	// Save in the binary editor format.
+	bool saveLevel()
+	{
+		Project* project = project_get();
+		if (!project)
+		{
+			LE_ERROR("Cannot save if no project is open.");
+			return false;
+		}
+
+		char filePath[TFE_MAX_PATH];
+		sprintf(filePath, "%s/%s.tfl", project->path, s_level.slot.c_str());
+		return saveLevelToPath(filePath);
 	}
 
 	// Export the level to the game format.
@@ -1484,9 +1580,6 @@ namespace LevelEditor
 			
 	bool exportDfObj(const char* oFile, const StartPoint* start)
 	{
-		// For now require the start point.
-		if (!start) { return false; }
-
 		FileStream file;
 		if (!file.open(oFile, FileStream::MODE_WRITE))
 		{
@@ -1515,6 +1608,10 @@ namespace LevelEditor
 			for (s32 o = 0; o < objCount; o++, obj++)
 			{
 				const Entity* entity = &s_level.entities[obj->entityId];
+				if ((entity->categories & s_enemyCategoryFlag) && (s_editorConfig.levelEditorFlags & LEVEDITOR_FLAG_NO_ENEMIES))
+				{
+					continue;
+				}
 
 				s32 index = (s32)objList.size();
 				objList.push_back(obj);
@@ -1572,13 +1669,21 @@ namespace LevelEditor
 
 		// For now just put in a start point.
 		const f32 radToDeg = 360.0f / (2.0f * PI);
-		const f32 yaw   = fmodf(start->yaw * radToDeg + 180.0f, 360.0f);
-		const f32 pitch = start->pitch * radToDeg;
-		const f32 y = std::max(start->sector->floorHeight, start->pos.y - 5.8f);
+		const f32 yaw   = start ? fmodf(start->yaw * radToDeg + 180.0f, 360.0f) : 0.0f;
+		const f32 pitch = start ? start->pitch * radToDeg : 0.0f;
+		const f32 y = start ? std::max(start->sector->floorHeight, start->pos.y - 5.8f) : 0.0f;
 
 		s32 objCount = (s32)objList.size();
 		s32 finalObjCount = objCount;
-		if (startPointId < 0) { finalObjCount++; }
+		if (startPointId < 0)
+		{
+			// If there is no start point, then we need to be provided one.
+			if (!start)
+			{
+				return false;
+			}
+			finalObjCount++;
+		}
 
 		WRITE_LINE("OBJECTS %d\r\n", finalObjCount);
 
@@ -1607,7 +1712,14 @@ namespace LevelEditor
 				{
 					if (i == startPointId)
 					{
-						WRITE_LINE("    CLASS: SPIRIT     DATA: 0   X: %0.2f Y: %0.2f Z: %0.2f PCH: %0.2f   YAW: %0.2f ROL: 0.00   DIFF: %d\r\n", start->pos.x, -y, start->pos.z, pitch, yaw, obj->diff);
+						if (start)
+						{
+							WRITE_LINE("    CLASS: SPIRIT     DATA: 0   X: %0.2f Y: %0.2f Z: %0.2f PCH: %0.2f   YAW: %0.2f ROL: 0.00   DIFF: %d\r\n", start->pos.x, -y, start->pos.z, pitch, yaw, obj->diff);
+						}
+						else
+						{
+							WRITE_LINE("    CLASS: SPIRIT     DATA: 0   X: %0.2f Y: %0.2f Z: %0.2f PCH: %0.2f   YAW: %0.2f ROL: %0.2f   DIFF: %d\r\n", obj->pos.x, -obj->pos.y, obj->pos.z, objPitch, objYaw, objRoll, obj->diff);
+						}
 						WRITE_LINE("        SEQ\r\n");
 						WRITE_LINE("            LOGIC:     PLAYER\r\n");
 						WRITE_LINE("            EYE:       TRUE\r\n");
@@ -1822,9 +1934,414 @@ namespace LevelEditor
 		return true;
 	}
 
-	// Hack test path for now.
-	static const char* s_testPath = "D:/dev/TheForceEngine/TheForceEngine/Games/Dark Forces";
-	static const char* s_testAppPath = "D:/dev/TheForceEngine/Build/TheForceEngine.exe";
+	bool writeZip(const char* path, FileList& fileList)
+	{
+		ZipArchive archive;
+		if (!archive.create(path)) { return false; }
+		const size_t count = fileList.size();
+		for (size_t i = 0; i < count; i++)
+		{
+			archive.addFile(fileList[i].c_str(), fileList[i].c_str());
+		}
+		archive.close();
+		return true;
+	}
+
+	const char* c_modHeaderTemplate =
+		"================================================================\r\n"
+		"Title:\t\t %s\r\n"
+		"Author:\t\t %s\r\n"
+		"Description: \r\n"
+		"%s\r\n"
+		"\r\n"
+		"Additional Credits:\r\n"
+		"================================================================\r\n"
+		"%s\r\n";
+
+	bool exportGob(const char* workPath, const char* exportPath, const char* gobName, const std::vector<LevelExportInfo>& levelList, char* gobTempPath)
+	{
+		const size_t count = levelList.size();
+		char baseName[TFE_MAX_PATH];
+		char levFile[TFE_MAX_PATH];
+		char infFile[TFE_MAX_PATH];
+		char objFile[TFE_MAX_PATH];
+		char jediLine[TFE_MAX_PATH];
+
+		// Load definitions.
+		// TODO: Handle different games...
+		const char* gameLocalDir = "DarkForces";
+		loadVariableData(gameLocalDir);
+		loadEntityData(gameLocalDir, false);
+		loadLogicData(gameLocalDir);
+		groups_init();
+
+		Project* project = project_get();
+		if (project && project->active)
+		{
+			char projEntityDataPath[TFE_MAX_PATH];
+			sprintf(projEntityDataPath, "%s/%s.ini", project->path, "CustomEntityDef");
+			loadEntityData(projEntityDataPath, true);
+		}
+
+		const LevelExportInfo* levelInfo = levelList.data();
+		std::string jediLevel;
+		FileList fileList;
+		s32 levelCount = 0;
+
+		std::vector<Asset*> assetList;
+		WorkBuffer buffer;
+
+		for (size_t i = 0; i < count; i++, levelInfo++)
+		{
+			FileUtil::getFileNameFromPath(levelInfo->slot.c_str(), baseName);
+
+			sprintf(levFile, "%s/%s.LEV", workPath, baseName);
+			sprintf(infFile, "%s/%s.INF", workPath, baseName);
+			sprintf(objFile, "%s/%s.O", workPath, baseName);
+
+			// Load the level.
+			if (!loadLevelFromAsset(levelInfo->asset))
+			{
+				return false;
+			}
+
+			if (!exportDfLevel(levFile)) { return false; }
+			if (!exportDfInf(infFile)) { return false; }
+			if (!exportDfObj(objFile, nullptr)) { return false; }
+
+			fileList.push_back(levFile);
+			fileList.push_back(infFile);
+			fileList.push_back(objFile);
+
+			sprintf(jediLine, "%s,\t%s,\t%s\r\n", s_level.name.c_str(), baseName, "L:\\LEVELS\\");
+			jediLevel += jediLine;
+			levelCount++;
+
+			gatherAssetList(s_level.slot.c_str(), levFile, objFile, assetList);
+		}
+		sprintf(jediLine, "LEVELS %d\r\n", levelCount);
+		jediLevel = jediLine + jediLevel;
+		jediLevel += "\r\n\r\n";
+		jediLevel += "//      (Comments must be at the end of this file)\r\n";
+		jediLevel += "//      This file contains the list of all the levels in Jedi,\r\n";
+		jediLevel += "//      and the DOS names for those levels.\r\n";
+
+		if (!assetList.empty())
+		{
+			char tmpDir[TFE_MAX_PATH];
+			getTempDirectory(tmpDir);
+
+			const size_t count = assetList.size();
+			Asset** list = assetList.data();
+			for (size_t i = 0; i < count; i++)
+			{
+				Asset* asset = list[i];
+				// Export
+				char exportPath[TFE_MAX_PATH];
+				sprintf(exportPath, "%s/%s", tmpDir, asset->name.c_str());
+				if (AssetBrowser::readWriteFile(exportPath, asset->name.c_str(), asset->archive, buffer))
+				{
+					fileList.push_back(exportPath);
+				}
+			}
+		}
+
+		char jediLevelPath[TFE_MAX_PATH];
+		sprintf(jediLevelPath, "%s/jedi.lvl", workPath);
+		FileStream jediLvlFile;
+		if (jediLvlFile.open(jediLevelPath, FileStream::MODE_WRITE))
+		{
+			jediLvlFile.writeBuffer(jediLevel.c_str(), (u32)jediLevel.length());
+			jediLvlFile.close();
+			fileList.push_back(jediLevelPath);
+		}
+
+		char gobPath[TFE_MAX_PATH];
+		const size_t len = strlen(exportPath);
+		if (exportPath[len - 1] == '/' || exportPath[len - 1] == '\\')
+		{
+			sprintf(gobPath, "%s%s.GOB", workPath, gobName);
+		}
+		else
+		{
+			sprintf(gobPath, "%s/%s.GOB", workPath, gobName);
+		}
+		strcpy(gobTempPath, gobPath);
+		return writeGob(gobPath, fileList);
+	}
+
+	// TODO: Support "gobx" format - basically storing data in "loose" format if vanilla support is not required.
+	// TODO: Go through levels and include any resources not included in the base game.
+	bool exportLevels(const char* workPath, const char* exportPath, const char* gobName, const std::vector<LevelExportInfo>& levelList)
+	{
+		char gobTempPath[TFE_MAX_PATH];
+		if (!exportGob(workPath, exportPath, gobName, levelList, gobTempPath))
+		{
+			return false;
+		}
+		FileList fileList;
+		fileList.push_back(gobTempPath);
+
+		Project* project = project_get();
+
+		char readme[4096];
+		sprintf(readme, c_modHeaderTemplate, project->name, project->authors.c_str(), project->desc.c_str(), project->credits.c_str());
+
+		char readmePath[TFE_MAX_PATH];
+		sprintf(readmePath, "%s/%s.txt", workPath, project->name);
+		FileStream readmeFile;
+		if (readmeFile.open(readmePath, FileStream::MODE_WRITE))
+		{
+			readmeFile.writeBuffer(readme, (u32)strlen(readme) + 1);
+			readmeFile.close();
+			fileList.push_back(readmePath);
+		}
+
+		// Search for any files in the project directory that include the following extensions:
+		const char* c_includeExt[] =
+		{
+			"txt",
+			"fs",
+			"lfd",
+			"png",
+			"jpg",
+			"webp",
+		};
+		const size_t extLen = TFE_ARRAYSIZE(c_includeExt);
+		FileList list;
+		char dir[TFE_MAX_PATH];
+		char filePath[TFE_MAX_PATH];
+		sprintf(dir, "%s/", project->path);
+
+		for (size_t i = 0; i < extLen; i++)
+		{
+			list.clear();
+			FileUtil::readDirectory(dir, c_includeExt[i], list);
+			for (size_t j = 0; j < list.size(); j++)
+			{
+				sprintf(filePath, "%s%s", dir, list[j].c_str());
+				fileList.push_back(filePath);
+			}
+		}
+
+		char zipPath[TFE_MAX_PATH];
+		const size_t len = strlen(exportPath);
+		if (exportPath[len - 1] == '/' || exportPath[len - 1] == '\\')
+		{
+			sprintf(zipPath, "%s%s.zip", exportPath, gobName);
+		}
+		else
+		{
+			sprintf(zipPath, "%s/%s.zip", exportPath, gobName);
+		}
+		return writeZip(zipPath, fileList);
+	}
+
+	void addAssetToList(Asset* asset, std::vector<Asset*>& assetList)
+	{
+		const size_t count = assetList.size();
+		const Asset* const* list = assetList.data();
+		for (size_t i = 0; i < count; i++)
+		{
+			if (list[i] == asset) { return; }
+		}
+		assetList.push_back(asset);
+	}
+
+	void readSourceFileAndSetupParser(FileStream& file, TFE_Parser& parser)
+	{
+		size_t len = file.getSize();
+		s_fileData.resize(len + 1);
+		char* buffer = (char*)s_fileData.data();
+		file.readBuffer(buffer, (u32)len);
+		buffer[len] = 0;
+		file.close();
+
+		parser.init(buffer, len);
+		parser.enableBlockComments();
+		parser.addCommentString("//");
+		parser.addCommentString("#");
+	}
+
+	void gatherAssetList(const char* name, const char* levFile, const char* objFile, std::vector<Asset*>& assetList)
+	{
+		TFE_Parser parser;
+		FileStream file;
+		if (file.open(levFile, FileStream::MODE_READ))
+		{
+			readSourceFileAndSetupParser(file, parser);
+
+			std::vector<std::string> textureList;
+			std::string palette;
+			size_t bufferPos = 0;
+			const char* line = parser.readLine(bufferPos, true);
+			TokenList tokens;
+			char* endPtr = nullptr;
+			while (line)
+			{
+				parser.tokenizeLine(line, tokens);
+				const s32 tokenCount = (s32)tokens.size();
+
+				if (tokenCount >= 2 && strncasecmp(tokens[0].c_str(), "PALETTE", strlen("PALETTE")) == 0)
+				{
+					palette = tokens[1];
+				}
+				else if (tokenCount >= 2 && strncasecmp(tokens[0].c_str(), "TEXTURES", strlen("TEXTURES")) == 0)
+				{
+					const s32 count = strtol(tokens[1].c_str(), &endPtr, 10);
+					if (count > 0)
+					{
+						textureList.reserve(count);
+					}
+				}
+				else if (tokenCount >= 2 && strncasecmp(tokens[0].c_str(), "TEXTURE:", strlen("TEXTURE:")) == 0)
+				{
+					textureList.push_back(tokens[1]);
+				}
+				else if (tokenCount >= 2 && strncasecmp(tokens[0].c_str(), "NUMSECTORS", strlen("NUMSECTORS")) == 0)
+				{
+					break;
+				}
+
+				line = parser.readLine(bufferPos, true);
+			}
+
+			if (!textureList.empty())
+			{
+				const size_t textureCount = textureList.size();
+				const std::string* list = textureList.data();
+				for (size_t t = 0; t < textureCount; t++)
+				{
+					Asset* asset = AssetBrowser::findAsset(list[t].c_str(), TYPE_TEXTURE);
+					if (asset && asset->assetSource != ASRC_VANILLA)
+					{
+						addAssetToList(asset, assetList);
+					}
+				}
+			}
+
+			// Load the colormap.
+			if (!palette.empty())
+			{
+				char colorMap[TFE_MAX_PATH];
+				FileUtil::replaceExtension(palette.c_str(), "CMP", colorMap);
+				Asset* asset = AssetBrowser::findAsset(colorMap, TYPE_COLORMAP);
+				if (asset && asset->assetSource != ASRC_VANILLA)
+				{
+					addAssetToList(asset, assetList);
+				}
+			}
+
+			// Try to load the palette as well.
+			char paletteFile[TFE_MAX_PATH];
+			FileUtil::replaceExtension(name, "PAL", paletteFile);
+			Asset* asset = AssetBrowser::findAsset(paletteFile, TYPE_PALETTE);
+			if (asset && asset->assetSource != ASRC_VANILLA)
+			{
+				addAssetToList(asset, assetList);
+			}
+		}
+		if (file.open(objFile, FileStream::MODE_READ))
+		{
+			readSourceFileAndSetupParser(file, parser);
+
+			std::vector<std::string> podList;
+			std::vector<std::string> spriteList;
+			std::vector<std::string> frameList;
+			size_t bufferPos = 0;
+			const char* line = parser.readLine(bufferPos, true);
+			TokenList tokens;
+			char* endPtr = nullptr;
+			while (line)
+			{
+				parser.tokenizeLine(line, tokens);
+				const s32 tokenCount = (s32)tokens.size();
+
+				if (tokenCount >= 2 && strncasecmp(tokens[0].c_str(), "PODS", strlen("PODS")) == 0)
+				{
+					const s32 count = strtol(tokens[1].c_str(), &endPtr, 10);
+					if (count > 0)
+					{
+						podList.reserve(count);
+					}
+				}
+				else if (tokenCount >= 2 && strncasecmp(tokens[0].c_str(), "POD:", strlen("POD:")) == 0)
+				{
+					podList.push_back(tokens[1]);
+				}
+				else if (tokenCount >= 2 && strncasecmp(tokens[0].c_str(), "SPRS", strlen("SPRS")) == 0)
+				{
+					const s32 count = strtol(tokens[1].c_str(), &endPtr, 10);
+					if (count > 0)
+					{
+						spriteList.reserve(count);
+					}
+				}
+				else if (tokenCount >= 2 && strncasecmp(tokens[0].c_str(), "SPR:", strlen("SPR:")) == 0)
+				{
+					spriteList.push_back(tokens[1]);
+				}
+				else if (tokenCount >= 2 && strncasecmp(tokens[0].c_str(), "FMES", strlen("FMES")) == 0)
+				{
+					const s32 count = strtol(tokens[1].c_str(), &endPtr, 10);
+					if (count > 0)
+					{
+						frameList.reserve(count);
+					}
+				}
+				else if (tokenCount >= 2 && strncasecmp(tokens[0].c_str(), "FME:", strlen("FME:")) == 0)
+				{
+					frameList.push_back(tokens[1]);
+				}
+				else if (tokenCount >= 2 && strncasecmp(tokens[0].c_str(), "OBJECTS", strlen("OBJECTS")) == 0)
+				{
+					break;
+				}
+
+				line = parser.readLine(bufferPos, true);
+			}
+
+			if (!podList.empty())
+			{
+				const size_t count = podList.size();
+				const std::string* list = podList.data();
+				for (size_t t = 0; t < count; t++)
+				{
+					Asset* asset = AssetBrowser::findAsset(list[t].c_str(), TYPE_3DOBJ);
+					if (asset && asset->assetSource != ASRC_VANILLA)
+					{
+						addAssetToList(asset, assetList);
+					}
+				}
+			}
+			if (!spriteList.empty())
+			{
+				const size_t count = spriteList.size();
+				const std::string* list = spriteList.data();
+				for (size_t t = 0; t < count; t++)
+				{
+					Asset* asset = AssetBrowser::findAsset(list[t].c_str(), TYPE_SPRITE);
+					if (asset && asset->assetSource != ASRC_VANILLA)
+					{
+						addAssetToList(asset, assetList);
+					}
+				}
+			}
+			if (!frameList.empty())
+			{
+				const size_t count = frameList.size();
+				const std::string* list = frameList.data();
+				for (size_t t = 0; t < count; t++)
+				{
+					Asset* asset = AssetBrowser::findAsset(list[t].c_str(), TYPE_FRAME);
+					if (asset && asset->assetSource != ASRC_VANILLA)
+					{
+						addAssetToList(asset, assetList);
+					}
+				}
+			}
+		}
+	}
 
 	bool exportLevel(const char* path, const char* name, const StartPoint* start)
 	{
@@ -1845,31 +2362,1190 @@ namespace LevelEditor
 		fileList.push_back(infFile);
 		fileList.push_back(objFile);
 
+		// Now go through all of the assets and gather a unique list (only including non-vanilla).
+		std::vector<Asset*> assetList;
+		WorkBuffer buffer;
+		gatherAssetList(name, levFile, objFile, assetList);
+		if (!assetList.empty())
+		{
+			char tmpDir[TFE_MAX_PATH];
+			getTempDirectory(tmpDir);
+
+			const size_t count = assetList.size();
+			Asset** list = assetList.data();
+			for (size_t i = 0; i < count; i++)
+			{
+				Asset* asset = list[i];
+				// Export
+				char exportPath[TFE_MAX_PATH];
+				sprintf(exportPath, "%s/%s", tmpDir, asset->name.c_str());
+				if (AssetBrowser::readWriteFile(exportPath, asset->name.c_str(), asset->archive, buffer))
+				{
+					fileList.push_back(exportPath);
+				}
+			}
+		}
+
 		char gobPath[TFE_MAX_PATH];
-		sprintf(gobPath, "%s/TFE_TEST.GOB", s_testPath);
+		const char* testPath = TFE_Paths::getPath(PATH_SOURCE_DATA);
+		if (!testPath || !testPath[0]) { return false; }
+		const size_t len = strlen(testPath);
+		if (testPath[len - 1] == '/' || testPath[len - 1] == '\\')
+		{
+			sprintf(gobPath, "%sTFE_TEST.GOB", testPath);
+		}
+		else
+		{
+			sprintf(gobPath, "%s/TFE_TEST.GOB", testPath);
+		}
 		writeGob(gobPath, fileList);
 
 		// Now run "TFE"
 		// Get the app directory and GOB name.
 		char appDir[TFE_MAX_PATH], gobName[TFE_MAX_PATH];
-		FileUtil::getFilePath(s_testAppPath, appDir);
+		FileUtil::getFilePath(s_editorConfig.darkForcesPort, appDir);
 		FileUtil::getFileNameFromPath(gobPath, gobName, true);
 
 		// Build the Commandline.
-		char cmdLine[1024];
-		sprintf(cmdLine, "-gDark -skip_load_delay -u%s -c0 -l%s", gobName, s_level.slot.c_str());
+		char cmdLine[TFE_MAX_PATH];
+		if (s_editorConfig.levelEditorFlags & LEVEDITOR_FLAG_RUN_TFE)
+		{
+			sprintf(cmdLine, "-gDark -skip_load_delay -u%s -c0 -l%s", gobName, s_level.slot.c_str());
+		}
+		else
+		{
+			sprintf(cmdLine, "-u%s -c0 -l%s", gobName, s_level.slot.c_str());
+		}
+		if (s_editorConfig.darkForcesAddCmdLine[0])
+		{
+			strcat(cmdLine, " ");
+			strcat(cmdLine, s_editorConfig.darkForcesAddCmdLine);
+		}
+		const bool waitForCompletion = s_editorConfig.waitForPlayCompletion;
 
 		// Run the test app (TFE, etc.), this will block until finished.
-		osShellExecute(s_testAppPath, appDir, cmdLine, true);
+		osShellExecute(s_editorConfig.darkForcesPort, appDir, cmdLine, waitForCompletion);
 		// Then cleanup by deleting the test GOB.
-		FileUtil::deleteFile(gobPath);
+		if (waitForCompletion)
+		{
+			FileUtil::deleteFile(gobPath);
+		}
 		
+		return true;
+	}
+
+	bool addFeatureToSectorList(s32 index, std::vector<s32>& sectorList)
+	{
+		EditorSector* sector = nullptr;
+		s32 featureIndex = -1;
+		HitPart part = HP_FLOOR;
+		if (!selection_get(index, sector, featureIndex, &part)) { return false; }
+		if (!sector) { return false; }
+		if (featureIndex != -1 && part != HP_FLOOR && part != HP_CEIL) { return false; }
+
+		insertIntoIntList(sector->id, &sectorList);
+		return true;
+	}
+
+#define WRITE_TO_BUFFER(...) \
+		sprintf(appendBuffer, __VA_ARGS__); \
+		buffer.append(appendBuffer)
+
+	void writeVariablesToBuffer(const std::vector<EntityVar>& var, std::string& buffer)
+	{
+		char appendBuffer[1024];
+		s32 varCount = (s32)var.size();
+		// Variables.
+		for (s32 v = 0; v < varCount; v++)
+		{
+			const EntityVarDef* def = getEntityVar(var[v].defId);
+			if (strcasecmp(def->name.c_str(), "GenType") == 0)
+			{
+				continue;
+			}
+			switch (def->type)
+			{
+				case EVARTYPE_BOOL:
+				{
+					// If the bool doesn't match the "default" value - then don't write it at all.
+					if (var[v].value.bValue == def->defValue.bValue)
+					{
+						WRITE_TO_BUFFER("      %s: %s\r\n", def->name.c_str(), var[v].value.bValue ? "TRUE" : "FALSE");
+					}
+				} break;
+				case EVARTYPE_FLOAT:
+				{
+					WRITE_TO_BUFFER("      %s: %f\r\n", def->name.c_str(), var[v].value.fValue);
+				} break;
+				case EVARTYPE_INT:
+				case EVARTYPE_FLAGS:
+				{
+					WRITE_TO_BUFFER("      %s: %d\r\n", def->name.c_str(), var[v].value.iValue);
+				} break;
+				case EVARTYPE_STRING_LIST:
+				{
+					WRITE_TO_BUFFER("      %s: \"%s\"\r\n", def->name.c_str(), var[v].value.sValue.c_str());
+				} break;
+				case EVARTYPE_INPUT_STRING_PAIR:
+				{
+					if (!var[v].value.sValue.empty())
+					{
+						WRITE_TO_BUFFER("      %s: %s \"%s\"\r\n", def->name.c_str(), var[v].value.sValue.c_str(), var[v].value.sValue1.c_str());
+					}
+				} break;
+			}
+		}
+	}
+
+	void writeObjSequenceToBuffer(const EditorObject* obj, const Entity* entity, std::string& buffer)
+	{
+		char appendBuffer[256];
+		if (entity->logic.empty() && entity->var.empty()) { return; }
+
+		WRITE_TO_BUFFER("    SEQ\r\n");
+		const s32 logicCount = (s32)entity->logic.size();
+		if (logicCount)
+		{
+			for (s32 l = 0; l < logicCount; l++)
+			{
+				const std::vector<EntityVar>& var = entity->logic[l].var;
+				const s32 varCount = (s32)var.size();
+
+				if (strcasecmp(entity->logic[l].name.c_str(), "generator") == 0)
+				{
+					for (s32 v = 0; v < varCount; v++)
+					{
+						if (strcasecmp(getEntityVarName(var[v].defId), "GenType") == 0)
+						{
+							WRITE_TO_BUFFER("      LOGIC: %s %s\r\n", entity->logic[l].name.c_str(), var[v].value.sValue.c_str());
+							break;
+						}
+					}
+				}
+				else
+				{
+					WRITE_TO_BUFFER("      LOGIC: %s\r\n", entity->logic[l].name.c_str());
+				}
+				// Write logic variables.
+				writeVariablesToBuffer(var, buffer);
+			}
+		}
+		else if (!entity->var.empty())
+		{
+			writeVariablesToBuffer(entity->var, buffer);
+		}
+		WRITE_TO_BUFFER("    SEQEND\r\n");
+	}
+
+	// TODO:
+	//   INF?
+	bool exportSelectionToText(std::string& buffer)
+	{
+		std::vector<s32> sectorList;
+		std::vector<const EditorObject*> objList;
+		char appendBuffer[1024];
+		const s32 count = selection_getCount();
+		if (s_editMode == LEDIT_ENTITY)
+		{
+			if (count == 0)
+			{
+				EditorSector* sector = nullptr;
+				s32 featureIndex = -1;
+				if (!selection_get(SEL_INDEX_HOVERED, sector, featureIndex)) { return false; }
+				if (!sector || featureIndex < 0) { return false; }
+
+				objList.push_back(&sector->obj[featureIndex]);
+			}
+			else
+			{
+				EditorSector* sector = nullptr;
+				s32 featureIndex = -1;
+				for (s32 s = 0; s < count; s++)
+				{
+					if (!selection_get(s, sector, featureIndex)) { return false; }
+					if (!sector || featureIndex < 0) { return false; }
+
+					objList.push_back(&sector->obj[featureIndex]);
+				}
+			}
+			if (objList.empty()) { return false; }
+		}
+		else
+		{
+			if (count == 0)
+			{
+				addFeatureToSectorList(SEL_INDEX_HOVERED, sectorList);
+			}
+			else
+			{
+				for (s32 s = 0; s < count; s++)
+				{
+					addFeatureToSectorList(s, sectorList);
+				}
+			}
+			if (sectorList.empty()) { return false; }
+		}
+
+		// Gather texture indices.
+		std::set<s32> textureListIndices;
+		const s32 sectorCount = (s32)sectorList.size();
+		const s32* sectorIndex = sectorList.data();
+		for (s32 s = 0; s < sectorCount; s++)
+		{
+			EditorSector* sector = &s_level.sectors[sectorIndex[s]];
+			textureListIndices.insert(sector->floorTex.texIndex);
+			textureListIndices.insert(sector->ceilTex.texIndex);
+
+			const s32 wallCount = (s32)sector->walls.size();
+			const EditorWall* wall = sector->walls.data();
+			for (s32 w = 0; w < wallCount; w++, wall++)
+			{
+				for (s32 t = 0; t < WP_COUNT; t++)
+				{
+					if (wall->tex[t].texIndex >= 0)
+					{
+						textureListIndices.insert(wall->tex[t].texIndex);
+					}
+				}
+			}
+		}
+
+		// Gather objects and entities.
+		std::vector<std::string> pods;
+		std::vector<std::string> sprites;
+		std::vector<std::string> frames;
+		std::vector<s32> objData;
+
+		if (s_editMode == LEDIT_ENTITY)
+		{
+			const s32 objCount = (s32)objList.size();
+			for (s32 i = 0; i < objCount; i++)
+			{
+				Entity* entity = &s_level.entities[objList[i]->entityId];
+				s32 dataIndex = 0;
+				// TODO: Handle other types.
+				if (entity->type == ETYPE_FRAME || entity->type == ETYPE_SPRITE || entity->type == ETYPE_3D)
+				{
+					dataIndex = addObjAsset(entity->assetName, entity->type == ETYPE_FRAME ? frames : entity->type == ETYPE_SPRITE ? sprites : pods);
+				}
+				objData.push_back(dataIndex);
+			}
+		}
+		else
+		{
+			sectorIndex = sectorList.data();
+			for (s32 s = 0; s < sectorCount; s++)
+			{
+				EditorSector* sector = &s_level.sectors[sectorIndex[s]];
+				const s32 objCount = (s32)sector->obj.size();
+				const EditorObject* obj = sector->obj.data();
+				for (s32 o = 0; o < objCount; o++, obj++)
+				{
+					Entity* entity = &s_level.entities[obj->entityId];
+
+					s32 index = (s32)objList.size();
+					objList.push_back(obj);
+					s32 dataIndex = 0;
+					// TODO: Handle other types.
+					if (entity->type == ETYPE_FRAME || entity->type == ETYPE_SPRITE || entity->type == ETYPE_3D)
+					{
+						dataIndex = addObjAsset(entity->assetName, entity->type == ETYPE_FRAME ? frames : entity->type == ETYPE_SPRITE ? sprites : pods);
+					}
+					objData.push_back(dataIndex);
+				}
+			}
+		}
+				
+		// Next add Texture list.
+		const s32 textureCount = (s32)textureListIndices.size();
+		if (textureCount > 0)
+		{
+			WRITE_TO_BUFFER("TEXTURES %d\r\n", textureCount);
+
+			std::set<s32>::iterator iIndex = textureListIndices.begin();
+			for (; iIndex != textureListIndices.end(); ++iIndex)
+			{
+				const s32 index = *iIndex;
+				WRITE_TO_BUFFER("  TEXTURE: %s\r\n", s_level.textures[index].name.c_str());
+			}
+			buffer.append("\r\n");
+		}
+		
+		// Add object data list.
+		if (!objList.empty())
+		{
+			const s32 podCount = (s32)pods.size();
+			WRITE_TO_BUFFER("PODS %d\r\n", podCount);
+
+			const std::string* pod = pods.data();
+			for (s32 p = 0; p < podCount; p++, pod++)
+			{
+				WRITE_TO_BUFFER("  POD: %s\r\n", pod->c_str());
+			}
+			buffer.append("\r\n");
+
+			const s32 sprCount = (s32)sprites.size();
+			WRITE_TO_BUFFER("SPRS %d\r\n", sprCount);
+
+			const std::string* wax = sprites.data();
+			for (s32 w = 0; w < sprCount; w++, wax++)
+			{
+				WRITE_TO_BUFFER("  SPR: %s\r\n", wax->c_str());
+			}
+			buffer.append("\r\n");
+
+			const s32 fmeCount = (s32)frames.size();
+			WRITE_TO_BUFFER("FMES %d\r\n", fmeCount);
+
+			const std::string* frame = frames.data();
+			for (s32 f = 0; f < fmeCount; f++, frame++)
+			{
+				WRITE_TO_BUFFER("  FME: %s\r\n", frame->c_str());
+			}
+			buffer.append("\r\n");
+		}
+
+		// Write out the sector data.
+		// Note that texture indices will need to be remapped.
+		sectorIndex = sectorList.data();
+		WRITE_TO_BUFFER("NUMSECTORS %d\r\n", sectorCount);
+		for (s32 s = 0; s < sectorCount; s++)
+		{
+			EditorSector* sector = &s_level.sectors[sectorIndex[s]];
+			WRITE_TO_BUFFER("SECTOR %d\r\n", sector->id);
+			WRITE_TO_BUFFER("  NAME %s\r\n", sector->name.c_str());
+			WRITE_TO_BUFFER("  AMBIENT %u\r\n", sector->ambient);
+
+			std::set<s32>::iterator iTex = textureListIndices.find(sector->floorTex.texIndex);
+			s32 floorIndex = (s32)std::distance(textureListIndices.begin(), iTex);
+			WRITE_TO_BUFFER("  FLOOR TEXTURE %d %f %f %d\r\n", floorIndex, sector->floorTex.offset.x, sector->floorTex.offset.z, 0);
+			WRITE_TO_BUFFER("  FLOOR ALTITUDE %f\r\n", -sector->floorHeight);
+
+			iTex = textureListIndices.find(sector->ceilTex.texIndex);
+			s32 ceilIndex = (s32)std::distance(textureListIndices.begin(), iTex);
+			WRITE_TO_BUFFER("  CEILING TEXTURE %d %f %f %d\r\n", ceilIndex, sector->ceilTex.offset.x, sector->ceilTex.offset.z, 0);
+			WRITE_TO_BUFFER("  CEILING ALTITUDE %f\r\n", -sector->ceilHeight);
+			WRITE_TO_BUFFER("  SECOND ALTITUDE %f\r\n", -sector->secHeight);
+			WRITE_TO_BUFFER("  FLAGS %d %d %d\r\n", sector->flags[0], sector->flags[1], sector->flags[2]);
+			WRITE_TO_BUFFER("  LAYER %d\r\n", sector->layer);
+			buffer.append("\r\n");
+
+			const s32 vtxCount = (s32)sector->vtx.size();
+			const Vec2f* vtx = sector->vtx.data();
+			WRITE_TO_BUFFER("  VERTICES %d\r\n", vtxCount);
+			for (s32 v = 0; v < vtxCount; v++)
+			{
+				WRITE_TO_BUFFER("    X: %f Z: %f\r\n", vtx[v].x, vtx[v].z);
+			}
+			buffer.append("\r\n");
+
+			const s32 wallCount = (s32)sector->walls.size();
+			const EditorWall* wall = sector->walls.data();
+			WRITE_TO_BUFFER("  WALLS %d\r\n", wallCount);
+			for (s32 w = 0; w < wallCount; w++, wall++)
+			{
+				// Get the texture index.
+				s32 texIndex[WP_COUNT];
+				for (s32 t = 0; t < WP_COUNT; t++)
+				{
+					if (wall->tex[t].texIndex < 0)
+					{
+						texIndex[t] = -1;
+					}
+					else
+					{
+						std::set<s32>::iterator iTex = textureListIndices.find(wall->tex[t].texIndex);
+						texIndex[t] = (s32)std::distance(textureListIndices.begin(), iTex);
+					}
+				}
+
+				WRITE_TO_BUFFER("    WALL LEFT: %d RIGHT: %d MID: %d %f %f %d TOP: %d %f %f %d BOT: %d %f %f %d SIGN: %d %f %f ADJOIN: %d MIRROR: %d WALK: %d FLAGS: %d %d %d LIGHT: %d\r\n",
+					wall->idx[0], wall->idx[1],
+					texIndex[WP_MID], wall->tex[WP_MID].offset.x, wall->tex[WP_MID].offset.z, 0,
+					texIndex[WP_TOP], wall->tex[WP_TOP].offset.x, wall->tex[WP_TOP].offset.z, 0,
+					texIndex[WP_BOT], wall->tex[WP_BOT].offset.x, wall->tex[WP_BOT].offset.z, 0,
+					texIndex[WP_SIGN], wall->tex[WP_SIGN].offset.x, wall->tex[WP_SIGN].offset.z,
+					wall->adjoinId, wall->mirrorId, wall->adjoinId, wall->flags[0], wall->flags[1], wall->flags[2], wall->wallLight);
+			}
+			buffer.append("\r\n");
+		}
+
+		// Write out the object data.
+		const s32 objectCount = (s32)objList.size();
+		if (objectCount)
+		{
+			WRITE_TO_BUFFER("OBJECTS %d\r\n", objectCount);
+			const f32 radToDeg = 360.0f / (2.0f * PI);
+			for (s32 o = 0; o < objectCount; o++)
+			{
+				const EditorObject* obj = objList[o];
+				const Entity* entity = &s_level.entities[obj->entityId];
+				const f32 objYaw = fmodf(obj->angle * radToDeg, 360.0f);
+				const f32 objPitch = fmodf(obj->pitch * radToDeg, 360.0f);
+				const f32 objRoll = fmodf(obj->roll * radToDeg, 360.0f);
+				const s32 logicCount = (s32)entity->logic.size();
+
+				switch (entity->type)
+				{
+					case ETYPE_SPIRIT:
+					{
+						WRITE_TO_BUFFER("  CLASS: SPIRIT DATA: 0 X: %0.2f Y: %0.2f Z: %0.2f PCH: %0.2f YAW: %0.2f ROL: %0.2f DIFF: %d\r\n", obj->pos.x, -obj->pos.y, obj->pos.z, objPitch, objYaw, objRoll, obj->diff);
+						writeObjSequenceToBuffer(obj, entity, buffer);
+					} break;
+					case ETYPE_SAFE:
+					{
+						WRITE_TO_BUFFER("  CLASS: SAFE DATA: 0 X: %0.2f Y: %0.2f Z: %0.2f PCH: %0.2f YAW: %0.2f ROL: %0.2f DIFF: %d\r\n", obj->pos.x, -obj->pos.y, obj->pos.z, objPitch, objYaw, objRoll, obj->diff);
+						writeObjSequenceToBuffer(obj, entity, buffer);
+					} break;
+					case ETYPE_FRAME:
+					{
+						WRITE_TO_BUFFER("  CLASS: FRAME DATA: %d X: %0.2f Y: %0.2f Z: %0.2f PCH: %0.2f YAW: %0.2f ROL: %0.2f DIFF: %d\r\n", objData[o], obj->pos.x, -obj->pos.y, obj->pos.z, objPitch, objYaw, objRoll, obj->diff);
+						writeObjSequenceToBuffer(obj, entity, buffer);
+					} break;
+					case ETYPE_SPRITE:
+					{
+						WRITE_TO_BUFFER("  CLASS: SPRITE DATA: %d X: %0.2f Y: %0.2f Z: %0.2f PCH: %0.2f YAW: %0.2f ROL: %0.2f DIFF: %d\r\n", objData[o], obj->pos.x, -obj->pos.y, obj->pos.z, objPitch, objYaw, objRoll, obj->diff);
+						writeObjSequenceToBuffer(obj, entity, buffer);
+					} break;
+					case ETYPE_3D:
+					{
+						WRITE_TO_BUFFER("  CLASS: 3D DATA: %d X: %0.2f Y: %0.2f Z: %0.2f PCH: %0.2f YAW: %0.2f ROL: %0.2f DIFF: %d\r\n", objData[o], obj->pos.x, -obj->pos.y, obj->pos.z, objPitch, objYaw, objRoll, obj->diff);
+						writeObjSequenceToBuffer(obj, entity, buffer);
+					} break;
+				}
+			}
+			buffer.append("\r\n");
+		}
+
+		return true;
+	}
+
+	void parseTexture(const TokenList& tokens, s32 offset, const std::vector<std::string>& textureList, LevelTexture* outTex, s32 defaultTexIndex)
+	{
+		char* endPtr = nullptr;
+		const s32 texId = strtol(tokens[offset].c_str(), &endPtr, 10);
+		const f32 offsetX = strtof(tokens[offset + 1].c_str(), &endPtr);
+		const f32 offsetY = strtof(tokens[offset + 2].c_str(), &endPtr);
+
+		outTex->texIndex = defaultTexIndex;
+		outTex->offset = { offsetX, offsetY };
+		if (texId >= 0 && texId < (s32)textureList.size())
+		{
+			bool isNewTexture = false;
+			const s32 texIndex = getTextureIndex(textureList[texId].c_str(), &isNewTexture);
+			if (texIndex >= 0)
+			{
+				outTex->texIndex = texIndex;
+			}
+		}
+	}
+
+	// TODO:
+	//   Object data list.
+	//   Objects.
+	//   INF items?
+	bool importFromText(const std::string& buffer, bool centerOnMouse)
+	{
+		const size_t len = buffer.length();
+		const char* data = buffer.data();
+		if (!len || !data) { return false; }
+				
+		TFE_Parser parser;
+		parser.init(data, len);
+		parser.enableBlockComments();
+		parser.addCommentString("//");
+		parser.addCommentString("#");
+
+		std::vector<std::string> textureList;
+		std::vector<std::string> podList;
+		std::vector<std::string> spriteList;
+		std::vector<std::string> frameList;
+		std::vector<EditorSector> sectorList;
+		std::vector<EditorObject> objList;
+		EditorSector* curSector = nullptr;
+		EditorObject* curObj = nullptr;
+		EntityLogic* curLogic = nullptr;
+		Entity objEntity = {};
+				
+		size_t bufferPos = 0;
+		const char* line = parser.readLine(bufferPos, true);
+		TokenList tokens;
+		char* endPtr = nullptr;
+		bool isNewTexture = false;
+		while (line)
+		{
+			parser.tokenizeLine(line, tokens);
+			const s32 tokenCount = (s32)tokens.size();
+
+			if (tokenCount >= 2 && strncasecmp(tokens[0].c_str(), "TEXTURES", strlen("TEXTURES")) == 0)
+			{
+				const s32 count = strtol(tokens[1].c_str(), &endPtr, 10);
+				if (count > 0)
+				{
+					textureList.reserve(count);
+				}
+			}
+			else if (tokenCount >= 2 && strncasecmp(tokens[0].c_str(), "TEXTURE:", strlen("TEXTURE:")) == 0)
+			{
+				textureList.push_back(tokens[1]);
+			}
+			else if (tokenCount >= 2 && strncasecmp(tokens[0].c_str(), "PODS", strlen("PODS")) == 0)
+			{
+				const s32 count = strtol(tokens[1].c_str(), &endPtr, 10);
+				if (count > 0)
+				{
+					podList.reserve(count);
+				}
+			}
+			else if (tokenCount >= 2 && strncasecmp(tokens[0].c_str(), "POD:", strlen("POD:")) == 0)
+			{
+				podList.push_back(tokens[1]);
+			}
+			else if (tokenCount >= 2 && strncasecmp(tokens[0].c_str(), "SPRS", strlen("SPRS")) == 0)
+			{
+				const s32 count = strtol(tokens[1].c_str(), &endPtr, 10);
+				if (count > 0)
+				{
+					spriteList.reserve(count);
+				}
+			}
+			else if (tokenCount >= 2 && strncasecmp(tokens[0].c_str(), "SPR:", strlen("SPR:")) == 0)
+			{
+				spriteList.push_back(tokens[1]);
+			}
+			else if (tokenCount >= 2 && strncasecmp(tokens[0].c_str(), "FMES", strlen("FMES")) == 0)
+			{
+				const s32 count = strtol(tokens[1].c_str(), &endPtr, 10);
+				if (count > 0)
+				{
+					frameList.reserve(count);
+				}
+			}
+			else if (tokenCount >= 2 && strncasecmp(tokens[0].c_str(), "FME:", strlen("FME:")) == 0)
+			{
+				frameList.push_back(tokens[1]);
+			}
+			else if (tokenCount >= 2 && strncasecmp(tokens[0].c_str(), "NUMSECTORS", strlen("NUMSECTORS")) == 0)
+			{
+				const s32 count = strtol(tokens[1].c_str(), &endPtr, 10);
+				if (count > 0)
+				{
+					sectorList.reserve(count);
+				}
+			}
+			else if (tokenCount >= 2 && strncasecmp(tokens[0].c_str(), "SECTOR", strlen("SECTOR")) == 0)
+			{
+				curObj = nullptr;
+
+				sectorList.push_back({});
+				curSector = &sectorList.back();
+				curSector->id = strtol(tokens[1].c_str(), &endPtr, 10);
+			}
+			else if (tokenCount >= 2 && strncasecmp(tokens[0].c_str(), "OBJECTS", strlen("OBJECTS")) == 0)
+			{
+				const s32 count = strtol(tokens[1].c_str(), &endPtr, 10);
+				if (count > 0)
+				{
+					objList.reserve(count);
+				}
+			}
+			else if (tokenCount >= 2 && strncasecmp(tokens[0].c_str(), "CLASS:", strlen("CLASS:")) == 0)
+			{
+				// The previous object had no SEQEND.
+				if (curObj)
+				{
+					// Does this entity exist as a loaded definition? If so, take that name.
+					const s32 editorDefId = getEntityDefId(&objEntity);
+					if (editorDefId >= 0)
+					{
+						objEntity = s_entityDefList[editorDefId];
+					}
+					else
+					{
+						loadSingleEntityData(&objEntity);
+					}
+					curObj->entityId = addEntityToLevel(&objEntity);
+					curObj = nullptr;
+				}
+
+				curSector = nullptr;
+				std::string className = tokens[1];
+				objList.push_back({});
+				curObj = &objList.back();
+
+				const f32 degToRad = (2.0f * PI) / 360.0f;
+
+				s32 dataIndex = 0;
+				for (s32 t = 2; t < tokenCount - 1;)
+				{
+					const char* token = tokens[t].c_str();
+					if (strncasecmp(token, "DATA:", strlen("DATA:")) == 0)
+					{
+						dataIndex = strtol(tokens[t + 1].c_str(), &endPtr, 10);
+						t += 2;
+					}
+					else if (strncasecmp(token, "X:", strlen("X:")) == 0)
+					{
+						curObj->pos.x = strtof(tokens[t + 1].c_str(), &endPtr);
+						t += 2;
+					}
+					else if (strncasecmp(token, "Y:", strlen("Y:")) == 0)
+					{
+						curObj->pos.y = -strtof(tokens[t + 1].c_str(), &endPtr);
+						t += 2;
+					}
+					else if (strncasecmp(token, "Z:", strlen("Z:")) == 0)
+					{
+						curObj->pos.z = strtof(tokens[t + 1].c_str(), &endPtr);
+						t += 2;
+					}
+					else if (strncasecmp(token, "PCH:", strlen("PCH:")) == 0)
+					{
+						curObj->pitch = strtof(tokens[t + 1].c_str(), &endPtr) * degToRad;
+						t += 2;
+					}
+					else if (strncasecmp(token, "YAW:", strlen("YAW:")) == 0)
+					{
+						curObj->angle = strtof(tokens[t + 1].c_str(), &endPtr) * degToRad;
+						t += 2;
+					}
+					else if (strncasecmp(token, "ROL:", strlen("ROL:")) == 0)
+					{
+						curObj->roll = strtof(tokens[t + 1].c_str(), &endPtr) * degToRad;
+						t += 2;
+					}
+					else if (strncasecmp(token, "DIFF:", strlen("DIFF:")) == 0)
+					{
+						curObj->diff = strtol(tokens[t + 1].c_str(), &endPtr, 10);
+						t += 2;
+					}
+					else
+					{
+						t++;
+					}
+				}
+				compute3x3Rotation(&curObj->transform, curObj->angle, curObj->pitch, curObj->roll);
+
+				objEntity = {};
+				objEntity.logic.clear();
+				KEYWORD classType = getKeywordIndex(className.c_str());
+				switch (classType)
+				{
+					case KW_3D:
+					{
+						if (!podList.empty())
+						{
+							objEntity.type = ETYPE_3D;
+							objEntity.assetName = podList[dataIndex];
+
+							char name[256];
+							entityNameFromAssetName(objEntity.assetName.c_str(), name);
+							objEntity.name = name;
+						}
+					} break;
+					case KW_SPRITE:
+					{
+						if (!spriteList.empty())
+						{
+							objEntity.type = ETYPE_SPRITE;
+							objEntity.assetName = spriteList[dataIndex];
+
+							char name[256];
+							entityNameFromAssetName(objEntity.assetName.c_str(), name);
+							objEntity.name = name;
+						}
+					} break;
+					case KW_FRAME:
+					{
+						if (!frameList.empty())
+						{
+							objEntity.type = ETYPE_FRAME;
+							objEntity.assetName = frameList[dataIndex];
+
+							char name[256];
+							entityNameFromAssetName(objEntity.assetName.c_str(), name);
+							objEntity.name = name;
+						}
+					} break;
+					case KW_SPIRIT:
+					{
+						objEntity.name = "Spirit";
+						objEntity.type = ETYPE_SPIRIT;
+						objEntity.assetName = "SpiritObject.png";
+					} break;
+					case KW_SOUND:
+					{
+						//objEntity.type = ETYPE_SOUND;
+						//objEntity.assetName = "SpiritObject.png";
+					} break;
+					case KW_SAFE:
+					{
+						objEntity.name = "Safe";
+						objEntity.type = ETYPE_SAFE;
+						objEntity.assetName = "SafeObject.png";
+					} break;
+				}
+			}
+			else if (curSector)
+			{
+				if (tokenCount >= 2 && strncasecmp(tokens[0].c_str(), "NAME", strlen("NAME")) == 0)
+				{
+					curSector->name = tokens[1];
+				}
+				else if (tokenCount >= 2 && strncasecmp(tokens[0].c_str(), "AMBIENT", strlen("AMBIENT")) == 0)
+				{
+					curSector->ambient = strtol(tokens[1].c_str(), &endPtr, 10);
+				}
+				else if (tokenCount >= 5 && strncasecmp(tokens[0].c_str(), "FLOOR", strlen("FLOOR")) == 0 && strncasecmp(tokens[1].c_str(), "TEXTURE", strlen("TEXTURE")) == 0)
+				{
+					parseTexture(tokens, 2, textureList, &curSector->floorTex, 0);
+				}
+				else if (tokenCount >= 5 && strncasecmp(tokens[0].c_str(), "CEILING", strlen("CEILING")) == 0 && strncasecmp(tokens[1].c_str(), "TEXTURE", strlen("TEXTURE")) == 0)
+				{
+					parseTexture(tokens, 2, textureList, &curSector->ceilTex, 0);
+				}
+				else if (tokenCount >= 3 && strncasecmp(tokens[0].c_str(), "FLOOR", strlen("FLOOR")) == 0 && strncasecmp(tokens[1].c_str(), "ALTITUDE", strlen("ALTITUDE")) == 0)
+				{
+					curSector->floorHeight = -strtof(tokens[2].c_str(), &endPtr);
+				}
+				else if (tokenCount >= 3 && strncasecmp(tokens[0].c_str(), "CEILING", strlen("CEILING")) == 0 && strncasecmp(tokens[1].c_str(), "ALTITUDE", strlen("ALTITUDE")) == 0)
+				{
+					curSector->ceilHeight = -strtof(tokens[2].c_str(), &endPtr);
+				}
+				else if (tokenCount >= 3 && strncasecmp(tokens[0].c_str(), "SECOND", strlen("SECOND")) == 0 && strncasecmp(tokens[1].c_str(), "ALTITUDE", strlen("ALTITUDE")) == 0)
+				{
+					curSector->secHeight = -strtof(tokens[2].c_str(), &endPtr);
+				}
+				else if (tokenCount >= 4 && strncasecmp(tokens[0].c_str(), "FLAGS", strlen("FLAGS")) == 0)
+				{
+					curSector->flags[0] = strtol(tokens[1].c_str(), &endPtr, 10);
+					curSector->flags[1] = strtol(tokens[2].c_str(), &endPtr, 10);
+					curSector->flags[2] = strtol(tokens[3].c_str(), &endPtr, 10);
+				}
+				else if (tokenCount >= 2 && strncasecmp(tokens[0].c_str(), "LAYER", strlen("LAYER")) == 0)
+				{
+					curSector->layer = strtol(tokens[1].c_str(), &endPtr, 10);
+					if (s_level.layerRange[0] > curSector->layer) { s_level.layerRange[0] = curSector->layer; }
+					if (s_level.layerRange[1] < curSector->layer) { s_level.layerRange[1] = curSector->layer; }
+				}
+				else if (tokenCount >= 2 && strncasecmp(tokens[0].c_str(), "VERTICES", strlen("VERTICES")) == 0)
+				{
+					s32 count = strtol(tokens[1].c_str(), &endPtr, 10);
+					if (count > 0)
+					{
+						curSector->vtx.reserve(count);
+					}
+				}
+				else if (tokenCount >= 4 && strncasecmp(tokens[0].c_str(), "X:", strlen("X:")) == 0 && strncasecmp(tokens[2].c_str(), "Z:", strlen("Z:")) == 0)
+				{
+					Vec2f vtx = { 0 };
+					vtx.x = strtof(tokens[1].c_str(), &endPtr);
+					vtx.z = strtof(tokens[3].c_str(), &endPtr);
+					curSector->vtx.push_back(vtx);
+				}
+				else if (tokenCount >= 2 && strncasecmp(tokens[0].c_str(), "WALLS", strlen("WALLS")) == 0)
+				{
+					s32 count = strtol(tokens[1].c_str(), &endPtr, 10);
+					if (count > 0)
+					{
+						curSector->walls.reserve(count);
+					}
+				}
+				else if (tokenCount >= 5 && strncasecmp(tokens[0].c_str(), "WALL", strlen("WALL")) == 0)
+				{
+					EditorWall wall = {};
+					for (s32 t = 1; t < tokenCount - 1;)
+					{
+						const char* token = tokens[t].c_str();
+						if (strncasecmp(token, "LEFT:", strlen("LEFT:")) == 0)
+						{
+							wall.idx[0] = strtol(tokens[t + 1].c_str(), &endPtr, 10);
+							t += 2;
+						}
+						else if (strncasecmp(token, "RIGHT:", strlen("RIGHT:")) == 0)
+						{
+							wall.idx[1] = strtol(tokens[t + 1].c_str(), &endPtr, 10);
+							t += 2;
+						}
+						else if (strncasecmp(token, "MID:", strlen("MID:")) == 0 && t < tokenCount - 5)
+						{
+							parseTexture(tokens, t + 1, textureList, &wall.tex[WP_MID], 0);
+							t += 5;
+						}
+						else if (strncasecmp(token, "TOP:", strlen("TOP:")) == 0 && t < tokenCount - 5)
+						{
+							parseTexture(tokens, t + 1, textureList, &wall.tex[WP_TOP], 0);
+							t += 5;
+						}
+						else if (strncasecmp(token, "BOT:", strlen("BOT:")) == 0 && t < tokenCount - 5)
+						{
+							parseTexture(tokens, t + 1, textureList, &wall.tex[WP_BOT], 0);
+							t += 5;
+						}
+						else if (strncasecmp(token, "SIGN:", strlen("SIGN:")) == 0 && t < tokenCount - 4)
+						{
+							parseTexture(tokens, t + 1, textureList, &wall.tex[WP_SIGN], -1);
+							t += 4;
+						}
+						else if (strncasecmp(token, "ADJOIN:", strlen("ADJOIN:")) == 0)
+						{
+							wall.adjoinId = strtol(tokens[t + 1].c_str(), &endPtr, 10);
+							t += 2;
+						}
+						else if (strncasecmp(token, "MIRROR:", strlen("MIRROR:")) == 0)
+						{
+							wall.mirrorId = strtol(tokens[t + 1].c_str(), &endPtr, 10);
+							t += 2;
+						}
+						else if (strncasecmp(token, "WALK:", strlen("WALK:")) == 0)
+						{
+							// Unused
+							t += 2;
+						}
+						else if (strncasecmp(token, "FLAGS:", strlen("FLAGS:")) == 0 && t < tokenCount - 4)
+						{
+							wall.flags[0] = strtol(tokens[t + 1].c_str(), &endPtr, 10);
+							wall.flags[1] = strtol(tokens[t + 2].c_str(), &endPtr, 10);
+							wall.flags[2] = strtol(tokens[t + 3].c_str(), &endPtr, 10);
+							t += 4;
+						}
+						else if (strncasecmp(token, "LIGHT:", strlen("LIGHT:")) == 0)
+						{
+							wall.wallLight = strtol(tokens[t + 1].c_str(), &endPtr, 10);
+							t += 2;
+						}
+						else
+						{
+							// Unknown, keep stepping through the list.
+							t++;
+						}
+					}
+					curSector->walls.push_back(wall);
+				}
+			}
+			else if (curObj)
+			{
+				if (tokenCount >= 1 && strncasecmp(tokens[0].c_str(), "SEQEND", strlen("SEQEND")) == 0)
+				{
+					// Does this entity exist as a loaded definition? If so, take that name.
+					const s32 editorDefId = getEntityDefId(&objEntity);
+					if (editorDefId >= 0)
+					{
+						objEntity = s_entityDefList[editorDefId];
+					}
+					else
+					{
+						loadSingleEntityData(&objEntity);
+					}
+					curObj->entityId = addEntityToLevel(&objEntity);
+					curObj = nullptr;
+					curLogic = nullptr;
+				}
+				else if (tokenCount >= 1 && strncasecmp(tokens[0].c_str(), "SEQ", strlen("SEQ")) == 0)
+				{
+					// Start the sequence.
+					curLogic = nullptr;
+				}
+				else if (tokenCount >= 2 && (strncasecmp(tokens[0].c_str(), "LOGIC:", strlen("LOGIC:")) == 0 || strncasecmp(tokens[0].c_str(), "TYPE:", strlen("TYPE:")) == 0))
+				{
+					objEntity.logic.push_back({});
+					curLogic = &objEntity.logic.back();
+
+					KEYWORD logicId = getKeywordIndex(tokens[1].c_str());
+					if (logicId == KW_PLAYER)  // Player Logic.
+					{
+						curLogic->name = s_logicDefList[0].name;
+						objEntity.assetName = "PlayerStart.png";
+					}
+					else if (logicId == KW_ANIM)	// Animated Sprites Logic.
+					{
+						curLogic->name = s_logicDefList[1].name;
+					}
+					else if (logicId == KW_UPDATE)	// "Update" logic is usually used for rotating 3D objects, like the Death Star.
+					{
+						curLogic->name = s_logicDefList[2].name;
+					}
+					else if (logicId >= KW_TROOP && logicId <= KW_SCENERY)	// Enemies, explosives barrels, land mines, and scenery.
+					{
+						curLogic->name = s_logicDefList[3 + logicId - KW_TROOP].name;
+					}
+					else if (logicId == KW_KEY)         // Vue animation logic.
+					{
+						curLogic->name = "Key"; // 38
+					}
+					else if (logicId == KW_GENERATOR && tokenCount >= 3)	// Enemy generator, used for in-level enemy spawning.
+					{
+						curLogic->name = "Generator"; // 39
+						objEntity.name = "Generator";
+						objEntity.assetName = "STORMFIN.WAX";
+						// Add a variable for the type.
+						EntityVar genType;
+						genType.defId = getVariableId("GenType");
+						genType.value.sValue = tokens[2];
+						curLogic->var.push_back(genType);
+					}
+					else if (logicId == KW_DISPATCH)
+					{
+						curLogic->name = "Dispatch"; // 40
+					}
+					else if (logicId == KW_ITEM && tokenCount >= 3)
+					{
+						// Item LogicName
+						curLogic->name = tokens[2];
+					}
+					else  // Everything else.
+					{
+						curLogic->name = tokens[1];
+					}
+				}
+				else if (tokenCount >= 2)
+				{
+					char varName[256];
+					strcpy(varName, tokens[0].c_str());
+					s32 len = (s32)strlen(varName);
+					while (varName[len - 1] == ':')
+					{
+						varName[len - 1] = 0;
+						len--;
+					}
+
+					const s32 varId = getVariableId(varName);
+					if (varId >= 0)
+					{
+						const EntityVarDef* def = getEntityVar(varId);
+						EntityVar* var = nullptr;
+						if (curLogic)
+						{
+							curLogic->var.push_back({});
+							var = &curLogic->var.back();
+						}
+						else
+						{
+							objEntity.var.push_back({});
+							var = &objEntity.var.back();
+						}
+						var->defId = varId;
+
+						TokenList varTokens;
+						varTokens.push_back(varName);
+						varTokens.push_back(tokens[1]);
+						if (tokenCount >= 3) { varTokens.push_back(tokens[2]); }
+						parseValue(varTokens, def->type, &var->value);
+					}
+				}
+			}
+
+			line = parser.readLine(bufferPos);
+		}
+
+		// Final object?
+		if (curObj)
+		{
+			// Does this entity exist as a loaded definition? If so, take that name.
+			const s32 editorDefId = getEntityDefId(&objEntity);
+			if (editorDefId >= 0)
+			{
+				objEntity = s_entityDefList[editorDefId];
+			}
+			else
+			{
+				loadSingleEntityData(&objEntity);
+			}
+			curObj->entityId = addEntityToLevel(&objEntity);
+			curObj = nullptr;
+		}
+
+		// Parse the results.
+		// 1. Create an ID map between new sector IDs and IDs in the data.
+		std::map<s32, s32> idMapping;
+		const s32 sectorCount = (s32)sectorList.size();
+		EditorSector* sector = sectorList.data();
+		s32 newId = (s32)s_level.sectors.size();
+		for (s32 s = 0; s < sectorCount; s++, sector++)
+		{
+			std::map<s32, s32>::iterator idMap = idMapping.find(sector->id);
+			if (idMap == idMapping.end())
+			{
+				idMapping[sector->id] = newId;
+				sector->id = newId;
+				newId++;
+			}
+			else
+			{
+				sector->id = idMap->second;
+			}
+		}
+
+		// 2. Iterate through adjoins, clear any with no mapping, update IDs based on mapping.
+		sector = sectorList.data();
+		for (s32 s = 0; s < sectorCount; s++, sector++)
+		{
+			const s32 wallCount = (s32)sector->walls.size();
+			EditorWall* wall = sector->walls.data();
+			for (s32 w = 0; w < wallCount; w++, wall++)
+			{
+				if (wall->adjoinId < 0) { continue; }
+				std::map<s32, s32>::iterator idMap = idMapping.find(wall->adjoinId);
+				if (idMap == idMapping.end())
+				{
+					// Adjoins to outside of the data, so clear.
+					wall->adjoinId = -1;
+					wall->mirrorId = -1;
+				}
+				else
+				{
+					// Fixup the adjoin to use the new ID.
+					wall->adjoinId = idMap->second;
+				}
+			}
+		}
+
+		// 3. Move sectors so they are centered on the mouse position.
+		const s32 objCount = (s32)objList.size();
+		sector = sectorList.data();
+		Vec3f offset = { 0 };
+		if (centerOnMouse)
+		{
+			Vec3f bounds[2] = { {FLT_MAX, FLT_MAX, FLT_MAX}, {-FLT_MAX, -FLT_MAX, -FLT_MAX} };
+			if (sectorCount > 0)
+			{
+				for (s32 s = 0; s < sectorCount; s++, sector++)
+				{
+					const s32 vtxCount = (s32)sector->vtx.size();
+					const Vec2f* vtx = sector->vtx.data();
+					for (s32 v = 0; v < vtxCount; v++, vtx++)
+					{
+						bounds[0].x = std::min(bounds[0].x, vtx->x);
+						bounds[0].z = std::min(bounds[0].z, vtx->z);
+
+						bounds[1].x = std::max(bounds[1].x, vtx->x);
+						bounds[1].z = std::max(bounds[1].z, vtx->z);
+					}
+					bounds[0].y = std::min(bounds[0].y, sector->floorHeight);
+					bounds[1].y = std::max(bounds[1].y, sector->ceilHeight);
+				}
+			}
+			else if (objCount > 0)
+			{
+				EditorObject* obj = objList.data();
+				for (s32 s = 0; s < objCount; s++, obj++)
+				{
+					bounds[0].x = std::min(bounds[0].x, obj->pos.x);
+					bounds[0].z = std::min(bounds[0].z, obj->pos.z);
+
+					bounds[1].x = std::max(bounds[1].x, obj->pos.x);
+					bounds[1].z = std::max(bounds[1].z, obj->pos.z);
+
+					bounds[0].y = std::min(bounds[0].y, obj->pos.y);
+					bounds[1].y = std::max(bounds[1].y, obj->pos.y);
+				}
+			}
+			else
+			{
+				bounds[0] = { 0 };
+				bounds[1] = { 0 };
+			}
+
+			Vec3f center = { (bounds[0].x + bounds[1].x) * 0.5f, bounds[0].y, (bounds[0].z + bounds[1].z) * 0.5f };
+			snapToGrid(&center);
+
+			f32 yBase = s_view == EDIT_VIEW_3D ? s_cursor3d.y : s_grid.height;
+			offset = { s_cursor3d.x - center.x, yBase - center.y, s_cursor3d.z - center.z };
+		}
+		// Snap to grid.
+		sector = sectorList.data();
+		for (s32 s = 0; s < sectorCount; s++, sector++)
+		{
+			sector->floorHeight += offset.y;
+			sector->ceilHeight += offset.y;
+			sector->groupId = groups_getCurrentId();
+			sector->groupIndex = 0;
+
+			const s32 vtxCount = (s32)sector->vtx.size();
+			Vec2f* vtx = sector->vtx.data();
+			for (s32 v = 0; v < vtxCount; v++, vtx++)
+			{
+				vtx->x += offset.x;
+				vtx->z += offset.z;
+			}
+
+			sectorToPolygon(sector);
+		}
+
+		// 4. Add the new sectors to the level.
+		selection_clear();
+		selection_clearHovered();
+
+		if (s_editMode == LEDIT_WALL || s_editMode == LEDIT_SECTOR)
+		{
+			sector = sectorList.data();
+			for (s32 s = 0; s < sectorCount; s++, sector++)
+			{
+				s_level.sectors.push_back(*sector);
+				selection_action(SA_ADD, sector);
+			}
+		}
+
+		// 5. Add objects.
+		s32 validObjCount = 0;
+		EditorObject* obj = objList.data();
+		for (s32 i = 0; i < objCount; i++, obj++)
+		{
+			obj->pos.x += offset.x;
+			obj->pos.y += offset.y;
+			obj->pos.z += offset.z;
+
+			EditorSector* sector = findSectorDf(obj->pos);
+			if (!sector)
+			{
+				obj->pos.y = s_view == EDIT_VIEW_3D ? s_cursor3d.y : s_grid.height;
+				sector = findSectorDf(obj->pos);
+			}
+			if (!sector)
+			{
+				const Vec2f pos = { obj->pos.x, obj->pos.z };
+				sector = findSectorDf(pos);
+				if (sector)
+				{
+					obj->pos.y = sector->floorHeight;
+				}
+			}
+
+			if (sector)
+			{
+				if (s_editMode == LEDIT_ENTITY)
+				{
+					if (s_view == EDIT_VIEW_3D)
+					{
+						obj->pos.y = s_cursor3d.y;
+					}
+					else
+					{
+						obj->pos.y = sector->floorHeight;
+					}
+				}
+
+				sector->obj.push_back(*obj);
+				validObjCount++;
+
+				if (s_editMode == LEDIT_ENTITY)
+				{
+					selection_action(SA_ADD, sector, (s32)sector->obj.size() - 1);
+				}
+			}
+		}
+				
+		// Create a snapshot.
+		if (sectorCount || validObjCount)
+		{
+			levHistory_createSnapshot("Paste");
+		}
 		return true;
 	}
 
 	EditorTexture* getTexture(s32 index)
 	{
-		if (index < 0) { return nullptr; }
+		if (index < 0 || index >= (s32)s_level.textures.size()) { return nullptr; }
 		return (EditorTexture*)getAssetData(s_level.textures[index].handle);
 	}
 
@@ -2571,8 +4247,15 @@ namespace LevelEditor
 		return inside;
 	}
 
-	bool sector_onActiveLayer(EditorSector* sector)
+	bool sector_inViewRange(const EditorSector* sector)
 	{
+		if (s_view == EDIT_VIEW_2D && (sector->floorHeight > s_viewDepth[0] || sector->floorHeight < s_viewDepth[1])) { return false; }
+		return true;
+	}
+
+	bool sector_onActiveLayer(const EditorSector* sector)
+	{
+		if (!sector_inViewRange(sector)) { return false; }
 		if (s_editFlags & LEF_SHOW_ALL_LAYERS) { return true; }
 		return sector->layer == s_curLayer;
 	}
@@ -2951,7 +4634,7 @@ namespace LevelEditor
 			writeData(&attrib, (u32)sizeof(SectorAttrib));
 		}
 	}
-						
+							
 	void level_createSectorSnapshot(SnapshotBuffer* buffer, std::vector<s32>& sectorIds)
 	{
 		s_uniqueEntities.clear();
@@ -3400,6 +5083,57 @@ namespace LevelEditor
 		// TODO: Handle edit state properly here too.
 		edit_clearSelections();
 	}
+		
+	void level_createGuidelineSnapshot(SnapshotBuffer* buffer)
+	{
+		setSnapshotWriteBuffer(buffer);
+		const u32 guidelineCount = s_level.guidelines.size();
+		const Guideline* guideline = s_level.guidelines.data();
+
+		writeU32(guidelineCount);
+		for (u32 g = 0; g < guidelineCount; g++, guideline++)
+		{
+			writeGuidelineToSnapshot(guideline);
+		}
+	}
+
+	void level_unpackGuidelineSnapshot(u32 size, void* data)
+	{
+		setSnapshotReadBuffer((u8*)data, size);
+
+		const u32 guidelineCount = readU32();
+		s_level.guidelines.resize(guidelineCount);
+
+		Guideline* guideline = s_level.guidelines.data();
+		for (u32 g = 0; g < guidelineCount; g++, guideline++)
+		{
+			readGuidelineFromSnapshot(guideline);
+		}
+	}
+		
+	void level_createSingleGuidelineSnapshot(SnapshotBuffer* buffer, s32 index)
+	{
+		assert(index >= 0 && index < (s32)s_level.guidelines.size());
+		setSnapshotWriteBuffer(buffer);
+
+		Guideline* guideline = &s_level.guidelines[index];
+		writeS32(index);
+		writeGuidelineToSnapshot(guideline);
+	}
+
+	void level_unpackSingleGuidelineSnapshot(u32 size, void* data)
+	{
+		setSnapshotReadBuffer((u8*)data, size);
+
+		const s32 index = readS32();
+		if (index < 0 || index >= (s32)s_level.guidelines.size())
+		{
+			return;
+		}
+
+		Guideline* guideline = &s_level.guidelines[index];
+		readGuidelineFromSnapshot(guideline);
+	}
 
 	// Find a sector based on DF rules.
 	EditorSector* findSectorDf(const Vec3f pos)
@@ -3432,6 +5166,41 @@ namespace LevelEditor
 						prevSectorUnitArea = sectorUnitArea;
 						foundSector = sector;
 					}
+				}
+			}
+		}
+
+		return foundSector;
+	}
+
+	// Find a sector based on DF rules.
+	EditorSector* findSectorDf(const Vec2f pos)
+	{
+		const s32 count = (s32)s_level.sectors.size();
+		EditorSector* sector = s_level.sectors.data();
+		EditorSector* foundSector = nullptr;
+		s32 sectorUnitArea = 0;
+		s32 prevSectorUnitArea = INT_MAX;
+
+		for (s32 i = 0; i < count; i++, sector++)
+		{
+			const f32 sectorMaxX = sector->bounds[1].x;
+			const f32 sectorMinX = sector->bounds[0].x;
+			const f32 sectorMaxZ = sector->bounds[1].z;
+			const f32 sectorMinZ = sector->bounds[0].z;
+
+			const s32 dxInt = (s32)floorf(sectorMaxX - sectorMinX) + 1;
+			const s32 dzInt = (s32)floorf(sectorMaxZ - sectorMinZ) + 1;
+			sectorUnitArea = dzInt * dxInt;
+
+			s32 insideBounds = 0;
+			if (pos.x >= sectorMinX && pos.x <= sectorMaxX && pos.z >= sectorMinZ && pos.z <= sectorMaxZ)
+			{
+				// pick the containing sector with the smallest area.
+				if (sectorUnitArea < prevSectorUnitArea && TFE_Polygon::pointInsidePolygon(&sector->poly, { pos.x, pos.z }))
+				{
+					prevSectorUnitArea = sectorUnitArea;
+					foundSector = sector;
 				}
 			}
 		}

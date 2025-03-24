@@ -3,6 +3,7 @@
 #include "levelEditorHistory.h"
 #include "editVertex.h"
 #include "editCommon.h"
+#include "hotkeys.h"
 #include "guidelines.h"
 #include "tabControl.h"
 #include "camera.h"
@@ -349,16 +350,9 @@ namespace LevelEditor
 		selection_clear();
 		selection_clearHovered();
 	}
-		
-	void selectAndScrollToSector(EditorSector* sector)
-	{
-		// Clear the selection, select the sector.
-		selection_clear();
 
-		// Set the edit mode to "Sector"
-		edit_setEditMode(LEDIT_SECTOR);
-		selection_sector(SA_SET, sector);
-				
+	void scrollToSector(EditorSector* sector)
+	{
 		// Set the correct layer.
 		if (!(s_editFlags & LEF_SHOW_ALL_LAYERS))
 		{
@@ -417,10 +411,22 @@ namespace LevelEditor
 		}
 	}
 		
+	void selectAndScrollToSector(EditorSector* sector)
+	{
+		// Clear the selection, select the sector.
+		selection_clear();
+
+		// Set the edit mode to "Sector"
+		edit_setEditMode(LEDIT_SECTOR);
+		selection_sector(SA_SET, sector);
+				
+		scrollToSector(sector);
+	}
+		
 	void listNamedSectorsInGroup(Group* group)
 	{
 		const s32 count = (s32)s_level.sectors.size();
-		const s32 groupId = group->id;
+		const s32 groupId = (s32)group->id;
 		EditorSector* sector = s_level.sectors.data();
 
 		Sublist sublist;
@@ -433,10 +439,36 @@ namespace LevelEditor
 			}
 			if (sublist_item(sublist, sector->name.c_str(), selection_featureInCurrentSelection(sector)))
 			{
-				
+				if (s_editMode == LEDIT_SECTOR)
+				{
+					const bool selToggle = TFE_Input::keyModDown(KEYMOD_CTRL);
+					const bool setOrAdd = !selToggle || !selection_sector(SA_CHECK_INCLUSION, sector);
+					if (selToggle)
+					{
+						selection_sector(setOrAdd ? SA_ADD : SA_REMOVE, sector);
+					}
+					else
+					{
+						selection_sector(SA_SET, sector);
+					}
+
+					if (setOrAdd)
+					{
+						scrollToSector(sector);
+					}
+				}
 			}
 		}
 		sublist_end(sublist);
+	}
+
+	void infoPanelOpenGroup(s32 groupId)
+	{
+		Group* group = groups_getById(groupId);
+		if (group)
+		{
+			s_groupOpen = group->index;
+		}
 	}
 
 	void infoPanelMap()
@@ -455,9 +487,19 @@ namespace LevelEditor
 			s_level.bounds[1].x, s_level.bounds[1].y, s_level.bounds[1].z);
 		ImGui::Text("Layer Range: [%d, %d]", s_level.layerRange[0], s_level.layerRange[1]);
 		ImGui::LabelText("##GridLabel", "Grid Height");
-		ImGui::SameLine(128.0f);
-		ImGui::SetNextItemWidth(196.0f);
+		ImGui::SameLine(108.0f);
+		ImGui::SetNextItemWidth(80.0f);
 		ImGui::InputFloat("##GridHeight", &s_grid.height, 0.0f, 0.0f, "%0.2f", ImGuiInputTextFlags_CharsDecimal);
+
+		ImGui::SameLine(0.0f, 16.0f);
+		ImGui::SetNextItemWidth(86.0f);
+		ImGui::LabelText("##DepthLabel", "View Depth");
+		ImGui::SameLine(0.0f, 8.0f);
+		ImGui::SetNextItemWidth(80.0f);
+		ImGui::InputFloat("##ViewDepth0", &s_viewDepth[0], 0.0f, 0.0f, "%0.2f", ImGuiInputTextFlags_CharsDecimal);
+		ImGui::SameLine(0.0f, 4.0f);
+		ImGui::SetNextItemWidth(80.0f);
+		ImGui::InputFloat("##ViewDepth1", &s_viewDepth[1], 0.0f, 0.0f, "%0.2f", ImGuiInputTextFlags_CharsDecimal);
 			
 		ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize
 			| ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoFocusOnAppearing;
@@ -673,7 +715,7 @@ namespace LevelEditor
 		s32 index = -1;
 		EditorSector* sector = nullptr;
 
-		ImGui::BeginChild("##TextureList");
+		ImGui::BeginChild("##VertexList");
 		{
 			const u32 count = selection_getCount();
 			if (count <= 1)
@@ -971,7 +1013,7 @@ namespace LevelEditor
 		if (s_editMode == LEDIT_SECTOR)
 		{
 			s_sectorInfo.resize(count);
-			for (s32 s = 0; s < count; s++)
+			for (s32 s = 0; s < (s32)count; s++)
 			{
 				selection_getSector(s, sector);
 				s_sectorInfo[s] = sector;
@@ -984,7 +1026,7 @@ namespace LevelEditor
 		{
 			s32 wallIndex;
 			HitPart part;
-			for (s32 s = 0; s < count; s++)
+			for (s32 s = 0; s < (s32)count; s++)
 			{
 				selection_getSurface(s, sector, wallIndex, &part);
 				if (part == HP_FLOOR || part == HP_CEIL)
@@ -1247,7 +1289,7 @@ namespace LevelEditor
 		EditorSector* sector = nullptr;
 		u32 selWallCount = getWallInfoList();
 
-		const bool insertTexture = s_selectedTexture >= 0 && TFE_Input::keyPressed(KEY_T);
+		const bool insertTexture = s_selectedTexture >= 0 && isShortcutPressed(SHORTCUT_SET_TEXTURE);
 		const bool removeTexture = TFE_Input::mousePressed(MBUTTON_RIGHT);
 		const s32 texIndex = insertTexture ? s_selectedTexture  : -1;
 
@@ -1573,6 +1615,19 @@ namespace LevelEditor
 		}
 	}
 
+	void fixupSectorName(char* sectorName)
+	{
+		const size_t len = strlen(sectorName);
+		for (size_t i = 0; i < len; i++)
+		{
+			// Spaces are not allowed in sector names, allowing them is a big source of issues.
+			if (sectorName[i] == ' ')
+			{
+				sectorName[i] = '-';
+			}
+		}
+	}
+
 	void infoPanelSector()
 	{
 		bool insertTexture = s_selectedTexture >= 0 && TFE_Input::keyPressed(KEY_T);
@@ -1610,6 +1665,7 @@ namespace LevelEditor
 			if (otherNameId >= 0) { ImGui::PushStyleColor(ImGuiCol_Text, { 1.0f, 0.2f, 0.2f, 1.0f }); }
 			if (ImGui::InputText(inputName, sectorName, getSectorNameLimit()))
 			{
+				fixupSectorName(sectorName);
 				sector->name = sectorName;
 				changed = true;
 			}
@@ -2118,7 +2174,7 @@ namespace LevelEditor
 		}
 		setPrevObjectFeature(sector, objIndex);
 
-		if (!sector || objIndex < 0) { return; }
+		if (!sector || objIndex < 0 || objIndex >= (s32)sector->obj.size()) { return; }
 
 		if (selection_getCount() <= 1)
 		{
@@ -2562,6 +2618,7 @@ namespace LevelEditor
 	}
 
 	static s32 s_selectedOffset = -1;
+	static s32 s_prevGuidelineId = -1;
 	
 	void infoPanelGuideline()
 	{
@@ -2569,11 +2626,14 @@ namespace LevelEditor
 		if (id < 0) { return; }
 
 		Guideline* guideline = &s_level.guidelines[id];
+		bool guidelineEdited = false;
 
 		sectionHeader("Settings");
 		const s32 checkWidth = (s32)ImGui::CalcTextSize("Limit Height Shown").x + 8;
+		const u32 prevFlags = guideline->flags;
 		optionCheckbox("Limit Height Shown", &guideline->flags, GLFLAG_LIMIT_HEIGHT, checkWidth);
 		optionCheckbox("Disable Snapping", &guideline->flags, GLFLAG_DISABLE_SNAPPING, checkWidth);
+		if (guideline->flags != prevFlags) { guidelineEdited = true; }
 		ImGui::Separator();
 
 		if ((guideline->flags & GLFLAG_LIMIT_HEIGHT) || !(guideline->flags & GLFLAG_DISABLE_SNAPPING))
@@ -2582,12 +2642,12 @@ namespace LevelEditor
 			s32 colWidth = s32(ImGui::CalcTextSize("Min Height Shown").x + 8.0f);
 			if (guideline->flags & GLFLAG_LIMIT_HEIGHT)
 			{
-				optionFloatInput("Min Height Shown", &guideline->minHeight, 0.1f, colWidth, 128, "%.2f");
-				optionFloatInput("Max Height Shown", &guideline->maxHeight, 0.1f, colWidth, 128, "%.2f");
+				guidelineEdited |= optionFloatInput("Min Height Shown", &guideline->minHeight, 0.1f, colWidth, 128, "%.2f");
+				guidelineEdited |= optionFloatInput("Max Height Shown", &guideline->maxHeight, 0.1f, colWidth, 128, "%.2f");
 			}
 			if (!(guideline->flags & GLFLAG_DISABLE_SNAPPING))
 			{
-				optionFloatInput("Max Snap Range", &guideline->maxSnapRange, 0.1f, colWidth, 128, "%.2f");
+				guidelineEdited |= optionFloatInput("Max Snap Range", &guideline->maxSnapRange, 0.1f, colWidth, 128, "%.2f");
 			}
 			ImGui::Separator();
 		}
@@ -2601,7 +2661,7 @@ namespace LevelEditor
 		{
 			char label[256];
 			sprintf(label, "Offset %d", i + 1);
-			optionFloatInput(label, &offsetValue[i], 0.1f, 0, 128, "%.2f");
+			guidelineEdited |= optionFloatInput(label, &offsetValue[i], 0.1f, 0, 128, "%.2f");
 			guideline->maxOffset = std::max(guideline->maxOffset, fabsf(offsetValue[i]));
 
 			ImGui::SameLine();
@@ -2617,6 +2677,7 @@ namespace LevelEditor
 		if (ImGui::Button("Add"))
 		{
 			guideline->offsets.push_back({ 0.0f });
+			guidelineEdited = true;
 		}
 		if (count >= 4) { enableNextItem(); }
 
@@ -2627,7 +2688,24 @@ namespace LevelEditor
 				guideline->offsets[i] = guideline->offsets[i + 1];
 			}
 			guideline->offsets.pop_back();
+			guidelineEdited = true;
 		}
+
+		ImGui::Separator();
+		sectionHeader("Subdivision");
+		ImGui::TextColored(ImVec4(0.5f, 1.0f, 0.75f, 0.5f), "Subdivide into equal length segments,\ndefault (0) = no subdivision.");
+		s32 colWidth = s32(ImGui::CalcTextSize("Segment Length").x + 8.0f);
+		if (optionFloatInput("Segment Length", &guideline->subDivLen, 0.1f, colWidth, 128, "%.2f"))
+		{
+			guidelineEdited = true;
+			guideline_computeSubdivision(guideline);
+		}
+		
+		if (guidelineEdited)
+		{
+			cmd_guidelineSingleSnapshot(LName_Guideline_Edit, id, s_prevGuidelineId != id);
+		}
+		s_prevGuidelineId = id;
 	}
 
 	void infoPanelNote()

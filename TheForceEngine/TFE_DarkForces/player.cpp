@@ -14,23 +14,19 @@
 #include <TFE_System/system.h>
 #include <TFE_FrontEndUI/console.h>
 #include <TFE_Settings/settings.h>
+#include <TFE_ExternalData/pickupExternal.h>
 #include <TFE_Input/inputMapping.h>
 #include <TFE_Game/igame.h>
-#include <TFE_DarkForces/mission.h>
 #include <TFE_Jedi/Level/level.h>
-#include <TFE_Jedi/Level/levelData.h>
 #include <TFE_Jedi/InfSystem/infSystem.h>
 #include <TFE_Jedi/Renderer/rlimits.h>
 #include <TFE_Jedi/Serialization/serialization.h>
 // Internal types need to be included in this case.
 #include <TFE_Jedi/InfSystem/infTypesInternal.h>
 #include <TFE_Jedi/Renderer/jediRenderer.h>
-#include <TFE_Jedi/Renderer/RClassic_Fixed/rclassicFixed.h>
-#include <TFE_Audio/audioSystem.h>
 
 // TFE
 #include <TFE_System/tfeMessage.h>
-#include <TFE_Settings/settings.h>
 
 using namespace TFE_Input;
 
@@ -82,6 +78,7 @@ namespace TFE_DarkForces
 		HEADLAMP_ENERGY_CONSUMPTION = 0x111,    // fraction of energy consumed per second = ~0.004
 		GASMASK_ENERGY_CONSUMPTION  = 0x444,    // fraction of energy consumed per second = ~0.0167
 		GOGGLES_ENERGY_CONSUMPTION  = 0x444,    // fraction of energy consumed per second = ~0.0167
+		SUPERCHARGE_DURATION        = 6554,     // 45 seconds
 	};
 
 	static const s32 c_pitchLimits[] =
@@ -182,6 +179,15 @@ namespace TFE_DarkForces
 	static angle14_32 s_playerObjYaw;
 	static RSector* s_playerObjSector;
 	static RWall* s_playerSlideWall;
+
+	// TFE - constants which can be overridden
+	static s32 s_lowFloorDamage = PLAYER_DMG_FLOOR_LOW;
+	static s32 s_highFloorDamage = PLAYER_DMG_FLOOR_HIGH;
+	static s32 s_gasDamage = PLAYER_DMG_FLOOR_LOW;
+	static s32 s_wallDamage = PLAYER_DMG_WALL;
+	static s32 s_headlampConsumption = HEADLAMP_ENERGY_CONSUMPTION;
+	static s32 s_gogglesConsumption = GOGGLES_ENERGY_CONSUMPTION;
+	static s32 s_gasmaskConsumption = GASMASK_ENERGY_CONSUMPTION;
 	
 	///////////////////////////////////////////
 	// Shared State
@@ -202,7 +208,7 @@ namespace TFE_DarkForces
 	JBool s_weaponFiringSec = JFALSE;
 	JBool s_wearingCleats = JFALSE;
 	JBool s_wearingGasmask = JFALSE;
-	JBool s_nightvisionActive = JFALSE;
+	JBool s_nightVisionActive = JFALSE;
 	JBool s_headlampActive = JFALSE;
 	JBool s_superCharge   = JFALSE;
 	JBool s_superChargeHud= JFALSE;
@@ -219,7 +225,7 @@ namespace TFE_DarkForces
 	SecObject* s_playerObject = nullptr;
 	SecObject* s_playerEye = nullptr;
 	vec3_fixed s_eyePos = { 0 };	// s_camX, s_camY, s_camZ in the DOS code.
-	angle14_32 s_pitch = 0, s_yaw = 0, s_roll = 0;
+	angle14_32 s_eyePitch = 0, s_eyeYaw = 0, s_eyeRoll = 0;
 	u32 s_playerEyeFlags = OBJ_FLAG_NEEDS_TRANSFORM;
 	Tick s_playerTick;
 	Tick s_prevPlayerTick;
@@ -235,8 +241,10 @@ namespace TFE_DarkForces
 	angle14_32 s_camOffsetRoll = 0;
 	angle14_32 s_playerYaw;
 
-	JBool s_itemUnknown1;	// 0x282428
-	JBool s_itemUnknown2;	// 0x28242c
+	// Based on positioning in inventory, these were probably meant to represent thermal
+	// detonators and mines - see player_readInfo() and player_writeInfo()
+	JBool s_itemUnknown1;	// 0x282428	
+	JBool s_itemUnknown2;	// 0x28242c 
 
 	SoundSourceId s_landSplashSound;
 	SoundSourceId s_landSolidSound;
@@ -261,6 +269,34 @@ namespace TFE_DarkForces
 	s32 s_onMovingSurface = 0;
 	// Other
 	s32 s_playerCrouch = 0;
+
+	// TFE - Pointers to player ammo stores
+	s32* s_playerAmmoEnergy;
+	s32* s_playerAmmoPower;
+	s32* s_playerAmmoPlasma;
+	s32* s_playerAmmoShell;
+	s32* s_playerAmmoDetonators;
+	s32* s_playerAmmoMines;
+	s32* s_playerAmmoMissiles;
+	s32* s_playerShields;
+	s32* s_playerHealth;
+	fixed16_16* s_playerBatteryPower;
+
+	// TFE - Maximum values for ammo, etc.
+	s32 s_ammoEnergyMax;
+	s32 s_ammoPowerMax;
+	s32 s_ammoShellMax;
+	s32 s_ammoPlasmaMax;
+	s32 s_ammoDetonatorMax;
+	s32 s_ammoMineMax;
+	s32 s_ammoMissileMax;
+	s32 s_shieldsMax;
+	fixed16_16 s_batteryPowerMax;
+	s32 s_healthMax;
+
+	// TFE - constants which can be overridden
+	s32 s_weaponSuperchargeDuration;
+	s32 s_shieldSuperchargeDuration;
 			   
 	///////////////////////////////////////////
 	// Forward Declarations
@@ -303,14 +339,40 @@ namespace TFE_DarkForces
 		s_kyleScreamSoundSource          = sound_load("fall.voc",     SOUND_PRIORITY_MED4);
 		s_playerShieldHitSoundSource     = sound_load("shield1.voc",  SOUND_PRIORITY_MED5);
 
+		s_playerAmmoEnergy = &s_playerInfo.ammoEnergy;
+		s_playerAmmoPower = &s_playerInfo.ammoPower;
+		s_playerAmmoPlasma = &s_playerInfo.ammoPlasma;
+		s_playerAmmoShell = &s_playerInfo.ammoShell;
+		s_playerAmmoDetonators = &s_playerInfo.ammoDetonator;
+		s_playerAmmoMines = &s_playerInfo.ammoMine;
+		s_playerAmmoMissiles = &s_playerInfo.ammoMissile;
+		s_playerShields = &s_playerInfo.shields;
+		s_playerHealth = &s_playerInfo.health;
+		s_playerBatteryPower = &s_batteryPower;
+
+		TFE_ExternalData::MaxAmounts* maxAmounts = TFE_ExternalData::getMaxAmounts();
+		s_ammoEnergyMax = maxAmounts->ammoEnergyMax;
+		s_ammoPowerMax = maxAmounts->ammoPowerMax;
+		s_ammoShellMax = maxAmounts->ammoShellMax;
+		s_ammoPlasmaMax = maxAmounts->ammoPlasmaMax;
+		s_ammoDetonatorMax = maxAmounts->ammoDetonatorMax;
+		s_ammoMineMax = maxAmounts->ammoMineMax;
+		s_ammoMissileMax = maxAmounts->ammoMissileMax;
+		s_shieldsMax = maxAmounts->shieldsMax;
+		s_batteryPowerMax = maxAmounts->batteryPowerMax;
+		s_healthMax = maxAmounts->healthMax;
+
 		s_playerInfo = { 0 }; // Make sure this is clear...
-		s_playerInfo.ammoEnergy  = pickup_addToValue(0, 100, 999);
-		s_playerInfo.ammoPower   = pickup_addToValue(0, 100, 999);
-		s_playerInfo.ammoPlasma  = pickup_addToValue(0, 100, 999);
-		s_playerInfo.shields     = pickup_addToValue(0, 100, 200);
-		s_playerInfo.health      = pickup_addToValue(0, 100, 100);
+		s_playerInfo.ammoEnergy  = pickup_addToValue(0, 100, s_ammoEnergyMax);
+		s_playerInfo.ammoPower   = pickup_addToValue(0, 100, s_ammoPowerMax);
+		s_playerInfo.ammoPlasma  = pickup_addToValue(0, 100, s_ammoPlasmaMax);
+		s_playerInfo.shields     = pickup_addToValue(0, 100, s_shieldsMax);
+		s_playerInfo.health      = pickup_addToValue(0, 100, s_healthMax);
 		s_playerInfo.healthFract = 0;
-		s_batteryPower = FIXED(2);
+		s_batteryPower = s_batteryPowerMax;
+		// Always reset player ticks on init for replay consistency
+		s_playerTick = 0;
+		s_prevPlayerTick = 0;
 		s_reviveTick = 0;
 
 		s_automapLocked = JTRUE;
@@ -447,6 +509,298 @@ namespace TFE_DarkForces
 			s_playerInfo.maxWeapon = nextWpn;
 		}
 	}
+
+	void player_handleLevelOverrides(ModSettingLevelOverride modLevelOverride)
+	{
+		// Handle Numeric Overrides
+		std::map<std::string, int> intMap = modLevelOverride.intOverrideMap;
+		std::map<std::string, float> floatMap = modLevelOverride.floatOverrideMap;
+
+		// Handle Ammo/Shields/Lives/Battery
+		if (intMap.find("energy") != intMap.end())
+		{
+			s_playerInfo.ammoEnergy = pickup_addToValue(0, intMap["energy"], 999);
+		}
+		if (intMap.find("power") != intMap.end())
+		{
+			s_playerInfo.ammoPower = pickup_addToValue(0, intMap["power"], 999);
+		}
+		if (intMap.find("plasma") != intMap.end())
+		{
+			s_playerInfo.ammoPlasma = pickup_addToValue(0, intMap["plasma"], 999);
+		}
+		if (intMap.find("detonator") != intMap.end())
+		{
+			s_playerInfo.ammoDetonator = pickup_addToValue(0, intMap["detonator"], 999);
+		}
+		if (intMap.find("shell") != intMap.end())
+		{
+			s_playerInfo.ammoShell = pickup_addToValue(0, intMap["shell"], 999);
+		}
+		if (intMap.find("mine") != intMap.end())
+		{
+			s_playerInfo.ammoMine = pickup_addToValue(0, intMap["mine"], 999);
+		}
+		if (intMap.find("missile") != intMap.end())
+		{
+			s_playerInfo.ammoMissile = pickup_addToValue(0, intMap["missile"], 99);
+		}
+		if (intMap.find("shields") != intMap.end())
+		{
+			s_playerInfo.shields = pickup_addToValue(0, intMap["shields"], 999);
+		}
+		if (intMap.find("health") != intMap.end())
+		{
+			s_playerInfo.health = pickup_addToValue(0, intMap["health"], 999);
+		}
+		if (intMap.find("lives") != intMap.end())
+		{
+			s_lifeCount = pickup_addToValue(0, intMap["lives"], 9);
+		}
+		if (intMap.find("battery") != intMap.end())
+		{
+			fixed16_16 batteryPower = FIXED(2);
+			int batteryPowerPercent = pickup_addToValue(0, intMap["battery"], 100);
+			s_batteryPower = (batteryPower * batteryPowerPercent) / 100;
+		}
+
+		// Note - this doesn't check if the weapon is in the inventory!
+		if (intMap.find("defaultWeapon") != intMap.end())
+		{
+			int weaponSwitchID = pickup_addToValue(0, intMap["defaultWeapon"], 9);
+
+			// Map it to the weapon index on the KEYBOARD (Ex: 1 = fists, 2  = bryar etc..)
+			if (weaponSwitchID == 0)
+			{
+				player_setNextWeapon(9);
+			}
+			else
+			{
+				player_setNextWeapon(weaponSwitchID - 1);
+			}
+		}
+
+		// Handle attenuation such as Gromas
+		if (intMap.find("fogLevel") != intMap.end())
+		{
+			s_levelAtten = pickup_addToValue(0, intMap["fogLevel"], 100);
+		}
+
+		// Constants
+		if (intMap.find("floorDamageLow") != intMap.end())
+		{
+			s_lowFloorDamage = FIXED(intMap["floorDamageLow"]);
+		}
+		if (intMap.find("floorDamageHigh") != intMap.end())
+		{
+			s_highFloorDamage = FIXED(intMap["floorDamageHigh"]);
+		}
+		if (intMap.find("gasDamage") != intMap.end())
+		{
+			s_gasDamage = FIXED(intMap["gasDamage"]);
+		}
+		if (intMap.find("wallDamage") != intMap.end())
+		{
+			s_wallDamage = FIXED(intMap["wallDamage"]);
+		}
+		if (intMap.find("gravity") != intMap.end())
+		{
+			s_gravityAccel = FIXED(intMap["gravity"]);
+		}
+		if (intMap.find("projectileGravity") != intMap.end())
+		{
+			setProjectileGravityAccel(FIXED(intMap["projectileGravity"]));
+		}
+
+		if (intMap.find("shieldSuperchargeDuration") != intMap.end())
+		{
+			s_shieldSuperchargeDuration = intMap["shieldSuperchargeDuration"] * TICKS_PER_SECOND;
+		}
+		if (intMap.find("weaponSuperchargeDuration") != intMap.end())
+		{
+			s_weaponSuperchargeDuration = intMap["weaponSuperchargeDuration"] * TICKS_PER_SECOND;
+		}
+
+		if (floatMap.find("headlampBatteryConsumption") != floatMap.end())
+		{
+			float* value = &floatMap["headlampBatteryConsumption"];
+			s_headlampConsumption = (s32) ((*value / 100.00) * FIXED(2));
+		}
+
+		if (floatMap.find("gogglesBatteryConsumption") != floatMap.end())
+		{
+			float* value = &floatMap["gogglesBatteryConsumption"];
+			s_gogglesConsumption = (s32)((*value / 100.00) * FIXED(2));
+		}
+
+		if (floatMap.find("maskBatteryConsumption") != floatMap.end())
+		{
+			float* value = &floatMap["maskBatteryConsumption"];
+			s_gasmaskConsumption = (s32)((*value / 100.00) * FIXED(2));
+		}
+
+		// Handle Boolean Overrides
+		std::map<std::string, bool> boolMap = modLevelOverride.boolOverrideMap;
+
+		// Handle Weapons
+		if (boolMap.find("pistol") != boolMap.end())
+		{
+			s_playerInfo.itemPistol = boolMap["pistol"];
+		}
+		if (boolMap.find("rifle") != boolMap.end())
+		{
+			s_playerInfo.itemRifle = boolMap["rifle"];
+		}
+		if (boolMap.find("autogun") != boolMap.end())
+		{
+			s_playerInfo.itemAutogun = boolMap["autogun"];
+		}
+		if (boolMap.find("mortar") != boolMap.end())
+		{
+			s_playerInfo.itemMortar = boolMap["mortar"];
+		}
+		if (boolMap.find("fusion") != boolMap.end())
+		{
+			s_playerInfo.itemFusion = boolMap["fusion"];
+		}
+		if (boolMap.find("concussion") != boolMap.end())
+		{
+			s_playerInfo.itemConcussion = boolMap["concussion"];
+		}
+		if (boolMap.find("cannon") != boolMap.end())
+		{
+			s_playerInfo.itemCannon = boolMap["cannon"];
+		}
+
+		// Handle Activatable Items
+
+		if (boolMap.find("mask") != boolMap.end())
+		{
+			s_playerInfo.itemMask = boolMap["mask"];
+		}
+		if (boolMap.find("goggles") != boolMap.end())
+		{
+			s_playerInfo.itemGoggles = boolMap["goggles"];
+		}
+		if (boolMap.find("cleats") != boolMap.end())
+		{
+			s_playerInfo.itemCleats = boolMap["cleats"];
+		}
+
+		// Handle Items 
+
+		if (boolMap.find("plans") != boolMap.end())
+		{
+			s_playerInfo.itemPlans = boolMap["plans"];
+		}
+		if (boolMap.find("phrik") != boolMap.end())
+		{
+			s_playerInfo.itemPhrik = boolMap["phrik"];
+		}
+		if (boolMap.find("nava") != boolMap.end())
+		{
+			s_playerInfo.itemNava = boolMap["nava"];
+		}
+		if (boolMap.find("datatape") != boolMap.end())
+		{
+			s_playerInfo.itemDatatape = boolMap["datatape"];
+		}
+		if (boolMap.find("dtWeapon") != boolMap.end())
+		{
+			s_playerInfo.itemDtWeapon = boolMap["dtWeapon"];
+		}
+		if (boolMap.find("code1") != boolMap.end())
+		{
+			s_playerInfo.itemCode1 = boolMap["code1"];
+		}
+		if (boolMap.find("code2") != boolMap.end())
+		{
+			s_playerInfo.itemCode2 = boolMap["code2"];
+		}
+		if (boolMap.find("code3") != boolMap.end())
+		{
+			s_playerInfo.itemCode3 = boolMap["code3"];
+		}
+		if (boolMap.find("code4") != boolMap.end())
+		{
+			s_playerInfo.itemCode4 = boolMap["code4"];
+		}
+		if (boolMap.find("code5") != boolMap.end())
+		{
+			s_playerInfo.itemCode5 = boolMap["code5"];
+		}
+
+		// Handle Keys
+		if (boolMap.find("redKey") != boolMap.end())
+		{
+			s_playerInfo.itemRedKey = boolMap["redKey"];
+		}
+		if (boolMap.find("yellowKey") != boolMap.end())
+		{
+			s_playerInfo.itemYellowKey = boolMap["yellowKey"];
+		}
+		if (boolMap.find("blueKey") != boolMap.end())
+		{
+			s_playerInfo.itemBlueKey = boolMap["blueKey"];
+		}
+
+		// Enable Activatable items
+
+		if (boolMap.find("enableMask") != boolMap.end())
+		{
+			if (boolMap["enableMask"])
+			{
+				s_playerInfo.itemMask = JTRUE;
+				enableMask();
+			}
+		}
+		if (boolMap.find("enableCleats") != boolMap.end())
+		{
+			if (boolMap["enableCleats"])
+			{
+				s_playerInfo.itemCleats = JTRUE;
+				enableCleats();
+			}
+		}
+		if (boolMap.find("enableNightVision") != boolMap.end())
+		{
+			if (boolMap["enableNightVision"])
+			{
+				s_playerInfo.itemGoggles = JTRUE;
+				enableNightVision();
+			}
+		}
+		if (boolMap.find("enableHeadlamp") != boolMap.end())
+		{
+			if (boolMap["enableHeadlamp"])
+			{
+				enableHeadlamp();
+			}
+		}
+
+		// Wipe everything and start only with Bryar Pistol Only
+
+		if (boolMap.find("bryarOnly") != boolMap.end() && boolMap["bryarOnly"] == MSO_TRUE)
+		{
+
+			// Wipe the player inventory settings.
+			u8* src = (u8*)&s_playerInfo;
+			size_t size = (size_t)&s_playerInfo.pileSaveMarker - (size_t)&s_playerInfo;
+			assert(size == 140);
+			memset(src, 0, size);
+
+			// Give player 100 blaster ammo and a Bryar Pistol
+			s_playerInfo.ammoEnergy = pickup_addToValue(0, 100, 999);
+			s_playerInfo.itemPistol = JTRUE;
+			player_setNextWeapon(1);
+
+			// Disable all activatable items
+			disableMask();
+			disableCleats();
+			disableNightVision();
+			hud_clearMessage();
+		}
+	}
 		
 	void player_createController(JBool clearData)
 	{
@@ -491,6 +845,18 @@ namespace TFE_DarkForces
 		s_playerStopAccel     = PLAYER_STOP_ACCEL;
 		s_minEyeDistFromFloor = PLAYER_MIN_EYE_DIST_FLOOR;
 		s_gravityAccel        = PLAYER_GRAVITY_ACCEL;
+
+		// TFE - reset constants that may have been previously overridden
+		s_lowFloorDamage            = PLAYER_DMG_FLOOR_LOW;
+		s_highFloorDamage           = PLAYER_DMG_FLOOR_HIGH;
+		s_gasDamage                 = PLAYER_DMG_FLOOR_LOW;
+		s_wallDamage                = PLAYER_DMG_WALL;
+		s_headlampConsumption       = HEADLAMP_ENERGY_CONSUMPTION;
+		s_gogglesConsumption        = GOGGLES_ENERGY_CONSUMPTION;
+		s_gasmaskConsumption        = GASMASK_ENERGY_CONSUMPTION;
+		s_shieldSuperchargeDuration = SUPERCHARGE_DURATION;
+		s_weaponSuperchargeDuration = SUPERCHARGE_DURATION;
+		resetProjectileGravityAccel();
 
 		// Initialize values.
 		s_postLandVel = 0;
@@ -542,21 +908,28 @@ namespace TFE_DarkForces
 		s_instaDeathEnabled = JFALSE;
 
 		// The player will always start a level with at least 100 shields, though if they have more it carries over.
-		s_playerInfo.shields = max(100, s_playerInfo.shields);
+		s_playerInfo.shields = min(max(100, s_playerInfo.shields), s_shieldsMax);
 		// The player starts a new level with full health and energy.
-		s_playerInfo.health = 100;
+		s_playerInfo.health = s_healthMax;
 		s_playerInfo.healthFract = 0;
-		s_batteryPower = FIXED(2);
+		s_batteryPower = s_batteryPowerMax;
 
 		s_wearingGasmask    = JFALSE;
 		s_wearingCleats     = JFALSE;
-		s_nightvisionActive = JFALSE;
+		s_nightVisionActive = JFALSE;
 		s_headlampActive    = JFALSE;
 
 		// Handle level-specific hacks.
 		const char* levelName = agent_getLevelName();
 		TFE_System::logWrite(LOG_MSG, "Player", "Setting up level '%s'", levelName);
-		if (!strcasecmp(levelName, "jabship"))
+
+		// Handle custom level player overrides
+		ModSettingLevelOverride modLevelOverride = TFE_Settings::getLevelOverrides(levelName);
+		if (!modLevelOverride.levName.empty())
+		{
+			player_handleLevelOverrides(modLevelOverride);
+		}
+		else if (!strcasecmp(levelName, "jabship"))
 		{
 			u8* src  = (u8*)&s_playerInfo;
 			size_t size = (size_t)&s_playerInfo.pileSaveMarker - (size_t)&s_playerInfo;
@@ -580,7 +953,7 @@ namespace TFE_DarkForces
 				player_setNextWeapon(0);
 				disableMask();
 				disableCleats();
-				disableNightvision();
+				disableNightVision();
 				hud_clearMessage();
 			}
 		}
@@ -623,6 +996,10 @@ namespace TFE_DarkForces
 		s_playerObject = obj;
 		obj_addLogic(obj, (Logic*)&s_playerLogic, LOGIC_PLAYER, s_playerTask, playerLogicCleanupFunc);
 
+		// Wipe out the player logic for replay consistency
+		s_playerLogic.move = {};
+		s_playerLogic.dir = {};
+
 		s_playerObject->entityFlags|= ETFLAG_PLAYER;
 		s_playerObject->flags      |= OBJ_FLAG_MOVABLE;
 		s_playerObject->worldHeight = PLAYER_HEIGHT;
@@ -662,9 +1039,9 @@ namespace TFE_DarkForces
 		s_eyePos.y = s_playerEye->posWS.y;
 		s_eyePos.z = s_playerEye->posWS.z;
 
-		s_pitch = s_playerEye->pitch;
-		s_yaw   = s_playerEye->yaw;
-		s_roll  = s_playerEye->roll;
+		s_eyePitch = s_playerEye->pitch;
+		s_eyeYaw   = s_playerEye->yaw;
+		s_eyeRoll  = s_playerEye->roll;
 
 		setCameraOffset(0, 0, 0);
 		setCameraAngleOffset(0, 0, 0);
@@ -674,8 +1051,8 @@ namespace TFE_DarkForces
 	{
 		// player_revive() is called when the player respawns, which is why it sets 100 for shields here.
 		// In the case of picking up the item, the value is then set to 200 after the function call.
-		s_playerInfo.shields = 100;
-		s_playerInfo.health = 100;
+		s_playerInfo.shields = min(100, s_shieldsMax);
+		s_playerInfo.health = s_healthMax;
 		s_playerInfo.healthFract = 0;
 		s_playerDying = 0;
 	}
@@ -699,10 +1076,10 @@ namespace TFE_DarkForces
 
 	void giveAllWeaponsAndHealth()
 	{
-		s_playerInfo.health = 100;
+		s_playerInfo.health = s_healthMax;
 		s_playerInfo.healthFract = 0;
 		s_playerDying = 0;
-		s_playerInfo.shields = 200;
+		s_playerInfo.shields = s_shieldsMax;
 
 		s_playerInfo.itemPistol = JTRUE;
 		s_playerInfo.itemRifle = JTRUE;
@@ -717,54 +1094,54 @@ namespace TFE_DarkForces
 		s_playerInfo.itemCleats = JTRUE;
 		s_playerInfo.itemMask = JTRUE;
 
-		s_playerInfo.ammoEnergy = 500;
-		s_playerInfo.ammoPower = 500;
-		s_playerInfo.ammoDetonator = 50;
-		s_playerInfo.ammoShell = 50;
-		s_playerInfo.ammoPlasma = 400;
-		s_playerInfo.ammoMine = 30;
-		s_playerInfo.ammoMissile = 20;
+		s_playerInfo.ammoEnergy = s_ammoEnergyMax;
+		s_playerInfo.ammoPower = s_ammoPowerMax;
+		s_playerInfo.ammoDetonator = s_ammoDetonatorMax;
+		s_playerInfo.ammoShell = s_ammoShellMax;
+		s_playerInfo.ammoPlasma = s_ammoPlasmaMax;
+		s_playerInfo.ammoMine = s_ammoMineMax;
+		s_playerInfo.ammoMissile = s_ammoMissileMax;
 
-		s_batteryPower = FIXED(2);
-		weapon_fixupAnim();
+		s_batteryPower = s_batteryPowerMax;
+		weapon_emptyAnim();
 	}
 
 	void giveHealthAndFullAmmo()
 	{
-		s_playerInfo.health = 100;
+		s_playerInfo.health = s_healthMax;
 		s_playerInfo.healthFract = 0;
 		s_playerDying = 0;
-		s_playerInfo.shields = 200;
-		s_playerInfo.ammoEnergy = 500;
+		s_playerInfo.shields = s_shieldsMax;
+		s_playerInfo.ammoEnergy = s_ammoEnergyMax;
 
 		if (s_playerInfo.itemAutogun || s_playerInfo.itemFusion || s_playerInfo.itemConcussion)
 		{
-			s_playerInfo.ammoPower = 500;
+			s_playerInfo.ammoPower = s_ammoPowerMax;
 		}
 		if (s_playerInfo.itemCannon)
 		{
-			s_playerInfo.ammoPlasma = 400;
+			s_playerInfo.ammoPlasma = s_ammoPlasmaMax;
 		}
-		s_playerInfo.ammoDetonator = 50;
+		s_playerInfo.ammoDetonator = s_ammoDetonatorMax;
 		if (s_playerInfo.itemMortar)
 		{
-			s_playerInfo.ammoShell = 50;
+			s_playerInfo.ammoShell = s_ammoShellMax;
 		}
-		s_playerInfo.ammoMine = 30;
+		s_playerInfo.ammoMine = s_ammoMineMax;
 		if (s_playerInfo.itemCannon)
 		{
-			s_playerInfo.ammoMissile = 20;
+			s_playerInfo.ammoMissile = s_ammoMissileMax;
 		}
-		s_batteryPower = FIXED(2);
-		weapon_fixupAnim();
+		s_batteryPower = s_batteryPowerMax;
+		weapon_emptyAnim();
 	}
 
 	void giveAllInventoryAndHealth()
 	{
-		s_playerInfo.health = 100;
+		s_playerInfo.health = s_healthMax;
 		s_playerInfo.healthFract = 0;
 		s_playerDying = 0;
-		s_playerInfo.shields = 200;
+		s_playerInfo.shields = s_shieldsMax;
 		s_playerInfo.itemPistol = JTRUE;
 		s_playerInfo.itemRifle = JTRUE;
 		// s_282428 = JTRUE;
@@ -795,16 +1172,16 @@ namespace TFE_DarkForces
 		s_playerInfo.itemCode7 = JTRUE;
 		s_playerInfo.itemCode8 = JTRUE;
 		s_playerInfo.itemCode9 = JTRUE;
-		s_playerInfo.ammoEnergy = 500;
-		s_playerInfo.ammoPower = 500;
-		s_playerInfo.ammoDetonator = 50;
-		s_playerInfo.ammoShell = 50;
-		s_playerInfo.ammoMissile = 20;
-		s_playerInfo.ammoPlasma = 400;
-		s_playerInfo.ammoMine = 30;
-		s_batteryPower = FIXED(2);
+		s_playerInfo.ammoEnergy = s_ammoEnergyMax;
+		s_playerInfo.ammoPower = s_ammoPowerMax;
+		s_playerInfo.ammoDetonator = s_ammoDetonatorMax;
+		s_playerInfo.ammoShell = s_ammoShellMax;
+		s_playerInfo.ammoMissile = s_ammoMissileMax;
+		s_playerInfo.ammoPlasma = s_ammoPlasmaMax;
+		s_playerInfo.ammoMine = s_ammoMineMax;
+		s_batteryPower = s_batteryPowerMax;
 
-		weapon_fixupAnim();
+		weapon_emptyAnim();
 	}
 
 	void giveKeys()
@@ -1020,13 +1397,13 @@ namespace TFE_DarkForces
 			s_eyePos.y = s_playerEye->posWS.y + s_camOffset.y - s_playerEye->worldHeight;
 			s_eyePos.z = s_playerEye->posWS.z + s_camOffset.z;
 
-			s_pitch = s_playerEye->pitch + s_camOffsetPitch;
-			s_yaw   = s_playerEye->yaw   + s_camOffsetYaw;
-			s_roll  = s_playerEye->roll  + s_camOffsetRoll;
+			s_eyePitch = s_playerEye->pitch + s_camOffsetPitch;
+			s_eyeYaw   = s_playerEye->yaw   + s_camOffsetYaw;
+			s_eyeRoll  = s_playerEye->roll  + s_camOffsetRoll;
 
 			if (s_playerEye->sector)
 			{
-				renderer_computeCameraTransform(s_playerEye->sector, s_pitch, s_yaw, s_eyePos.x, s_eyePos.y, s_eyePos.z);
+				renderer_computeCameraTransform(s_playerEye->sector, s_eyePitch, s_eyeYaw, s_eyePos.x, s_eyePos.y, s_eyePos.z);
 			}
 			renderer_setWorldAmbient(s_playerLight);
 		}
@@ -1209,8 +1586,8 @@ namespace TFE_DarkForces
 				player_revive();
 				player_reset();
 				s_headlampActive = JFALSE;
-				s_nightvisionActive = JFALSE;
-				disableNightvisionInternal();
+				s_nightVisionActive = JFALSE;
+				disableNightVisionInternal();
 
 				s_playerObject->yaw = s_curSafe->yaw;
 				s_playerYaw = s_curSafe->yaw;
@@ -1290,7 +1667,7 @@ namespace TFE_DarkForces
 					}
 				}
 			}
-						
+
 			s_prevPlayerTick = s_playerTick;
 			task_yield(TASK_NO_DELAY);
 		}
@@ -1645,14 +2022,14 @@ namespace TFE_DarkForces
 				// Lower friction means the player will stop sliding sooner.
 				friction = FRICTION_CLEATS;
 			}
-			else if (s_playerSector->secHeight - 1 >= 0)	// In water
+			else if (s_playerSector->secHeight - 1 >= 0 && !s_flyMode)	// In water
 			{
 				friction = FRICTION_DEFAULT;
 				s_playerRun = wearingCleats;		// Once you get cleats, you move faster through water.
 				s_playerInWater = JTRUE;
 			}
 		}
-
+ 
 		// Apply friction to existing velocity.
 		if (s_playerVelX || s_playerVelZ)
 		{
@@ -2170,17 +2547,17 @@ namespace TFE_DarkForces
 		// Handle damage floors.
 		if (dmgFlags == SEC_FLAGS1_LOW_DAMAGE && s_onFloor)
 		{
-			fixed16_16 dmg = mul16(PLAYER_DMG_FLOOR_LOW, s_deltaTime);
+			fixed16_16 dmg = mul16(s_lowFloorDamage, s_deltaTime);
 			player_applyDamage(dmg, 0, JTRUE);
 		}
 		else if (dmgFlags == SEC_FLAGS1_HIGH_DAMAGE && s_onFloor)
 		{
-			fixed16_16 dmg = mul16(PLAYER_DMG_FLOOR_HIGH, s_deltaTime);
+			fixed16_16 dmg = mul16(s_highFloorDamage, s_deltaTime);
 			player_applyDamage(dmg, 0, JTRUE);
 		}
 		else if (dmgFlags == lowAndHighFlag && !s_wearingGasmask && !s_playerDying)
 		{
-			fixed16_16 dmg = mul16(PLAYER_DMG_FLOOR_LOW, s_deltaTime);
+			fixed16_16 dmg = mul16(s_gasDamage, s_deltaTime);
 			player_applyDamage(dmg, 0, JFALSE);
 
 			if (!s_gasSectorTask)
@@ -2198,7 +2575,7 @@ namespace TFE_DarkForces
 		// Handle damage walls.
 		if (s_playerSlideWall && (s_playerSlideWall->flags1 & WF1_DAMAGE_WALL))
 		{
-			fixed16_16 dmg = mul16(PLAYER_DMG_WALL, s_deltaTime);
+			fixed16_16 dmg = mul16(s_wallDamage, s_deltaTime);
 			player_applyDamage(dmg, 0, JTRUE);
 		}
 
@@ -2259,7 +2636,7 @@ namespace TFE_DarkForces
 				atten = max(headlamp, s_weaponLight + s_levelAtten);
 			}
 			s_baseAtten = atten;
-			if (s_nightvisionActive)
+			if (s_nightVisionActive)
 			{
 				atten = 0;
 			}
@@ -2296,7 +2673,7 @@ namespace TFE_DarkForces
 				}
 				// Now take the other half away.
 				shields = max(0, shields - halfShieldDmg);
-				s_playerInfo.shields = pickup_addToValue(floor16(shields), 0, 200);
+				s_playerInfo.shields = pickup_addToValue(floor16(shields), 0, s_shieldsMax);
 				if (playHitSound)
 				{
 					sound_play(s_playerShieldHitSoundSource);
@@ -2314,7 +2691,7 @@ namespace TFE_DarkForces
 			{
 				s_playerInfo.healthFract = 0;
 				// We could just set the health to 0 here...
-				s_playerInfo.health = pickup_addToValue(0, 0, 100);
+				s_playerInfo.health = pickup_addToValue(0, 0, s_healthMax);
 				if (playHitSound)
 				{
 					sound_play(s_playerDeathSoundSource);
@@ -2432,25 +2809,25 @@ namespace TFE_DarkForces
 		{
 			if (s_headlampActive)
 			{
-				fixed16_16 powerDelta = mul16(HEADLAMP_ENERGY_CONSUMPTION, s_deltaTime);
+				fixed16_16 powerDelta = mul16(s_headlampConsumption, s_deltaTime);
 				s_batteryPower -= powerDelta;
 			}
 			if (s_wearingGasmask)
 			{
-				fixed16_16 powerDelta = mul16(GASMASK_ENERGY_CONSUMPTION, s_deltaTime);
+				fixed16_16 powerDelta = mul16(s_gasmaskConsumption, s_deltaTime);
 				s_batteryPower -= powerDelta;
 			}
-			if (s_nightvisionActive)
+			if (s_nightVisionActive)
 			{
-				fixed16_16 powerDelta = mul16(GOGGLES_ENERGY_CONSUMPTION, s_deltaTime);
+				fixed16_16 powerDelta = mul16(s_gogglesConsumption, s_deltaTime);
 				s_batteryPower -= powerDelta;
 			}
 			if (s_batteryPower <= 0)
 			{
-				if (s_nightvisionActive)
+				if (s_nightVisionActive)
 				{
-					s_nightvisionActive = JFALSE;
-					disableNightvisionInternal();
+					s_nightVisionActive = JFALSE;
+					disableNightVisionInternal();
 					hud_sendTextMessage(9);
 				}
 				if (s_headlampActive)
@@ -2920,7 +3297,7 @@ namespace TFE_DarkForces
 		SERIALIZE(ObjState_InitVersion, s_weaponFiringSec, 0);
 		SERIALIZE(ObjState_InitVersion, s_wearingCleats, 0);
 		SERIALIZE(ObjState_InitVersion, s_wearingGasmask, 0);
-		SERIALIZE(ObjState_InitVersion, s_nightvisionActive, 0);
+		SERIALIZE(ObjState_InitVersion, s_nightVisionActive, 0);
 		SERIALIZE(ObjState_InitVersion, s_headlampActive, 0);
 		SERIALIZE(ObjState_InitVersion, s_superCharge, 0);
 		SERIALIZE(ObjState_InitVersion, s_superChargeHud, 0);
@@ -2929,6 +3306,26 @@ namespace TFE_DarkForces
 		SERIALIZE(ObjState_OneHitCheats, s_oneHitKillEnabled, JFALSE);
 		SERIALIZE(ObjState_OneHitCheats, s_instaDeathEnabled, JFALSE);
 		SERIALIZE(ObjState_CrouchToggle, s_playerCrouch, 0);
+		SERIALIZE(ObjState_ConstOverrides, s_lowFloorDamage, PLAYER_DMG_FLOOR_LOW);
+		SERIALIZE(ObjState_ConstOverrides, s_highFloorDamage, PLAYER_DMG_FLOOR_HIGH);
+		SERIALIZE(ObjState_ConstOverrides, s_gasDamage, PLAYER_DMG_FLOOR_LOW);
+		SERIALIZE(ObjState_ConstOverrides, s_wallDamage, PLAYER_DMG_WALL);
+		SERIALIZE(ObjState_ConstOverrides, s_headlampConsumption, HEADLAMP_ENERGY_CONSUMPTION);
+		SERIALIZE(ObjState_ConstOverrides, s_gogglesConsumption, GOGGLES_ENERGY_CONSUMPTION);
+		SERIALIZE(ObjState_ConstOverrides, s_gasmaskConsumption, GASMASK_ENERGY_CONSUMPTION);
+		SERIALIZE(ObjState_ConstOverrides, s_shieldSuperchargeDuration, SUPERCHARGE_DURATION);
+		SERIALIZE(ObjState_ConstOverrides, s_weaponSuperchargeDuration, SUPERCHARGE_DURATION);
+		
+		s32 projectileGravity = 0;
+		if (serialization_getMode() == SMODE_WRITE)
+		{
+			projectileGravity = getProjectileGravityAccel();
+		}
+		SERIALIZE(ObjState_ConstOverrides, projectileGravity, FIXED(120));
+		if (serialization_getMode() == SMODE_READ)
+		{
+			setProjectileGravityAccel(projectileGravity);
+		}
 
 		s32 invSavedSize = 0;
 		if (serialization_getMode() == SMODE_WRITE && s_playerInvSaved)
@@ -2965,7 +3362,7 @@ namespace TFE_DarkForces
 			s_playerObject = playerObjId < 0 ? nullptr : objData_getObjectBySerializationId(playerObjId);
 			s_playerEye    = playerEyeId < 0 ? nullptr : objData_getObjectBySerializationId(playerEyeId);
 
-			if (s_nightvisionActive)
+			if (s_nightVisionActive)
 			{
 				TFE_Jedi::s_flatAmbient = 16;
 				TFE_Jedi::s_flatLighting = JTRUE;
@@ -2977,9 +3374,9 @@ namespace TFE_DarkForces
 		}
 
 		SERIALIZE(ObjState_InitVersion, s_eyePos, defV3);
-		SERIALIZE(ObjState_InitVersion, s_pitch, 0);
-		SERIALIZE(ObjState_InitVersion, s_yaw, 0);
-		SERIALIZE(ObjState_InitVersion, s_roll, 0);
+		SERIALIZE(ObjState_InitVersion, s_eyePitch, 0);
+		SERIALIZE(ObjState_InitVersion, s_eyeYaw, 0);
+		SERIALIZE(ObjState_InitVersion, s_eyeRoll, 0);
 		SERIALIZE(ObjState_InitVersion, s_playerEyeFlags, 0);
 		SERIALIZE(ObjState_InitVersion, s_playerTick, 0);
 		SERIALIZE(ObjState_InitVersion, s_prevPlayerTick, 0);
@@ -3013,7 +3410,7 @@ namespace TFE_DarkForces
 			{
 				s_playerInfo.healthFract = 0;
 				// We could just set the health to 0 here...
-				s_playerInfo.health = pickup_addToValue(0, 0, 100);
+				s_playerInfo.health = pickup_addToValue(0, 0, s_healthMax);
 				if (s_gasSectorTask)
 				{
 					task_free(s_gasSectorTask);

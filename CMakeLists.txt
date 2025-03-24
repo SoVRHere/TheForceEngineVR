@@ -12,6 +12,7 @@ endif()
 project(TheForceEngine
 	HOMEPAGE_URL "https://theforceengine.github.io"
 	DESCRIPTION "Modern 'Jedi Engine' replacement supporting Dark Forces, mods, and in the future Outlaws."
+	LANGUAGES C CXX ASM
 	)
 
 set(CMAKE_CXX_STANDARD 14)
@@ -27,7 +28,7 @@ endif()
 
 # disable Clangs excessive warnings about unhandled switch values
 if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-switch")	
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-switch")
 endif()
 
 if (UNIX AND NOT APPLE)
@@ -52,7 +53,6 @@ include(GNUInstallDirs)
 option(ENABLE_TFE "Enable building “The Force Engine”" ON)
 option(ENABLE_SYSMIDI "Enable System-MIDI Output if RTMidi is available" ON)
 option(ENABLE_EDITOR "Enable TFE Editor" OFF)
-option(ENABLE_FORCE_SCRIPT "Enable Force Script" OFF)
 option(ENABLE_ADJUSTABLEHUD_MOD "Install the build‑in “AdjustableHud mod” with TFE" ON)
 
 if(ENABLE_TFE)
@@ -60,20 +60,25 @@ if(ENABLE_TFE)
 	set_target_properties(tfe PROPERTIES OUTPUT_NAME "theforceengine")
 
 	if(UNIX)
+		set(THREADS_PREFER_PTHREAD_FLAG ON)
+		find_package(Threads REQUIRED)
 		find_package(PkgConfig REQUIRED)
-		find_package(SDL2 2.0.20 REQUIRED)
+		find_package(SDL2 REQUIRED)
 		pkg_check_modules(SDL2_IMAGE REQUIRED SDL2_image)
 		target_include_directories(tfe PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 		target_include_directories(tfe PRIVATE ${SDL2_INCLUDE_DIRS})
 		target_include_directories(tfe PRIVATE ${SDL2_IMAGE_INCLUDE_DIRS})
-		target_link_libraries(tfe PRIVATE SDL2::SDL2main SDL2::SDL2
+		target_link_libraries(tfe PRIVATE ${SDL2_LIBRARIES}
 					${SDL2_IMAGE_LIBRARIES}
+					${CMAKE_DL_LIBS}
+					Threads::Threads
 		)
 
 		# set up build directory to be able to run TFE immediately: symlink
 		# the necessary support file directories into the build env.
 		execute_process(COMMAND ln -sf ${CMAKE_SOURCE_DIR}/TheForceEngine/Captions)
 		execute_process(COMMAND ln -sf ${CMAKE_SOURCE_DIR}/TheForceEngine/Documentation)
+		execute_process(COMMAND ln -sf ${CMAKE_SOURCE_DIR}/TheForceEngine/ExternalData)
 		execute_process(COMMAND ln -sf ${CMAKE_SOURCE_DIR}/TheForceEngine/Fonts)
 		execute_process(COMMAND ln -sf ${CMAKE_SOURCE_DIR}/TheForceEngine/Mods)
 		execute_process(COMMAND ln -sf ${CMAKE_SOURCE_DIR}/TheForceEngine/Shaders)
@@ -81,6 +86,7 @@ if(ENABLE_TFE)
 		execute_process(COMMAND ln -sf ${CMAKE_SOURCE_DIR}/TheForceEngine/UI_Images)
 		execute_process(COMMAND ln -sf ${CMAKE_SOURCE_DIR}/TheForceEngine/UI_Text)
 		execute_process(COMMAND ln -sf ${CMAKE_SOURCE_DIR}/TheForceEngine/EditorDef)
+		execute_process(COMMAND ln -sf ${CMAKE_SOURCE_DIR}/TheForceEngine/Tests)
 		include(CreateGitVersionH.cmake)
 		create_git_version_h()
 	endif()
@@ -103,15 +109,11 @@ if(ENABLE_TFE)
 	if(ENABLE_EDITOR)
 		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DBUILD_EDITOR")
 	endif()
-	if(ENABLE_FORCE_SCRIPT)
-		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DBUILD_FORCE_SCRIPT")
-	endif()
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DBUILD_FORCE_SCRIPT")
 
 
-	if(ENABLE_FORCE_SCRIPT)
-		target_include_directories(tfe PRIVATE "TheForceEngine/TFE_ForceScript/Angelscript/angelscript/include")
-		target_include_directories(tfe PRIVATE "TheForceEngine/TFE_ForceScript/Angelscript/add_on")
-	endif()
+	target_include_directories(tfe PRIVATE "TheForceEngine/TFE_ForceScript/Angelscript/angelscript/include")
+	target_include_directories(tfe PRIVATE "TheForceEngine/TFE_ForceScript/Angelscript/add_on")
 	target_include_directories(tfe PRIVATE TheForceEngine)
 
 	add_subdirectory(TheForceEngine/)
@@ -130,12 +132,14 @@ if(ENABLE_TFE)
 	install(DIRECTORY
 		"${CMAKE_CURRENT_SOURCE_DIR}/TheForceEngine/Captions"
 		"${CMAKE_CURRENT_SOURCE_DIR}/TheForceEngine/Documentation"
+		"${CMAKE_CURRENT_SOURCE_DIR}/TheForceEngine/ExternalData"
 		"${CMAKE_CURRENT_SOURCE_DIR}/TheForceEngine/UI_Text"
 		"${CMAKE_CURRENT_SOURCE_DIR}/TheForceEngine/UI_Images"
 		"${CMAKE_CURRENT_SOURCE_DIR}/TheForceEngine/EditorDef"
 		"${CMAKE_CURRENT_SOURCE_DIR}/TheForceEngine/Shaders"
 		"${CMAKE_CURRENT_SOURCE_DIR}/TheForceEngine/SoundFonts"
 		"${CMAKE_CURRENT_SOURCE_DIR}/TheForceEngine/Fonts"
+		"${CMAKE_CURRENT_SOURCE_DIR}/TheForceEngine/Tests"
 		DESTINATION "${CMAKE_INSTALL_DATADIR}"
 		    FILE_PERMISSIONS
 		      OWNER_READ OWNER_WRITE
@@ -161,7 +165,8 @@ if(ENABLE_TFE)
 			FILES "${CMAKE_CURRENT_SOURCE_DIR}/TheForceEngine/io.github.theforceengine.tfe.desktop" DESTINATION "share/applications"
 		)
 		install(
-			FILES "${CMAKE_CURRENT_SOURCE_DIR}/TheForceEngine/io.github.theforceengine.tfe.png" DESTINATION "${TFE_ICONDIR}/256x256/apps"
+			FILES "${CMAKE_CURRENT_SOURCE_DIR}/TheForceEngine/TheForceEngine.svg" DESTINATION "${TFE_ICONDIR}/scalable/apps"
+   			RENAME "io.github.theforceengine.tfe.svg"
 		)
 		install(
 			FILES "${CMAKE_CURRENT_SOURCE_DIR}/TheForceEngine/io.github.theforceengine.tfe.metainfo.xml"

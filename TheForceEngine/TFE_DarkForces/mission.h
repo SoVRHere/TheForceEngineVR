@@ -29,11 +29,16 @@ namespace TFE_DarkForces
 	void mission_pause(JBool pause);
 
 	void setScreenFxLevels(s32 healthFx, s32 shieldFx, s32 flashFx);
-	void disableNightvisionInternal();
+	void disableNightVisionInternal();
+
+	void enableMask();
+	void enableCleats();
+	void enableNightVision();
+	void enableHeadlamp();
 
 	void disableMask();
 	void disableCleats();
-	void disableNightvision();
+	void disableNightVision();
 
 	void mission_render(s32 rendererIndex = 0, bool forceTextureUpdate = false);
 
@@ -45,6 +50,7 @@ namespace TFE_DarkForces
 	void cheat_supercharge();
 	void cheat_toggleData();
 	void cheat_toggleFullBright();
+	void cheat_levelSkip();
 	
 	extern JBool s_gamePaused;
 	extern GameMissionMode s_missionMode;

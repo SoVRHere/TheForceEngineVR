@@ -17,6 +17,8 @@
 #include <TFE_FileSystem/paths.h>
 #include <TFE_FileSystem/filestream.h>
 #include <TFE_Jedi/Serialization/serialization.h>
+#include <TFE_DarkForces/logic.h>
+#include <TFE_Settings/settings.h>
 
 using namespace TFE_Jedi;
 
@@ -38,6 +40,8 @@ namespace TFE_DarkForces
 		Tick       wanderTime;
 		Wax*       wax;
 		JBool      active;
+
+		char	   logicName[64];		// JK: added to store a custom logic name
 	};
 
 	void generatorTaskFunc(MessageType msg)
@@ -109,8 +113,21 @@ namespace TFE_DarkForces
 				if (dist >= gen->minDist && dist <= gen->maxDist && !actor_canSeeObject(spawn, s_playerObject))
 				{
 					sprite_setData(spawn, gen->wax);
-					obj_setEnemyLogic(spawn, gen->type);
+					
+					// Search the externally defined logics for a match
+					TFE_ExternalData::CustomActorLogic* customLogic;
+					customLogic = tryFindCustomActorLogic(gen->logicName);
+					if (customLogic && TFE_Settings::jsonAiLogics())
+					{
+						obj_setCustomActorLogic(spawn, customLogic);
+					}
+					else if (gen->type != -1)
+					{
+						obj_setEnemyLogic(spawn, gen->type);
+					}
+					
 					Logic** head = (Logic**)allocator_getHead_noIterUpdate((Allocator*)spawn->logic);
+					if (!head) { break; }		// JK: This is to prevent a crash happening when an invalid logic is set to a generator
 					ActorDispatch* actorLogic = *((ActorDispatch**)head);
 
 					actorLogic->flags &= ~1;
@@ -211,12 +228,13 @@ namespace TFE_DarkForces
 		return JFALSE;
 	}
 
-	Logic* obj_createGenerator(SecObject* obj, LogicSetupFunc* setupFunc, KEYWORD genType)
+	Logic* obj_createGenerator(SecObject* obj, LogicSetupFunc* setupFunc, KEYWORD genType, const char* logicName)
 	{
 		Generator* generator = (Generator*)level_alloc(sizeof(Generator));
 		memset(generator, 0, sizeof(Generator));
 
 		generator->type   = genType;
+		strncpy(generator->logicName, logicName, 63);
 		generator->active = 1;
 		generator->delay  = 0;
 
@@ -343,5 +361,14 @@ namespace TFE_DarkForces
 		SERIALIZE(ObjState_InitVersion, gen->wanderTime, 0);
 		serialization_serializeWaxPtr(stream, ObjState_InitVersion, gen->wax);
 		SERIALIZE(ObjState_InitVersion, gen->active, 0);
+		
+		u32 len = 0;
+		if (serialization_getMode() == SMODE_WRITE)
+		{
+			len = (u32)strlen(gen->logicName);
+		}
+		SERIALIZE(ObjState_CustomLogics, len, 0);
+		SERIALIZE_BUF(ObjState_CustomLogics, gen->logicName, len);
+		gen->logicName[len] = 0;
 	}
 }  // TFE_DarkForces
