@@ -3,7 +3,13 @@
 #include "inputMapping.h"
 #include <TFE_Game/igame.h>
 #include <TFE_FileSystem/paths.h>
-#include <assert.h>
+#include <TFE_Settings/settings.h>
+#include <TFE_Input/replay.h>
+#include <TFE_DarkForces/hud.h>
+#include <TFE_DarkForces/player.h>
+#include <TFE_DarkForces/GameUI/pda.h>
+#include <TFE_System/system.h>
+#include <TFE_Vr/vr.h>
 
 namespace TFE_Input
 {
@@ -12,7 +18,9 @@ namespace TFE_Input
 		INPUT_INIT_VER      = 0x00010000,
 		INPUT_ADD_QUICKSAVE = 0x00020001,
 		INPUT_ADD_DEADZONE  = 0x00020002,
-		INPUT_CUR_VERSION   = INPUT_ADD_DEADZONE
+		INPUT_ADD_HIGH_DEF  = 0x00020003,
+		INPUT_DEMO_CONFIG   = 0x00020004,
+		INPUT_CUR_VERSION = INPUT_DEMO_CONFIG
 	};
 
 	static const char* c_inputRemappingName = "tfe_input_remapping.bin";
@@ -86,6 +94,16 @@ namespace TFE_Input
 		// Saving
 		{ IAS_QUICK_SAVE, ITYPE_KEYBOARD, KEY_F5, KEYMOD_ALT },
 		{ IAS_QUICK_LOAD, ITYPE_KEYBOARD, KEY_F9, KEYMOD_ALT },
+
+		// HD Asset
+		{ IADF_HD_ASSET_TOGGLE, ITYPE_KEYBOARD, KEY_F3, KEYMOD_ALT },
+		{ IADF_SCREENSHOT, ITYPE_KEYBOARD, KEY_PRINTSCREEN },
+		{ IADF_GIF_RECORD, ITYPE_KEYBOARD, KEY_F2, KEYMOD_ALT },
+		{ IADF_GIF_RECORD_NO_COUNTDOWN, ITYPE_KEYBOARD, KEY_F2, KEYMOD_CTRL },
+
+		// DEMO handling
+		{ IADF_DEMO_SPEEDUP, ITYPE_KEYBOARD, KEY_KP_PLUS },
+		{ IADF_DEMO_SLOWDOWN, ITYPE_KEYBOARD, KEY_KP_MINUS },
 	};
 
 	static InputBinding s_defaultControllerBinds[] =
@@ -114,6 +132,11 @@ namespace TFE_Input
 
 	static InputConfig s_inputConfig = { 0 };
 	static ActionState s_actions[IA_COUNT];
+	int replayCounter = 0;
+	int maxReplayCounter = 0;
+	vector <KeyboardCode> currentKeys;
+	vector <KeyboardCode> currentKeyPresses;
+	vector <MouseButton> currentMouse;
 		
 	void addDefaultControlBinds();
 			   
@@ -130,6 +153,7 @@ namespace TFE_Input
 
 		// Once the defaults are setup, write out the file to disk for next time.
 		inputMapping_serialize();
+		TFE_Settings::getGameSettings()->df_enableRecording;
 	}
 
 	void inputMapping_shutdown()
@@ -228,6 +252,12 @@ namespace TFE_Input
 
 		file.read(&s_inputConfig.bindCount);
 		file.read(&s_inputConfig.bindCapacity);
+		// This is shouldn't be needed, but is here in case bindCapacity was not set correctly in an earlier save.
+		if (s_inputConfig.bindCount > s_inputConfig.bindCapacity)
+		{
+			// Round it off to the nearest IA_COUNT and then increment by IA_COUNT
+			s_inputConfig.bindCapacity = ((s_inputConfig.bindCount + IA_COUNT - 1) / IA_COUNT) * IA_COUNT + IA_COUNT;
+		}
 		s_inputConfig.binds = (InputBinding*)realloc(s_inputConfig.binds, sizeof(InputBinding) * s_inputConfig.bindCapacity);
 		file.readBuffer(s_inputConfig.binds, sizeof(InputBinding), s_inputConfig.bindCount);
 
@@ -255,6 +285,22 @@ namespace TFE_Input
 		{
 			inputMapping_addBinding(&s_defaultKeyboardBinds[IAS_QUICK_SAVE]);
 			inputMapping_addBinding(&s_defaultKeyboardBinds[IAS_QUICK_LOAD]);
+		}
+
+		// Add HD and other buttons
+		if (version < INPUT_ADD_HIGH_DEF)
+		{
+			inputMapping_addBinding(&s_defaultKeyboardBinds[IADF_HD_ASSET_TOGGLE]);
+			inputMapping_addBinding(&s_defaultKeyboardBinds[IADF_SCREENSHOT]);
+			inputMapping_addBinding(&s_defaultKeyboardBinds[IADF_GIF_RECORD]);
+			inputMapping_addBinding(&s_defaultKeyboardBinds[IADF_GIF_RECORD_NO_COUNTDOWN]);
+		}
+
+		// Demo handling
+		if (version < INPUT_DEMO_CONFIG)
+		{
+			inputMapping_addBinding(&s_defaultKeyboardBinds[IADF_DEMO_SPEEDUP]);
+			inputMapping_addBinding(&s_defaultKeyboardBinds[IADF_DEMO_SLOWDOWN]);
 		}
 
 		return true;
@@ -294,15 +340,42 @@ namespace TFE_Input
 		}
 	}
 
+	ActionState inputMapping_getAction(InputAction act)
+	{
+		return s_actions[act];
+	}
+
 	bool inputMapping_isMovementAction(InputAction action)
 	{
 		return action >= IADF_FORWARD && action <= IADF_LOOK_DN;
 	}
 
-	void inputMapping_updateInput()
+	void inputMapping_setReplayCounter(int counter)
 	{
+		replayCounter = counter;
+	}
+
+	void inputMapping_resetCounter()
+	{
+		replayCounter = 0;
+	}
+
+	int inputMapping_getCounter()
+	{
+		return replayCounter;
+	}
+
+	void inputMapping_setMaxCounter(int counter)
+	{
+		maxReplayCounter = counter;
+	}
+
+	void inputMapping_updateInput()
+	{		
+
+		// For each bind record it if it is pressed or down.
 		for (u32 i = 0; i < s_inputConfig.bindCount; i++)
-		{
+		{				
 			InputBinding* bind = &s_inputConfig.binds[i];
 			switch (bind->type)
 			{
@@ -315,10 +388,12 @@ namespace TFE_Input
 						if (TFE_Input::keyPressed(bind->keyCode))
 						{
 							s_actions[bind->action] = STATE_PRESSED;
+							recordEvent(bind->action, bind->keyCode, true);
 						}
 						else if (TFE_Input::keyDown(bind->keyCode) && s_actions[bind->action] != STATE_PRESSED)
 						{
 							s_actions[bind->action] = STATE_DOWN;
+							recordEvent(bind->action, bind->keyCode, false);
 						}
 					}
 				} break;
@@ -329,23 +404,28 @@ namespace TFE_Input
 						if (TFE_Input::mousePressed(bind->mouseBtn))
 						{
 							s_actions[bind->action] = STATE_PRESSED;
+							recordEvent(bind->action, bind->keyCode, true);
 						}
 						else if (TFE_Input::mouseDown(bind->mouseBtn) && s_actions[bind->action] != STATE_PRESSED)
 						{
 							s_actions[bind->action] = STATE_DOWN;
+							recordEvent(bind->action, bind->keyCode, false);
 						}
+
 					}
 				} break;
 				case ITYPE_MOUSEWHEEL:
 				{
 					s32 dx, dy;
 					TFE_Input::getMouseWheel(&dx, &dy);
-					if ((bind->mouseWheel == MOUSEWHEEL_LEFT  && dx < 0) || 
+
+					if ((bind->mouseWheel == MOUSEWHEEL_LEFT  && dx < 0) ||
 						(bind->mouseWheel == MOUSEWHEEL_RIGHT && dx > 0) ||
 						(bind->mouseWheel == MOUSEWHEEL_UP    && dy > 0) ||
 						(bind->mouseWheel == MOUSEWHEEL_DOWN  && dy < 0))
 					{
 						s_actions[bind->action] = STATE_PRESSED;
+						recordEvent(bind->action, bind->keyCode, true);
 					}
 				} break;
 				case ITYPE_CONTROLLER:
@@ -358,10 +438,12 @@ namespace TFE_Input
 					if (TFE_Input::buttonPressed(bind->ctrlBtn))
 					{
 						s_actions[bind->action] = STATE_PRESSED;
+						recordEvent(bind->action, bind->keyCode, true);
 					}
 					else if (TFE_Input::buttonDown(bind->ctrlBtn) && s_actions[bind->action] != STATE_PRESSED)
 					{
 						s_actions[bind->action] = STATE_DOWN;
+						recordEvent(bind->action, bind->keyCode, false);
 					}
 				} break;
 				case ITYPE_CONTROLLER_AXIS:
@@ -374,15 +456,26 @@ namespace TFE_Input
 					if (TFE_Input::getAxis(bind->axis) > 0.5f)
 					{
 						s_actions[bind->action] = STATE_DOWN;
+						recordEvent(bind->action, bind->keyCode, false);
 					}
 				} break;
-			}
+			}			
 		}
 	}
 
 	void inputMapping_removeState(InputAction action)
 	{
 		s_actions[action] = STATE_UP;
+	}
+
+	void inputMapping_setStateDown(InputAction action)
+	{
+		s_actions[action] = STATE_DOWN;
+	}
+
+	void inputMapping_setStatePress(InputAction action)
+	{
+		s_actions[action] = STATE_PRESSED;
 	}
 	
 	ActionState inputMapping_getActionState(InputAction action)
@@ -437,7 +530,7 @@ namespace TFE_Input
 
 		return axisValue;
 	}
-		
+
 	f32 inputMapping_getHorzMouseSensitivity()
 	{
 		return s_inputConfig.mouseSensitivity[0] * ((s_inputConfig.mouseFlags & MFLAG_INVERT_HORZ) ? -1.0f : 1.0f);
@@ -484,4 +577,273 @@ namespace TFE_Input
 	{
 		return &s_inputConfig;
 	}
-}  // TFE_DarkForces
+
+	void clearKeys()
+	{
+		for (int i = 0; i < currentKeys.size(); i++)
+		{
+			KeyboardCode key = (KeyboardCode)currentKeys[i];
+			TFE_Input::setKeyUp(key);
+		}
+		currentKeys.clear();
+		for (int i = 0; i < currentKeyPresses.size(); i++)
+		{
+			KeyboardCode key = (KeyboardCode)currentKeyPresses[i];
+			TFE_Input::clearKeyPressed(key);
+		}
+		currentKeyPresses.clear();
+	}
+
+	bool isBindingPressed(InputAction action)
+	{
+		u32 indices[2];
+		u32 count = inputMapping_getBindingsForAction(action, indices, 2);
+		if (count > 0)
+		{
+			InputBinding* binding = inputMapping_getBindingByIndex(indices[0]);
+			if (TFE_Input::keyPressed(binding->keyCode))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	// emulate mouse move/click by controller if in any menu,
+	// ImGui works with SDL events, Agent Menu & PDA with TFE_Input
+	void emulateMouseByController(s32 mouseAbsX, s32 mouseAbsY, SDL_Window* wnd, SDLEventHandler* eventHandler)
+	{
+		if (TFE_Settings::getTempSettings()->inMenu && (!TFE_Settings::getTempSettings()->vr || TFE_Settings::getVrSettings()->ignoreVrControllers))
+		{
+			const f32 elapsed = (f32)TFE_System::getDeltaTime();
+			const f32 moveX = 600.0f * elapsed * TFE_Input::getAxis(Axis::AXIS_RIGHT_X);
+			const f32 moveY = -600.0f * elapsed * TFE_Input::getAxis(Axis::AXIS_RIGHT_Y);
+
+			if ((s32)moveX != 0 || (s32)moveY != 0)
+			{
+				s32 posX, posY;
+
+				//DisplayInfo displayInfo;
+				//TFE_RenderBackend::getDisplayInfo(&displayInfo);
+				//SDL_Window* wnd = (SDL_Window*)TFE_RenderBackend::getWindow();
+				s32 w, h;
+				SDL_GetWindowSize(wnd, &w, &h);
+#if defined(ENABLE_VR)
+				if (TFE_Settings::getTempSettings()->vr)
+				{
+					s32 w, h;
+					SDL_GetWindowSize(wnd, &w, &h);
+
+					const Vec2ui& targetSize = vr::GetRenderTargetSize();
+					posX = s32((mouseAbsX + moveX) * ((float)w / (float)targetSize.x/*displayInfo.width*/));
+					posY = s32((mouseAbsY + moveY) * ((float)h / (float)targetSize.y/*displayInfo.height*/));
+				}
+				else
+#endif
+				{
+					posX = s32(mouseAbsX + moveX);
+					posY = s32(mouseAbsY + moveY);
+				}
+				posX = std::clamp(posX, 0, w/*(s32)displayInfo.width*/);
+				posY = std::clamp(posY, 0, h/*(s32)displayInfo.height*/);
+				SDL_WarpMouseInWindow(wnd, posX, posY);
+				TFE_Input::setMousePos(posX, posY);
+			}
+
+			static bool buttonPressed = false;
+			if (TFE_Input::buttonDown(Button::CONTROLLER_BUTTON_A) || TFE_Input::getAxis(AXIS_RIGHT_TRIGGER) > 0.5f)
+			{
+				if (!buttonPressed)
+				{
+					SDL_Event event;
+					event.type = SDL_MOUSEBUTTONDOWN;
+					event.button.which = 0;
+					event.button.button = SDL_BUTTON_LEFT;
+					eventHandler(event);
+					buttonPressed = true;
+				}
+			}
+			else
+			{
+				if (buttonPressed)
+				{
+					SDL_Event event;
+					event.type = SDL_MOUSEBUTTONUP;
+					event.button.which = 0;
+					event.button.button = SDL_BUTTON_LEFT;
+					eventHandler(event);
+					buttonPressed = false;
+				}
+			}
+		}
+	}
+
+	bool inputMapping_handleInputs(SDL_Window* wnd, SDLEventHandler* eventHandler, IGame::State gameState)
+	{
+		//  Allow escape during playback except when in PDA mode 
+		if (keyPressed(KEY_ESCAPE) && !TFE_DarkForces::pda_isOpen())
+		{
+			if (isDemoPlayback())
+			{
+				sendEndPlaybackMsg();
+				clearKeys();
+				endReplay();
+			}
+			if (isRecording())
+			{
+				sendEndRecordingMsg();
+				TFE_Input::endRecording();
+			}
+		}
+		
+		// Load the mouse positional data
+		std::vector<s32> mousePos;
+		s32 mouseX, mouseY;
+		s32 mouseAbsX, mouseAbsY;
+		SDL_GetRelativeMouseState(&mouseX, &mouseY);
+		SDL_GetMouseState(&mouseAbsX, &mouseAbsY);
+
+		// TODO: test with playback
+		bool mouseMoveEmulatedByVrController = false;
+		if (!isDemoPlayback())
+		{
+#if defined(ANDROID) && !defined(ENABLE_VR)
+			SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, TFE_Settings::getTempSettings()->inMenu ? "1" : "0");
+#elif defined(ENABLE_VR)
+			if (TFE_Settings::getTempSettings()->vr)
+			{
+				mouseMoveEmulatedByVrController = vr::HandleControllerEvents(gameState, mouseX, mouseY);
+				const std::vector<SDL_Event> generatedEvents = vr::GetGeneratedSDLEvents();
+				for (const SDL_Event& e : generatedEvents)
+				{
+					eventHandler(e);
+				}
+
+				// absolute mouse position is returned for current window, not the VR window,
+				// we have to convert it to VR window coordinates
+				const Vec2ui& targetSize = vr::GetRenderTargetSize();
+				s32 w, h;
+				SDL_GetWindowSize(wnd, &w, &h);
+				mouseAbsX = (s32)((f32)mouseAbsX * (f32)targetSize.x / (f32)w/*s_displayWidth*/);
+				mouseAbsY = (s32)((f32)mouseAbsY * (f32)targetSize.y / (f32)h/*s_displayHeight*/);
+			}
+#endif
+		}
+
+		// Handle Playback
+		if (isDemoPlayback())
+		{
+			// Handle speed up and slowdowns of playback
+			if (isBindingPressed(IADF_DEMO_SPEEDUP))
+			{
+				increaseReplayFrameRate();
+			}
+
+			if (isBindingPressed(IADF_DEMO_SLOWDOWN))
+			{
+				decreaseReplayFrameRate();
+			}
+
+			// If we are at the end of the replay, stop playback.
+			if (replayCounter >= maxReplayCounter)
+			{
+				endReplay();
+			}
+			else
+			{
+				sendHudStartMessage();
+
+				// Show the complete message just before it exits for 60 frames otherwise you won't see it.
+				if (replayCounter + 60 >= maxReplayCounter)
+				{
+					sendEndPlaybackMsg();
+				}
+
+				// Show the % progress
+				else if (TFE_Settings::getGameSettings()->df_showReplayCounter)
+				{
+					int percentage = (replayCounter * 100) / maxReplayCounter;
+					string msg = "DEMO Playback [" + to_string(replayCounter) + " out of " + to_string(maxReplayCounter) + "] ( " + to_string(percentage) + " % )...";
+					TFE_DarkForces::hud_sendTextMessage(msg.c_str(), 1, true);
+				}
+
+				// Wipe the binds during playback and populate with new ones.
+				inputMapping_endFrame();
+
+				ReplayEvent event = TFE_Input::inputEvents[replayCounter - 1];
+				
+				// Load Mouse positional information
+				mousePos = event.mousePos;
+
+				// Only load if it has mouse movement
+				if (mousePos.size() == 4)
+				{
+					mouseX = mousePos[0];
+					mouseY = mousePos[1];
+					mouseAbsX = mousePos[2];
+					mouseAbsY = mousePos[3];
+				}
+			}
+
+			// Replay the event keys
+			replayEvent();
+		}
+
+		// Handle Recording
+		else if (isRecording())
+		{
+
+			sendHudStartMessage();
+
+			if (TFE_Settings::getGameSettings()->df_showReplayCounter)
+			{
+				string msg = "DEMO Recording [" + std::to_string(replayCounter) + "] ...";
+				TFE_DarkForces::hud_sendTextMessage(msg.c_str(), 1, true);
+			}
+
+			ReplayEvent event = TFE_Input::inputEvents[replayCounter];
+			mousePos = event.mousePos;
+			mousePos.clear();
+			mousePos.push_back(mouseX);
+			mousePos.push_back(mouseY);
+			mousePos.push_back(mouseAbsX);
+			mousePos.push_back(mouseAbsY);
+			event.mousePos = mousePos;
+
+			// Store the mouse positions 
+			TFE_Input::inputEvents[replayCounter] = event;
+		}		
+		// Apply the mouse position data we either got from SDL or from the demo
+		if (!mouseMoveEmulatedByVrController && (mouseX != 0 || mouseY != 0))
+		{
+			TFE_Input::setRelativeMousePos(mouseX, mouseY);
+			TFE_Input::setMousePos(mouseAbsX, mouseAbsY);
+		}
+
+		// If you are not playing back the demo - process the input keys.
+		if (!isDemoPlayback())
+		{
+			emulateMouseByController(mouseAbsX, mouseAbsY, wnd, eventHandler);
+			inputMapping_updateInput();
+		}
+
+		if (isReplaySystemLive())
+		{
+			logReplayPosition(replayCounter);
+		}
+
+		// If you are replaying the demo and the game is paused, we should also halt all logic
+		bool skipUpdateCounter = isDemoPlayback() && isReplayPaused() && TFE_DarkForces::s_playerEye;		
+
+		if (skipUpdateCounter)
+		{
+			return false; 
+		}
+		else
+		{
+			replayCounter++;
+			return true;
+		}
+	}
+
+}  // TFE_Input

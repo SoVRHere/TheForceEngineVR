@@ -37,6 +37,7 @@
 #include <TFE_FileSystem/paths.h>
 #include <TFE_FileSystem/fileutil.h>
 #include <TFE_FileSystem/filestream.h>
+#include <TFE_ForceScript/scriptInterface.h>
 #include <TFE_A11y/accessibility.h>
 #include <TFE_Audio/midiPlayer.h>
 #include <TFE_Audio/audioSystem.h>
@@ -53,6 +54,8 @@
 #include <TFE_Jedi/Task/task.h>
 #include <TFE_Jedi/IMuse/imuse.h>
 #include <TFE_Jedi/Serialization/serialization.h>
+#include <TFE_ExternalData/weaponExternal.h>
+#include <TFE_ExternalData/pickupExternal.h>
 #include <assert.h>
 
 // Add texture callbacks.
@@ -335,6 +338,11 @@ namespace TFE_DarkForces
 
 		s_sharedState.gameStarted = JTRUE;
 		sound_setLevelStart();
+
+		// TFE
+		TFE_ScriptInterface::registerScriptInterface(API_GAME);
+		TFE_ScriptInterface::setAPI(API_GAME, nullptr);
+
 		return true;
 	}
 
@@ -380,13 +388,19 @@ namespace TFE_DarkForces
 		TFE_Model_Jedi::freeAll();
 		reticle_enable(false);
 		texturepacker_reset();
+		freeLevelScript();
 
 		TFE_MidiPlayer::resume();
 		TFE_Audio::resume();
 
+		TFE_Jedi::renderer_destroy();
+
 		// Reset state.
-		s_sharedState = {};
+		s_sharedState = SharedGameState{};
 		s_runGameState = {};
+
+		// TFE - Script system.
+		TFE_ScriptInterface::reset();
 	}
 
 	void DarkForces::pauseGame(bool pause)
@@ -444,6 +458,19 @@ namespace TFE_DarkForces
 	void DarkForces::getLevelName(char* name)
 	{
 		const char* levelName = agent_getLevelDisplayName();
+		if (levelName)
+		{
+			strcpy(name, levelName);
+		}
+		else
+		{
+			name[0] = 0;
+		}
+	}
+
+	void DarkForces::getLevelId(char* name)
+	{
+		const char* levelName = agent_getLevelName();
 		if (levelName)
 		{
 			strcpy(name, levelName);
@@ -564,6 +591,13 @@ namespace TFE_DarkForces
 			{
 				s_runGameState.state = GSTATE_CUTSCENE;
 				s_invalidLevelIndex = JTRUE;
+
+				// Always force cutscenes off for demo playbac for cutscenes. 
+				if (isDemoPlayback())
+				{
+					s_runGameState.cutscenesEnabled = JFALSE;
+				}
+
 				if (s_runGameState.cutscenesEnabled && !s_runGameState.startLevel)
 				{
 					cutscene_play(10);
@@ -677,6 +711,8 @@ namespace TFE_DarkForces
 
 					// TFE
 					reticle_enable(false);
+					// TFE - Script system.
+					TFE_ScriptInterface::reset();
 
 					if (!s_levelComplete)
 					{
@@ -798,6 +834,21 @@ namespace TFE_DarkForces
 
 				task_reset();
 				inf_clearState();
+
+				TFE_Settings_Game* gameSettings = TFE_Settings::getGameSettings();
+
+				// Entry point to replay a demo
+				if (gameSettings->df_enableReplay && !isDemoPlayback())
+				{
+					loadReplay();
+				}
+
+				// Entry point to recording a demo
+				if (gameSettings->df_enableRecording && !isRecording())
+				{
+					startRecording();
+				}
+
 				s_sharedState.loadMissionTask = createTask("start mission", mission_startTaskFunc, JTRUE);
 				mission_setLoadMissionTask(s_sharedState.loadMissionTask);
 
@@ -893,12 +944,28 @@ namespace TFE_DarkForces
 		s_runGameState.cutscenesEnabled = enable;
 	}
 
+	bool getCutscenesEnabled()
+	{
+		return s_runGameState.cutscenesEnabled;
+	}
+
 	void setInitialLevel(const char* levelName)
 	{
 		s_runGameState.startLevel = 0;
 
 		if (!levelName || levelName[0] == 0) { return; }
 		s_runGameState.startLevel = agent_getLevelIndexFromName(levelName);
+	}
+
+	char* extractTextFileFromZip(ZipArchive& zip, u32 fileIndex)
+	{
+		u32 bufferLen = (u32)zip.getFileLength(fileIndex);
+		char* buffer = (char*)malloc(bufferLen);
+		zip.openFile(fileIndex);
+		zip.readFile(buffer, bufferLen);
+		zip.closeFile();
+
+		return buffer;
 	}
 
 	void loadCustomGob(const char* gobName)
@@ -917,19 +984,22 @@ namespace TFE_DarkForces
 			// Is this really a gob?
 			const size_t len = strlen(gobName);
 			const char* ext = &gobName[len - 3];
-			if (strcasecmp(ext, "zip") == 0 || strcasecmp(ext, "pk3") == 0)
+			const char* ext4 = &gobName[len - 4];
+			if (strcasecmp(ext, "zip") == 0 || strcasecmp(ext, "pk3") == 0 || strcasecmp(ext4, "gobx") == 0)
 			{
 				// In the case of a zip file, we want to extract the GOB into an in-memory format and use that directly.
-				ZipArchive zipArchive;
-				if (zipArchive.open(archivePath.path))
+				// Note that the archive will be deleted on exit, so we can safely allocate here and pass it along.
+				ZipArchive* zipArchive = new ZipArchive();
+				if (zipArchive->open(archivePath.path))
 				{
 					s32 gobIndex = -1;
-					const u32 count = zipArchive.getFileCount();
+					const u32 count = zipArchive->getFileCount();
 					for (u32 i = 0; i < count; i++)
 					{
-						const char* name = zipArchive.getFileName(i);
+						const char* name = zipArchive->getFileName(i);
 						const size_t nameLen = strlen(name);
 						const char* zext = &name[nameLen - 3];
+						const char* zext4 = &name[nameLen - 4];
 						if (strcasecmp(zext, "gob") == 0)
 						{
 							// Avoid MacOS references, they aren't real files.
@@ -951,6 +1021,52 @@ namespace TFE_DarkForces
 								lfdIndex[lfdCount++] = i;
 							}
 						}
+						else if (strcasecmp(zext4, "json") == 0)
+						{
+							// Load external data overrides
+							char fname[TFE_MAX_PATH];
+							FileUtil::getFileNameFromPath(name, fname, true);
+
+							if (strcasecmp(fname, "projectiles.json") == 0)
+							{
+								char* buffer = extractTextFileFromZip(*zipArchive, i);
+								TFE_ExternalData::parseExternalProjectiles(buffer, true);
+								free(buffer);
+							}
+							else if (strcasecmp(fname, "effects.json") == 0)
+							{
+								char* buffer = extractTextFileFromZip(*zipArchive, i);
+								TFE_ExternalData::parseExternalEffects(buffer, true);
+								free(buffer);
+							}
+							else if (strcasecmp(fname, "pickups.json") == 0)
+							{
+								char* buffer = extractTextFileFromZip(*zipArchive, i);
+								TFE_ExternalData::parseExternalPickups(buffer, true);
+								free(buffer);
+							}
+							else if (strcasecmp(fname, "weapons.json") == 0)
+							{
+								char* buffer = extractTextFileFromZip(*zipArchive, i);
+								TFE_ExternalData::parseExternalWeapons(buffer, true);
+								free(buffer);
+							}
+							else
+							{
+								char name2[TFE_MAX_PATH];
+								strcpy(name2, name);
+								const char* subdir = strtok(name2, "/");
+
+								// If in logics subdirectory, attempt to load logics from JSON
+								if (strcasecmp(subdir, "logics") == 0)
+								{
+									char* buffer = extractTextFileFromZip(*zipArchive, i);
+									TFE_ExternalData::ExternalLogics* logics = TFE_ExternalData::getExternalLogics();
+									TFE_ExternalData::parseLogicData(buffer, name, logics->actorLogics);
+									free(buffer);
+								}
+							}
+						}
 					}
 
 					// If there is only 1 LFD, assume it is mission briefings.
@@ -962,14 +1078,14 @@ namespace TFE_DarkForces
 
 					if (gobIndex >= 0)
 					{
-						u32 bufferLen = (u32)zipArchive.getFileLength(gobIndex);
+						u32 bufferLen = (u32)zipArchive->getFileLength(gobIndex);
 						u8* buffer = (u8*)malloc(bufferLen);
-						zipArchive.openFile(gobIndex);
-						zipArchive.readFile(buffer, bufferLen);
-						zipArchive.closeFile();
+						zipArchive->openFile(gobIndex);
+						zipArchive->readFile(buffer, bufferLen);
+						zipArchive->closeFile();
 
 						GobMemoryArchive* gobArchive = new GobMemoryArchive();
-						gobArchive->setName(zipArchive.getFileName(gobIndex));
+						gobArchive->setName(zipArchive->getFileName(gobIndex));
 						gobArchive->open(buffer, bufferLen);
 						TFE_Paths::addLocalArchive(gobArchive);
 					}
@@ -979,11 +1095,11 @@ namespace TFE_DarkForces
 					// Extract and copy the briefing.
 					if (briefingIndex >= 0)
 					{
-						u32 bufferLen = (u32)zipArchive.getFileLength(briefingIndex);
+						u32 bufferLen = (u32)zipArchive->getFileLength(briefingIndex);
 						u8* buffer = (u8*)malloc(bufferLen);
-						zipArchive.openFile(briefingIndex);
-						zipArchive.readFile(buffer, bufferLen);
-						zipArchive.closeFile();
+						zipArchive->openFile(briefingIndex);
+						zipArchive->readFile(buffer, bufferLen);
+						zipArchive->closeFile();
 
 						char lfdPath[TFE_MAX_PATH];
 						sprintf(lfdPath, "%sdfbrief.lfd", tempPath);
@@ -1000,11 +1116,11 @@ namespace TFE_DarkForces
 					// Extract and copy the LFD.
 					for (s32 i = 0; i < lfdCount; i++)
 					{
-						u32 bufferLen = (u32)zipArchive.getFileLength(lfdIndex[i]);
+						u32 bufferLen = (u32)zipArchive->getFileLength(lfdIndex[i]);
 						u8* buffer = (u8*)malloc(bufferLen);
-						zipArchive.openFile(lfdIndex[i]);
-						zipArchive.readFile(buffer, bufferLen);
-						zipArchive.closeFile();
+						zipArchive->openFile(lfdIndex[i]);
+						zipArchive->readFile(buffer, bufferLen);
+						zipArchive->closeFile();
 
 						char lfdPath[TFE_MAX_PATH];
 						sprintf(lfdPath, "%scutscenes%d.lfd", tempPath, i);
@@ -1016,10 +1132,16 @@ namespace TFE_DarkForces
 						}
 						free(buffer);
 
-						TFE_Paths::addSingleFilePath(zipArchive.getFileName(lfdIndex[i]), lfdPath);
+						TFE_Paths::addSingleFilePath(zipArchive->getFileName(lfdIndex[i]), lfdPath);
 					}
 
-					zipArchive.close();
+					// Add the ZIP archive itself.
+					TFE_Paths::addLocalArchive(zipArchive);
+				}
+				else
+				{
+					// Delete on read failure since the allocation is not added to TFE_Paths in this case.
+					delete zipArchive;
 				}
 			}
 			else
@@ -1029,10 +1151,13 @@ namespace TFE_DarkForces
 				{
 					TFE_Paths::addLocalArchive(archive);
 
-					// Handle LFD files.
 					char modPath[TFE_MAX_PATH];
 					FileUtil::getFilePath(archivePath.path, modPath);
 
+					// Add the Mod directory to head of search paths - so that assets here will be loaded preferentially
+					TFE_Paths::addAbsoluteSearchPathToHead(modPath);
+
+					// Handle LFD files.
 					// Look for LFD files.
 					lfdCount = 0;
 					briefingIndex = -1;
@@ -1083,6 +1208,81 @@ namespace TFE_DarkForces
 					{
 						sprintf(lfdPath, "%s%s", modPath, lfdName[i]);
 						TFE_Paths::addSingleFilePath(lfdName[i], lfdPath);
+					}
+
+					// Load external data overrides
+					char jsonPath[TFE_MAX_PATH];
+
+					sprintf(jsonPath, "%s%s", modPath, "projectiles.json");
+					if (FileUtil::exists(jsonPath))
+					{
+						FileStream file;
+						if (!file.open(jsonPath, FileStream::MODE_READ)) { return; }
+						const size_t size = file.getSize();
+						char* data = (char*)malloc(size + 1);
+
+						if (size > 0 && data)
+						{
+							file.readBuffer(data, (u32)size);
+							data[size] = 0;
+							file.close();
+							TFE_ExternalData::parseExternalProjectiles(data, true);
+							free(data);
+						}
+					}
+
+					sprintf(jsonPath, "%s%s", modPath, "effects.json");
+					if (FileUtil::exists(jsonPath))
+					{
+						FileStream file;
+						if (!file.open(jsonPath, FileStream::MODE_READ)) { return; }
+						const size_t size = file.getSize();
+						char* data = (char*)malloc(size + 1);
+
+						if (size > 0 && data)
+						{
+							file.readBuffer(data, (u32)size);
+							data[size] = 0;
+							file.close();
+							TFE_ExternalData::parseExternalEffects(data, true);
+							free(data);
+						}
+					}
+
+					sprintf(jsonPath, "%s%s", modPath, "pickups.json");
+					if (FileUtil::exists(jsonPath))
+					{
+						FileStream file;
+						if (!file.open(jsonPath, FileStream::MODE_READ)) { return; }
+						const size_t size = file.getSize();
+						char* data = (char*)malloc(size + 1);
+
+						if (size > 0 && data)
+						{
+							file.readBuffer(data, (u32)size);
+							data[size] = 0;
+							file.close();
+							TFE_ExternalData::parseExternalPickups(data, true);
+							free(data);
+						}
+					}
+
+					sprintf(jsonPath, "%s%s", modPath, "weapons.json");
+					if (FileUtil::exists(jsonPath))
+					{
+						FileStream file;
+						if (!file.open(jsonPath, FileStream::MODE_READ)) { return; }
+						const size_t size = file.getSize();
+						char* data = (char*)malloc(size + 1);
+
+						if (size > 0 && data)
+						{
+							file.readBuffer(data, (u32)size);
+							data[size] = 0;
+							file.close();
+							TFE_ExternalData::parseExternalWeapons(data, true);
+							free(data);
+						}
 					}
 				}
 			}
@@ -1228,14 +1428,41 @@ namespace TFE_DarkForces
 		loadMapNumFont();
 		inf_loadSounds();
 		actor_loadSounds();
-		item_loadData();
-		player_init();
 		actor_allocatePhysicsActorList();
 		loadCutsceneList();
+		loadLangHotkeys();
+
+		TFE_ExternalData::loadCustomLogics();
+
+		TFE_ExternalData::loadExternalPickups();
+		if (!TFE_ExternalData::validateExternalPickups())
+		{
+			TFE_System::logWrite(LOG_ERROR, "EXTERNAL_DATA", "Warning: Pickup data is incomplete. PICKUPS.JSON may have been altered. Pickups may not behave as expected.");
+		}
+
+		TFE_ExternalData::loadExternalProjectiles();
+		if (!TFE_ExternalData::validateExternalProjectiles())
+		{
+			TFE_System::logWrite(LOG_ERROR, "EXTERNAL_DATA", "Warning: Projectile data is incomplete. PROJECTILES.JSON may have been altered. Projectiles may not behave as expected.");
+		}
+
+		TFE_ExternalData::loadExternalEffects();
+		if (!TFE_ExternalData::validateExternalEffects())
+		{
+			TFE_System::logWrite(LOG_ERROR, "EXTERNAL_DATA", "Warning: Effect data is incomplete. EFFECTS.JSON may have been altered. Effects may not behave as expected.");
+		}
+
+		TFE_ExternalData::loadExternalWeapons();
+		if (!TFE_ExternalData::validateExternalWeapons())
+		{
+			TFE_System::logWrite(LOG_ERROR, "EXTERNAL_DATA", "Warning: Weapon data is incomplete. WEAPONS.JSON may have been altered. Weapons may not behave as expected.");
+		}
+
 		projectile_startup();
 		hitEffect_startup();
 		weapon_startup();
-		loadLangHotkeys();
+		item_loadData();
+		player_init();
 
 		FilePath filePath;
 		TFE_Paths::getFilePath("swfont1.fnt", &filePath);
@@ -1317,18 +1544,7 @@ namespace TFE_DarkForces
 			SERIALIZE(SaveVersionInit, s_runGameState.argCount, 0);
 			for (s32 i = 0; i < s_runGameState.argCount; i++)
 			{
-				u32 length = 0;
-				if (serialization_getMode() == SMODE_WRITE)
-				{
-					length = (u32)strlen(s_runGameState.args[i]);
-				}
-				SERIALIZE(SaveVersionInit, length, 0);
-				if (serialization_getMode() == SMODE_READ)
-				{
-					s_runGameState.args[i] = (char*)game_alloc(length + 1);
-				}
-				SERIALIZE_BUF(SaveVersionInit, s_runGameState.args[i], length);
-				s_runGameState.args[i][length] = 0;
+				SERIALIZE_CSTRING_GAME_ALLOC(SaveVersionInit, s_runGameState.args[i]);
 			}
 
 			SERIALIZE(SaveVersionInit, s_runGameState.cutscenesEnabled, JTRUE);
@@ -1347,7 +1563,7 @@ namespace TFE_DarkForces
 
 	void serializeVersion(Stream* stream)
 	{
-		SERIALIZE_VERSION(SaveVersionInit);
+		SERIALIZE_VERSION(SaveVersionCur);
 	}
 
 	bool DarkForces::serializeGameState(Stream* stream, const char* filename, bool writeState)
@@ -1376,6 +1592,8 @@ namespace TFE_DarkForces
 		}
 
 		serializeVersion(stream);
+		const u32 curVersion = serialization_getVersion();
+
 		serializeLoopState(stream, this);
 		agent_serialize(stream);
 		time_serialize(stream);
@@ -1393,6 +1611,10 @@ namespace TFE_DarkForces
 		inf_serialize(stream);
 		pickupLogic_serializeTasks(stream);
 		mission_serialize(stream);
+
+		// TFE - Scripting.
+		serialization_setVersion(curVersion);
+		TFE_ForceScript::serialize(stream);
 
 		if (!writeState)
 		{

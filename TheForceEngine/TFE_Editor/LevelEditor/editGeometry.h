@@ -50,6 +50,9 @@ namespace LevelEditor
 
 	void editGeometry_init();
 
+	bool isInIntList(s32 value, std::vector<s32>* list);
+	void insertIntoIntList(s32 value, std::vector<s32>* list);
+
 	void handleSectorDraw(RayHitInfo* hitInfo);
 	void handleSectorExtrude(RayHitInfo* hitInfo);
 	
@@ -68,5 +71,5 @@ namespace LevelEditor
 
 	void evaluateQuadraticBezier(const Vec2f& a, const Vec2f& b, const Vec2f& c, f32 t, Vec2f* pos, Vec2f* nrm = nullptr);
 	f32  signedDistQuadraticBezier(const Vec2f& p0, const Vec2f& p1, const Vec2f& pc, const Vec2f& pos, f32& t);
-	f32  getQuadraticBezierArcLength(const Vec2f& a, const Vec2f& b, const Vec2f& c, f32 t = 1.0f, s32 maxIterationCount = 8);
+	f32  getQuadraticBezierArcLength(const Vec2f& a, const Vec2f& b, const Vec2f& c, f32 t = 1.0f, s32 maxIterationCount = 8, Vec2f* table = nullptr);
 }

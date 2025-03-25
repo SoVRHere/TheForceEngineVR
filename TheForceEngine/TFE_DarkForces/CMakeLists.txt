@@ -93,6 +93,24 @@ set(SOURCES
 	Landru/lview.h
 	Landru/textCrawl.cpp
 	Landru/textCrawl.h
+	Scripting/gameScripts.cpp
+	Scripting/gameScripts.h
+	Scripting/gs_game.cpp
+	Scripting/gs_game.h
+	Scripting/gs_level.cpp
+	Scripting/gs_level.h
+	Scripting/gs_player.cpp
+	Scripting/gs_player.h
+	Scripting/gs_system.cpp
+	Scripting/gs_system.h
+	Scripting/scriptElev.cpp
+	Scripting/scriptElev.h
+	Scripting/scriptSector.cpp
+	Scripting/scriptSector.h
+	Scripting/scriptTexture.cpp
+	Scripting/scriptTexture.h
+	Scripting/scriptWall.cpp
+	Scripting/scriptWall.h
 	agent.cpp
 	agent.h
 	animLogic.cpp

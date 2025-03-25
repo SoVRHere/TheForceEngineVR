@@ -143,10 +143,12 @@ enum JediBool : u32
 #define TFE_ARRAYPOS(ptr, arr) s32(((u8*)(ptr) - (u8*)(arr)) / sizeof(*(ptr)))
 
 #define FLAG_BIT(bit) (1u << u32(bit))
+#define FLAG_BIT64(bit) (1ull << u64(bit))
 #define SIGN_BIT(x) ((x)<0?1:0)
 
 // Move to math
 #define PI 3.14159265358979323846f
+#define TWO_PI 6.28318530717958647693f
 
 enum AssetPool
 {

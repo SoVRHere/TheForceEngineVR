@@ -1,8 +1,10 @@
 #include "levelEditor.h"
 #include "levelEditorData.h"
 #include "editCommon.h"
+#include "editTransforms.h"
 #include "selection.h"
 #include "sharedState.h"
+#include "infoPanel.h"
 
 using namespace TFE_Editor;
 
@@ -12,6 +14,7 @@ namespace LevelEditor
 	SelectionList s_savedSelections[SEL_GEO_COUNT];
 	SelectionListId s_currentSelection = SEL_VERTEX;
 	FeatureId s_hovered = FEATUREID_NULL;
+	bool s_derivedBuildNeeded = false;
 
 	bool selection_insertVertex(FeatureId id, Vec2f value, EditorSector* root = nullptr, HitPart part = HP_FLOOR);
 	bool selection_removeVertex(FeatureId id, Vec2f value);
@@ -21,6 +24,7 @@ namespace LevelEditor
 	bool selection_isFeatureIdInSet(SelectionList& list, FeatureId id, s32* index = nullptr);
 	bool selection_featureId(SelectAction action, FeatureId id);
 	void selection_buildDerived();
+	void selection_derivedBuildNeeded();
 	FeatureId selection_getFeatureId(s32 index, SelectionListId listId);
 
 	// General Interface
@@ -37,6 +41,8 @@ namespace LevelEditor
 		{
 			s_dragSelect.active = false;
 		}
+		edit_setTransformChange();
+		infoPanel_clearSelection();
 	}
 
 	void selection_setCurrent(SelectionListId id)
@@ -44,6 +50,8 @@ namespace LevelEditor
 		assert(id < SEL_CURRENT);
 		selection_clearHovered();
 		s_currentSelection = id;
+		edit_setTransformChange();
+		infoPanel_clearSelection();
 	}
 
 	void selection_clearHovered()
@@ -51,9 +59,72 @@ namespace LevelEditor
 		s_hovered = FEATUREID_NULL;
 	}
 
+	// Is the feature valid in the current selection mode?
+	bool selection_isFeatureValidInMode(FeatureId featureId)
+	{
+		s32 featureIndex = -1;
+		HitPart part = HP_NONE;
+		EditorSector* sector = unpackFeatureId(featureId, &featureIndex, (s32*)&part);
+
+		switch (s_currentSelection)
+		{
+			case SEL_VERTEX:
+			{
+				if (!sector || featureIndex < 0 || featureIndex >= (s32)sector->vtx.size()) { return false; }
+			} break;
+			case SEL_SURFACE:
+			{
+				if (!sector) { return false; }
+				if (part != HP_FLOOR && part != HP_CEIL) 
+				{
+					if (featureIndex < 0 || featureIndex >= (s32)sector->walls.size())
+					{
+						return false;
+					}
+				}
+			} break;
+			case SEL_SECTOR:
+			{
+				if (!sector) { return false; }
+			} break;
+			case SEL_ENTITY:
+			{
+				if (!sector || featureIndex < 0 || featureIndex >= (s32)sector->obj.size())
+				{
+					return false;
+				}
+			} break;
+			case SEL_GUIDELINE:
+			{
+				if (featureIndex < 0 || featureIndex >= (s32)s_level.guidelines.size())
+				{
+					return false;
+				}
+			} break;
+			case SEL_NOTE:
+			{
+				if (featureIndex < 0 || featureIndex >= (s32)s_level.notes.size())
+				{
+					return false;
+				}
+			} break;
+		};
+		return true;
+	}
+
 	bool selection_hasHovered()
 	{
-		return s_hovered != FEATUREID_NULL;
+		// Check to see if the hovered feature is NULL.
+		if (s_hovered == FEATUREID_NULL) { return false; }
+		// Verify that the hovered feature is still valid.
+		if (!selection_isFeatureValidInMode(s_hovered))
+		{
+			// And if not, clear the hovered feature.
+			selection_clearHovered();
+			return false;
+		}
+		// Has valid hovered feature for the selection mode.
+		return true;
 	}
 
 	bool selection_hasSelection(SelectionListId id)
@@ -93,16 +164,19 @@ namespace LevelEditor
 				s_selectionList2[SEL_VERTEX].clear();
 				actionDone = selection_insertVertex(id, sector->vtx[index], sector, part);
 				buildDerived = actionDone;
+				infoPanel_clearSelection();
 			} break;
 			case SA_ADD:
 			{
 				actionDone = selection_insertVertex(id, sector->vtx[index], sector, part);
 				buildDerived = actionDone;
+				infoPanel_clearSelection();
 			} break;
 			case SA_REMOVE:
 			{
 				actionDone = selection_removeVertex(id, sector->vtx[index]);
 				buildDerived = actionDone;
+				infoPanel_clearSelection();
 			} break;
 			case SA_TOGGLE:
 			{
@@ -115,6 +189,7 @@ namespace LevelEditor
 					actionDone = selection_insertVertex(id, sector->vtx[index], sector, part);
 				}
 				buildDerived = actionDone;
+				infoPanel_clearSelection();
 			} break;
 			case SA_CHECK_INCLUSION:
 			{
@@ -129,7 +204,8 @@ namespace LevelEditor
 
 		if (buildDerived)
 		{
-			selection_buildDerived();
+			edit_setTransformChange();
+			selection_derivedBuildNeeded();
 		}
 		return actionDone;
 	}
@@ -176,11 +252,13 @@ namespace LevelEditor
 	// Pass in SEL_GET_HOVERED for the index to get the hovered feature (or false is none).
 	u32 selection_getCount(SelectionListId id)
 	{
+		if (id != SEL_CURRENT && id != s_currentSelection) { selection_buildDerived(); }
 		return (u32)s_selectionList2[id >= SEL_CURRENT ? s_currentSelection : id].size();
 	}
 		
 	bool selection_getVertex(s32 index, EditorSector*& sector, s32& featureIndex, HitPart* part, bool* isOverlapped)
 	{
+		if (s_currentSelection != SEL_VERTEX) { selection_buildDerived(); }
 		const FeatureId id = selection_getFeatureId(index, SEL_VERTEX);
 		if (id == FEATUREID_NULL) { return false; }
 		// Unpack the feature ID based on the type.
@@ -190,6 +268,7 @@ namespace LevelEditor
 
 	bool selection_getSurface(s32 index, EditorSector*& sector, s32& featureIndex, HitPart* part, bool* isOverlapped)
 	{
+		if (s_currentSelection != SEL_SURFACE) { selection_buildDerived(); }
 		const FeatureId id = selection_getFeatureId(index, SEL_SURFACE);
 		if (id == FEATUREID_NULL) { return false; }
 		// Unpack the feature ID based on the type.
@@ -208,6 +287,7 @@ namespace LevelEditor
 
 	bool selection_getSector(s32 index, EditorSector*& sector)
 	{
+		if (s_currentSelection != SEL_SECTOR) { selection_buildDerived(); }
 		const FeatureId id = selection_getFeatureId(index, SEL_SECTOR);
 		if (id == FEATUREID_NULL) { return false; }
 		// Unpack the feature ID based on the type.
@@ -317,10 +397,65 @@ namespace LevelEditor
 
 	u32 selection_getList(FeatureId*& list, SelectionListId id)
 	{
+		if (id != SEL_CURRENT && id != s_currentSelection) { selection_buildDerived(); }
 		SelectionList& selList = s_selectionList2[id >= SEL_CURRENT ? s_currentSelection : id];
 		u32 count = (u32)selList.size();
 		list = count > 0 ? selList.data() : nullptr;
 		return count;
+	}
+		
+	// TODO: Finish
+	bool selection_get(s32 index, EditorSector*& sector, s32& featureIndex, HitPart* part)
+	{
+		bool result = false;
+		sector = nullptr;
+		featureIndex = -1;
+		if (part) { *part = HP_FLOOR; }
+		switch (s_currentSelection)
+		{
+			case SEL_VERTEX:
+			{
+				result = selection_getVertex(index, sector, featureIndex, part);
+			} break;
+			case SEL_SURFACE:
+			{
+				result = selection_getSurface(index, sector, featureIndex, part);
+			} break;
+			case SEL_SECTOR:
+			{
+				result = selection_getSector(index, sector);
+			} break;
+			case SEL_ENTITY:
+			{
+				result = selection_getEntity(index, sector, featureIndex);
+			} break;
+		}
+		return result;
+	}
+
+	bool selection_action(SelectAction action, EditorSector* sector, s32 featureIndex, HitPart part)
+	{
+		bool result = false;
+		switch (s_currentSelection)
+		{
+			case SEL_VERTEX:
+			{
+				result = selection_vertex(action, sector, featureIndex, part);
+			} break;
+			case SEL_SURFACE:
+			{
+				result = selection_surface(action, sector, featureIndex, part);
+			} break;
+			case SEL_SECTOR:
+			{
+				result = selection_sector(action, sector);
+			} break;
+			case SEL_ENTITY:
+			{
+				result = selection_entity(action, sector, featureIndex);
+			} break;
+		}
+		return result;
 	}
 
 	////////////////////////////////////////////////////////////
@@ -510,16 +645,19 @@ namespace LevelEditor
 				s_selectionList2[s_currentSelection].clear();
 				actionDone = selection_insertFeatureId(s_selectionList2[s_currentSelection], id);
 				buildDerived = actionDone;
+				infoPanel_clearSelection();
 			} break;
 			case SA_ADD:
 			{
 				actionDone = selection_insertFeatureId(s_selectionList2[s_currentSelection], id);
 				buildDerived = actionDone;
+				infoPanel_clearSelection();
 			} break;
 			case SA_REMOVE:
 			{
 				actionDone = selection_removeFeatureId(s_selectionList2[s_currentSelection], id);
 				buildDerived = actionDone;
+				infoPanel_clearSelection();
 			} break;
 			case SA_TOGGLE:
 			{
@@ -532,6 +670,7 @@ namespace LevelEditor
 					actionDone = selection_insertFeatureId(s_selectionList2[s_currentSelection], id);
 				}
 				buildDerived = actionDone;
+				infoPanel_clearSelection();
 			} break;
 			case SA_CHECK_INCLUSION:
 			{
@@ -546,7 +685,8 @@ namespace LevelEditor
 
 		if (buildDerived)
 		{
-			selection_buildDerived();
+			edit_setTransformChange();
+			selection_derivedBuildNeeded();
 		}
 		return actionDone;
 	}
@@ -573,7 +713,7 @@ namespace LevelEditor
 		selection_insertVertex(v1, sector->vtx[wall->idx[1]], sector);
 	}
 
-	void selection_buildDerived()
+	void selection_derivedBuildNeeded()
 	{
 		if (s_currentSelection != SEL_VERTEX && s_currentSelection != SEL_SURFACE && s_currentSelection != SEL_SECTOR)
 		{
@@ -581,8 +721,22 @@ namespace LevelEditor
 		}
 		// Clear any geometry selection that does not match the current selection.
 		if (s_currentSelection != SEL_VERTEX) { s_selectionList2[SEL_VERTEX].clear(); }
-		if (s_currentSelection != SEL_SURFACE){ s_selectionList2[SEL_SURFACE].clear(); }
+		if (s_currentSelection != SEL_SURFACE) { s_selectionList2[SEL_SURFACE].clear(); }
 		if (s_currentSelection != SEL_SECTOR) { s_selectionList2[SEL_SECTOR].clear(); }
+
+		s_derivedBuildNeeded = true;
+	}
+
+	void selection_buildDerived()
+	{
+		if (!s_derivedBuildNeeded || s_dragSelect.active) { return; }
+		s_derivedBuildNeeded = false;
+
+		if (s_currentSelection != SEL_VERTEX && s_currentSelection != SEL_SURFACE && s_currentSelection != SEL_SECTOR)
+		{
+			return;
+		}
+
 		// Setup derived selections.
 		if (s_currentSelection == SEL_VERTEX)
 		{

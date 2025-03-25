@@ -1,6 +1,7 @@
 #include "levelEditorData.h"
 #include "levelDataSnapshot.h"
 #include "sharedState.h"
+#include "guidelines.h"
 #include <TFE_Editor/snapshotReaderWriter.h>
 #include <TFE_Editor/history.h>
 #include <TFE_Editor/errorMessages.h>
@@ -148,6 +149,21 @@ namespace LevelEditor
 		writeData(sector->obj.data(), u32(sizeof(EditorObject) * sector->obj.size()));
 	}
 
+	void writeSectorAttribSnapshot(const EditorSector* sector)
+	{
+		writeU32(sector->groupId);
+		writeU32(sector->groupIndex);
+		writeString(sector->name);
+		writeData(&sector->floorTex, sizeof(LevelTexture));
+		writeData(&sector->ceilTex, sizeof(LevelTexture));
+		writeF32(sector->floorHeight);
+		writeF32(sector->ceilHeight);
+		writeF32(sector->secHeight);
+		writeU32(sector->ambient);
+		writeS32(sector->layer);
+		writeData(sector->flags, sizeof(u32) * 3);
+	}
+
 	void writeLevelNoteToSnapshot(const LevelNote* note)
 	{
 		writeS32(note->id);
@@ -166,20 +182,26 @@ namespace LevelEditor
 	{
 		const s32 vtxCount = (s32)guideline->vtx.size();
 		const s32 knotCount = (s32)guideline->knots.size();
+		const s32 edgeCount = (s32)guideline->edge.size();
 		const s32 offsetCount = (s32)guideline->offsets.size();
-
+		
 		writeS32(guideline->id);
 		writeS32(vtxCount);
 		writeS32(knotCount);
+		writeS32(edgeCount);
 		writeS32(offsetCount);
-
+		
 		writeU32(guideline->flags);
+		writeF32(guideline->maxOffset);
 		writeF32(guideline->maxHeight);
 		writeF32(guideline->minHeight);
 		writeF32(guideline->maxSnapRange);
+		writeF32(guideline->subDivLen);
 
+		writeData(guideline->bounds.m, sizeof(Vec4f));
 		writeData(guideline->vtx.data(), sizeof(Vec2f) * vtxCount);
 		writeData(guideline->knots.data(), sizeof(Vec4f) * knotCount);
+		writeData(guideline->edge.data(), sizeof(GuidelineEdge) * edgeCount);
 		writeData(guideline->offsets.data(), sizeof(f32) * offsetCount);
 	}
 
@@ -225,6 +247,21 @@ namespace LevelEditor
 		readData(sector->obj.data(), u32(sizeof(EditorObject) * sector->obj.size()));
 	}
 
+	void readFromSectorAttribSnapshot(EditorSector* sector)
+	{
+		sector->groupId = readU32();
+		sector->groupIndex = readU32();
+		readString(sector->name);
+		readData(&sector->floorTex, sizeof(LevelTexture));
+		readData(&sector->ceilTex, sizeof(LevelTexture));
+		sector->floorHeight = readF32();
+		sector->ceilHeight = readF32();
+		sector->secHeight = readF32();
+		sector->ambient = readU32();
+		sector->layer = readS32();
+		readData(sector->flags, sizeof(u32) * 3);
+	}
+
 	void readLevelNoteFromSnapshot(LevelNote* note)
 	{
 		note->id = readS32();
@@ -244,18 +281,26 @@ namespace LevelEditor
 		guideline->id = readS32();
 		const s32 vtxCount = readS32();
 		const s32 knotCount = readS32();
+		const s32 edgeCount = readS32();
 		const s32 offsetCount = readS32();
 		guideline->vtx.resize(vtxCount);
 		guideline->knots.resize(knotCount);
+		guideline->edge.resize(edgeCount);
 		guideline->offsets.resize(offsetCount);
 
 		guideline->flags = readU32();
+		guideline->maxOffset = readF32();
 		guideline->maxHeight = readF32();
 		guideline->minHeight = readF32();
 		guideline->maxSnapRange = readF32();
+		guideline->subDivLen = readF32();
 
+		readData(guideline->bounds.m, sizeof(Vec4f));
 		readData(guideline->vtx.data(), sizeof(Vec2f) * vtxCount);
 		readData(guideline->knots.data(), sizeof(Vec4f) * knotCount);
+		readData(guideline->edge.data(), sizeof(GuidelineEdge) * edgeCount);
 		readData(guideline->offsets.data(), sizeof(f32) * offsetCount);
+
+		guideline_computeSubdivision(guideline);
 	}
 }

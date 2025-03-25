@@ -2,6 +2,7 @@
 #include <TFE_Editor/editorConfig.h>
 #include <TFE_Editor/editor.h>
 #include <TFE_Editor/AssetBrowser/assetBrowser.h>
+#include <TFE_Editor/LevelEditor/levelEditorData.h>
 #include <TFE_RenderBackend/renderBackend.h>
 #include <TFE_System/system.h>
 #include <TFE_System/parser.h>
@@ -39,6 +40,12 @@ namespace TFE_Editor
 	static bool s_createDir = true;
 	static std::string* s_curStringOut = nullptr;
 
+	static char s_exportPath[TFE_MAX_PATH];
+	static char s_exportError[TFE_MAX_PATH];
+	static bool s_doProjectExport = false;
+	static bool s_exportSucceeded = false;
+	static u32 s_levelFlags = 0u;
+
 	void parseProjectValue(const char* key, const char* value);
 
 	Project* project_get()
@@ -48,20 +55,38 @@ namespace TFE_Editor
 
 	void project_close()
 	{
-		s_curProject = {};
+		s_curProject = Project{};
 		resources_clear();
 		AssetBrowser::rebuildAssets();
 	}
 
 	void project_prepareNew()
 	{
-		s_newProject = {};
+		s_newProject = Project{};
 		s_createDir = true;
 	}
 
 	void project_prepareEdit()
 	{
 		s_newProject = s_curProject;
+	}
+
+	void project_prepareExportUi()
+	{
+		s_doProjectExport = false;
+		s_exportSucceeded = false;
+
+		const AssetList& levels = AssetBrowser::getAssetList(TYPE_LEVEL);
+		s32 count = (s32)levels.size();
+		s_levelFlags = 0u;
+		for (s32 i = 0; i < count; i++)
+		{
+			if (levels[i].assetSource != ASRC_PROJECT)
+			{
+				continue;
+			}
+			s_levelFlags |= (1u << i);
+		}
 	}
 		
 	void project_save()
@@ -117,7 +142,7 @@ namespace TFE_Editor
 		parser.addCommentString(";");
 		parser.addCommentString("#");
 
-		s_curProject = {};
+		s_curProject = Project{};
 		s_curStringOut = nullptr;
 		size_t bufferPos = 0;
 		bool inResource = false;
@@ -167,11 +192,17 @@ namespace TFE_Editor
 		// Validate that the path exists.
 		if (!FileUtil::directoryExits(s_curProject.path))
 		{
-			TFE_System::logWrite(LOG_ERROR, "Editor Project", "Editor Project Path '%s' does not exist.", s_curProject.path);
-			removeFromRecents(s_curProject.path);
+			// Replace it with the current path.
+			FileUtil::getFilePath(filepath, s_curProject.path);
 
-			s_curProject = {};
-			return false;
+			if (!FileUtil::directoryExits(s_curProject.path))
+			{
+				TFE_System::logWrite(LOG_ERROR, "Editor Project", "Editor Project Path '%s' does not exist.", s_curProject.path);
+				removeFromRecents(s_curProject.path);
+
+				s_curProject = Project{};
+				return false;
+			}
 		}
 
 		s_curProject.active = true;
@@ -179,6 +210,92 @@ namespace TFE_Editor
 		AssetBrowser::rebuildAssets();
 
 		return true;
+	}
+
+	bool handleProjectExport(char* exportPath, char* exportError)
+	{
+		const AssetList& levels = AssetBrowser::getAssetList(TYPE_LEVEL);
+		s32 count = (s32)levels.size();
+
+		std::vector<LevelEditor::LevelExportInfo> levelList;
+		for (s32 i = 0; i < count; i++)
+		{
+			const u32 flag = 1u << u32(i);
+			if (!(s_levelFlags & flag)) { continue; }
+			// Add the level to the list to export.
+			levelList.push_back({ levels[i].name, &levels[i] });
+		}
+
+		char workPath[TFE_MAX_PATH];
+		getTempDirectory(workPath);
+		return LevelEditor::exportLevels(workPath, exportPath, s_curProject.name, levelList);
+	}
+
+	bool project_exportUi()
+	{
+		// Make sure a project is active.
+		if (!s_curProject.active) { return true; }
+
+		pushFont(TFE_Editor::FONT_SMALL);
+		bool finished = false;
+		ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize;
+
+		strcpy(s_exportPath, s_curProject.path);
+		if (ImGui::BeginPopupModal("Export Project", nullptr, window_flags))
+		{
+			if (s_doProjectExport && s_exportSucceeded) // Succeeded
+			{
+				ImGui::TextColored(ImVec4(0.2f, 1.0f, 0.2f, 1.0f), "Project exported successfully: %s", s_exportPath);
+				ImGui::Separator();
+				if (ImGui::Button("Close"))
+				{
+					finished = true;
+				}
+			}
+			else if (s_doProjectExport) // Failed
+			{
+				ImGui::TextColored(ImVec4(1.0f, 0.2f, 0.2f, 1.0f), "Project export failed: '%s'!", s_exportError);
+				ImGui::Separator();
+				if (ImGui::Button("Close"))
+				{
+					finished = true;
+				}
+			}
+			else // Waiting for input.
+			{
+				// Checkboxes for each level.
+				ImGui::Text("Levels");
+				ImGui::Separator();
+				const AssetList& levels = AssetBrowser::getAssetList(TYPE_LEVEL);
+				s32 count = (s32)levels.size();
+				for (s32 i = 0; i < count; i++)
+				{
+					if (levels[i].assetSource != ASRC_PROJECT)
+					{
+						continue;
+					}
+					ImGui::CheckboxFlags(levels[i].name.c_str(), &s_levelFlags, 1u << u32(i));
+				}
+				ImGui::Separator();
+				if (ImGui::Button("Export"))
+				{
+					s_doProjectExport = true;
+					s_exportSucceeded = handleProjectExport(s_exportPath, s_exportError);
+				}
+				ImGui::SameLine();
+				if (ImGui::Button("Cancel"))
+				{
+					// Cancel the export request.
+					s_doProjectExport = false;
+					finished = true;
+				}
+			}
+			ImGui::EndPopup();
+		}
+		popFont();
+
+		return finished;
+
 	}
 		
 	bool project_editUi(bool newProject)

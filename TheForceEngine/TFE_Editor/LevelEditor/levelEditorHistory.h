@@ -12,6 +12,10 @@ namespace LevelEditor
 		LName_SetVertex,
 		LName_MoveWall,
 		LName_MoveFlat,
+		LName_MoveSector,
+		LName_MoveObject,
+		LName_MoveObjectToFloor,
+		LName_MoveObjectToCeil,
 		LName_InsertVertex,
 		LName_DeleteVertex,
 		LName_DeleteWall,
@@ -26,6 +30,20 @@ namespace LevelEditor
 		LName_Autoalign,
 		LName_DeleteObject,
 		LName_AddObject,
+		LName_RotateSector,
+		LName_RotateWall,
+		LName_RotateVertex,
+		LName_RotateEntity,
+		LName_ChangeWallAttrib,
+		LName_ChangeSectorAttrib,
+		LName_SetSectorGroup,
+		LName_CleanSectors,
+		LName_JoinSectors,
+		LName_Connect,
+		LName_Disconnect,
+		LName_Guideline_Create,
+		LName_Guideline_Delete,
+		LName_Guideline_Edit,
 		LName_Count
 	};
 
@@ -39,24 +57,11 @@ namespace LevelEditor
 	void levHistory_redo();
 
 	// Commands
-	enum SectorAttribId
-	{
-		SEC_ATTRIB_GROUP_ID = 0,
-		SEC_ATTRIB_NAME,
-		SEC_ATTRIB_FLOOR_TEX,
-		SEC_ATTRIB_CEIL_TEX,
-		SEC_ATTRIB_FLOOR_HEIGHT,
-		SEC_ATTRIB_CEIL_HEIGHT,
-		SEC_ATTRIB_SEC_HEIGHT,
-		SEC_ATTRIB_FLAGS1,
-		SEC_ATTRIB_FLAGS2,
-		SEC_ATTRIB_FLAGS3,
-		SEC_ATTRIB_LAYER,
-		SEC_ATTRIB_COUNT
-	};
-
-	void cmd_sectorChangeAttribute(u32 name, s32 count, const FeatureId* list, u32 attribId);
-	void cmd_sectorSetAttribute(u32 name, s32 count, const FeatureId* list, u32 attribId);
 	void cmd_sectorSnapshot(u32 name, std::vector<s32>& sectorIds);
+	void cmd_sectorWallSnapshot(u32 name, std::vector<IndexPair>& sectorWallIds, bool idsChanged);
+	void cmd_sectorAttributeSnapshot(u32 name, std::vector<IndexPair>& sectorIds, bool idsChanged);
 	void cmd_objectListSnapshot(u32 name, s32 sectorId);
+	void cmd_setTextures(u32 name, s32 count, FeatureId* features);
+	void cmd_guidelineSnapshot(u32 name);
+	void cmd_guidelineSingleSnapshot(u32 name, s32 index, bool idChanged);
 }

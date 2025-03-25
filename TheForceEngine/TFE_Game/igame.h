@@ -41,6 +41,7 @@ struct IGame
 	virtual bool canSave() { return false; }
 	virtual bool isPaused() { return false; }
 	virtual void getLevelName(char* name) {};
+	virtual void getLevelId(char* name) {};
 	virtual void getModList(char* modList) {};
 	virtual State getState() { return State::Unknown; }
 

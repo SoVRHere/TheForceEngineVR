@@ -93,13 +93,42 @@ set(SOURCES
 	Angelscript/angelscript/source/as_variablescope.cpp
 	Angelscript/angelscript/source/as_variablescope.h
 	Angelscript/README.txt
+	ScriptAPI-Shared/scriptMath.cpp
+	ScriptAPI-Shared/scriptMath.h
+	ScriptAPI-Shared/scriptTest.cpp
+	ScriptAPI-Shared/scriptTest.h
+	ScriptAPI-Shared/sharedScriptAPI.cpp
+	ScriptAPI-Shared/sharedScriptAPI.h
 	float2.cpp
 	float2.h
+	float2x2.cpp
+	float2x2.h
+	float3.cpp
+	float3.h
+	float3x3.cpp
+	float3x3.h
+	float4.cpp
+	float4.h
+	float4x4.cpp
+	float4x4.h
 	forceScript.cpp
 	forceScript.h
+	scriptInterface.cpp
+	scriptAPI.h
+	scriptInterface.h
 )
 
-if(CMAKE_SYSTEM_PROCESSOR MATCHES "AMD64")
+set(ARCHFLAGS "${CMAKE_SYSTEM_PROCESSOR}")
+#message(STATUS "Arch: "${ARCHFLAGS})
+
+if (APPLE AND NOT IOS)
+    # TODO: Would this break building on armv7 Linux?
+    if (${CMAKE_SYSTEM_PROCESSOR} MATCHES "arm")
+        set(ARCHFLAGS "aarch64")
+    endif ()
+endif ()
+
+if(${ARCHFLAGS} MATCHES "AMD64")
 	enable_language(ASM_MASM)
 
 	add_compile_definitions(ASMJIT_EMBED ASMJIT_STATIC ASMJIT_NO_FOREIGN)
@@ -111,8 +140,34 @@ if(CMAKE_SYSTEM_PROCESSOR MATCHES "AMD64")
     set_source_files_properties(
         Angelscript/angelscript/source/as_callfunc_x64_msvc_asm.asm
         PROPERTY LANGUAGE ASM_MASM)
-elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "ARM64")
-	message(FATAL_ERROR "TODO: AngelScript ARM64")
+endif()
+
+if(${ARCHFLAGS} MATCHES "^arm")
+   if(CMAKE_ASM_COMPILER_WORKS)
+       list(APPEND SOURCES
+			Angelscript/angelscript/source/as_callfunc_arm.cpp
+           Angelscript/angelscript/source/as_callfunc_arm_gcc.S)
+       set_property(SOURCE
+           Angelscript/angelscript/source/as_callfunc_arm_gcc.S
+           APPEND PROPERTY COMPILE_FLAGS " -Wa,-mimplicit-it=always")
+   else()
+       message(FATAL ERROR "ARM target requires a working assembler")
+   endif()
+endif()
+
+if(${ARCHFLAGS} MATCHES "^aarch64")
+   if(CMAKE_ASM_COMPILER_WORKS)
+       if(NOT APPLE)
+           list(APPEND SOURCES
+				Angelscript/angelscript/source/as_callfunc_arm64.cpp
+               Angelscript/angelscript/source/as_callfunc_arm64_gcc.S)
+       else()
+           list(APPEND SOURCES
+               Angelscript/angelscript/source/as_callfunc_arm64_xcode.S)
+       endif()
+   else()
+       message(FATAL ERROR "ARM target requires a working assembler")
+   endif()
 endif()
 
 #add_custom_target(${PROJECT_NAME} "" SOURCES ${SOURCES})
@@ -122,35 +177,3 @@ source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} PREFIX Sources FILES ${SOURCES})
 
 target_include_directories(${PROJECT_NAME} PRIVATE "Angelscript/angelscript/include")
 
-# Add support for ARM calling conventions.
-# Uncomment after testing on ARM.
-
-#set(ARCHFLAGS "${CMAKE_SYSTEM_PROCESSOR}")
-#if (APPLE AND NOT IOS)
-#  if (${CMAKE_SYSTEM_PROCESSOR} MATCHES "arm")
-#    set(ARCHFLAGS "aarch64")
-#  endif ()
-#endif ()
-
-#if(${ARCHFLAGS} MATCHES "^arm")
-#    enable_language(ASM)
-#    if(CMAKE_ASM_COMPILER_WORKS)
-#        set(SOURCES Angelscript/angelscript/source/as_callfunc_arm.cpp Angelscript/angelscript/source/as_callfunc_arm_gcc.S)
-#        set_property(SOURCE Angelscript/angelscript/source/as_callfunc_arm_gcc.S APPEND PROPERTY COMPILE_FLAGS " -Wa,-mimplicit-it=always")
-#    else()
-#        message(FATAL ERROR "ARM target requires a working assembler")
-#    endif()
-#endif()
-
-#if(${ARCHFLAGS} MATCHES "^aarch64")
-#    enable_language(ASM)
-#    if(CMAKE_ASM_COMPILER_WORKS)
-#        if(NOT APPLE)
-#            set(SOURCES Angelscript/angelscript/source/as_callfunc_arm64.cpp Angelscript/angelscript/source/as_callfunc_arm64_gcc.S)
-#        else()
-#            set(SOURCES Angelscript/angelscript/source/as_callfunc_arm64.cpp Angelscript/angelscript/source/as_callfunc_arm64_xcode.S)
-#        endif()
-#    else()
-#        message(FATAL ERROR "ARM target requires a working assembler")
-#    endif()
-#endif()

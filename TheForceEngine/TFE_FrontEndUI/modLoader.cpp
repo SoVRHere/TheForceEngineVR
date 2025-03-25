@@ -70,6 +70,7 @@ namespace TFE_FrontEndUI
 
 	static ViewMode s_viewMode = VIEW_IMAGES;
 
+	char programDirModDir[TFE_MAX_PATH];
 	static char s_modFilter[256] = { 0 };
 	static char s_prevModFilter[256] = { 0 };
 	static size_t s_filterLen = 0;
@@ -87,10 +88,11 @@ namespace TFE_FrontEndUI
 	{
 		return strcasecmp(a.fileName.c_str(), b.fileName.c_str()) < 0;
 	}
-
+	
 	void modLoader_read()
 	{
-		if (s_modsRead) { return; }
+		// Only read the mods once unless you are looking at the mod UI and there are not mods.
+		if (s_modsRead && (s_mods.size() > 0 || !isModUI())) { return; }
 		s_modsRead = true;
 
 		s_mods.clear();
@@ -118,7 +120,6 @@ namespace TFE_FrontEndUI
 		sprintf(programDataModDir, "%sMods/", programData);
 		TFE_Paths::fixupPathAsDirectory(programDataModDir);
 
-		char programDirModDir[TFE_MAX_PATH];
 		sprintf(programDirModDir, "%sMods/", programDir);
 		TFE_Paths::fixupPathAsDirectory(programDirModDir);
 
@@ -142,9 +143,10 @@ namespace TFE_FrontEndUI
 
 		if (!modPathCount)
 		{
+			s_modsRead = false;
 			return;
 		}
-
+		
 		FileList dirList, zipList;
 		for (s32 i = 0; i < modPathCount; i++)
 		{
@@ -382,6 +384,26 @@ namespace TFE_FrontEndUI
 		ImGui::PopFont();
 	}
 
+	bool modLoader_exist(const char* modName)
+	{
+		// If you are not passing in a mod (ie: base game level) then this is always true
+		if (strlen(modName) == 0)
+		{
+			return true;
+		}
+
+		char programDirModDir[TFE_MAX_PATH];
+		sprintf(programDirModDir, "%sMods/%s", TFE_Paths::getPath(PATH_PROGRAM), modName);
+		TFE_Paths::fixupPathAsDirectory(programDirModDir);
+
+		if (FileUtil::exists(programDirModDir))
+		{
+			return true;
+		}
+
+		return false;
+	}
+
 	void modLoader_preLoad()
 	{
 		readFromQueue(c_itemsPerFrame);
@@ -444,6 +466,24 @@ namespace TFE_FrontEndUI
 			}
 			filterMods(s_viewMode != VIEW_FILE_LIST);
 		}
+
+		ImGui::SameLine(510.0f * uiScale);
+		if (ImGui::Button("Refresh Mod Listing"))
+		{
+			s_modsRead = false;
+			modLoader_read();
+		}
+
+		#ifdef _WIN32
+		ImGui::SameLine(730.0f * uiScale);
+		if (ImGui::Button("Open Mod Folder"))
+		{
+			if (!TFE_System::osShellExecute(programDirModDir, NULL, NULL, false))
+			{
+				TFE_System::logWrite(LOG_ERROR, "ModLoader", "Failed to open the directory: '%s'", programDirModDir);
+			}
+		}
+		#endif
 		
 		ImGui::Separator();
 
@@ -682,14 +722,23 @@ namespace TFE_FrontEndUI
 			if (strncasecmp("Title", line, titleLen) == 0)
 			{
 				size_t lineLen = strlen(line);
-				for (size_t c = titleLen + 1; c < lineLen; c++)
+				for (size_t c = titleLen; c < lineLen; c++)
 				{
-					if (line[c] == ':' && line[c + 1] == ' ')
+					if (line[c] == ':' && (line[c + 1] == ' ' || line[c + 1] == '\t'))
 					{
+						// Next, skip past white space.
+						for (size_t c2 = c + 1; c2 < lineLen; c2++)
+						{
+							if (line[c2] != ' ' && line[c2] != '\t')
+							{
+								strcpy(name, &line[c2]);
+								foundTitle = true;
+								break;
+							}
+						}
+
 						// Found it.
-						strcpy(name, &line[c + 2]);
-						foundTitle = true;
-						break;
+						if (foundTitle) { break; }
 					}
 				}
 			}

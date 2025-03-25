@@ -149,6 +149,16 @@ namespace TFE_Jedi
 		return s_textureList[pool][index].name.c_str();
 	}
 
+	s32 bitmap_getLevelTextureIndex(const char* name)
+	{
+		TextureTable::iterator iTex = s_textureTable[POOL_LEVEL].find(name);
+		if (iTex != s_textureTable[POOL_LEVEL].end())
+		{
+			return iTex->second;
+		}
+		return -1;
+	}
+
 	// Serialize only level textures.
 	void bitmap_serializeLevelTextures(Stream* stream)
 	{
@@ -649,7 +659,7 @@ namespace TFE_Jedi
 			// Verify that we don't read past the end of the buffer.
 			const s64 curOffset = s64((u8*)frame + 0x1c - imageBase);
 			const s64 maxSize = tex->dataSize - curOffset;
-			const s64 sizeToCopy = max(0, min((s32)maxSize, (s32)outFrames[i].width * (s32)outFrames[i].height));
+			const s64 sizeToCopy = (s64)max(0, min(maxSize, outFrames[i].width * outFrames[i].height));
 			memcpy(outFrames[i].image, (u8*)frame + 0x1c, sizeToCopy);
 			
 			// We have to make sure the structure offsets line up with DOS...

@@ -2,12 +2,15 @@
 #include "grid.h"
 #include "grid2d.h"
 #include "grid3d.h"
+#include "gizmo.h"
 #include <TFE_System/math.h>
 #include <TFE_Editor/editor.h>
 #include <TFE_Editor/editorMath.h>
 #include <TFE_Editor/editorConfig.h>
+#include <TFE_Editor/LevelEditor/editCommon.h>
 #include <TFE_Editor/LevelEditor/editGeometry.h>
 #include <TFE_Editor/LevelEditor/editGuidelines.h>
+#include <TFE_Editor/LevelEditor/editTransforms.h>
 #include <TFE_Editor/LevelEditor/levelEditor.h>
 #include <TFE_Editor/LevelEditor/levelEditorData.h>
 #include <TFE_Editor/LevelEditor/sharedState.h>
@@ -88,7 +91,6 @@ namespace LevelEditor
 		INF_COLOR_EDIT_HELPER = 0xffc000ff,
 	};
 
-
 	const u32 c_connectMsgColor = 0xc0ff80ff;
 	const u32 c_connectClientColor = 0xc080ff80;
 	const u32 c_connectTargetColor = 0xc080ffff;
@@ -135,6 +137,7 @@ namespace LevelEditor
 	Vec4f s_viewportTrans2d = { 0 };
 	f32 s_gridOpacity = 0.5f;
 	f32 s_zoom2d = 0.25f;			// current zoom level in 2D.
+	f32 s_viewDepth[2] = { 65536.0f, -65536.0f };
 	u32 s_viewportRenderFlags = VRF_NONE;
 
 	Rail s_rail = {};
@@ -154,7 +157,6 @@ namespace LevelEditor
 	void drawEntity2d(const EditorSector* sector, const EditorObject* obj, s32 id, u32 objColor, bool drawEntityBounds);
 	void drawNoteIcon2d(LevelNote* note, s32 id, u32 objColor);
 	void renderSectorVertices2d();
-	void drawBox(const Vec3f* center, f32 side, f32 lineWidth, u32 color);
 	void drawBounds(const Vec3f* center, Vec3f size, f32 lineWidth, u32 color);
 	void drawOBB(const Vec3f* bounds, const Mat3* mtx, const Vec3f* pos, f32 lineWidth, u32 color);
 	void drawBounds2d(const Vec2f* center, Vec2f size, f32 lineWidth, u32 color, u32 fillColor);
@@ -171,8 +173,11 @@ namespace LevelEditor
 	void drawPosition3d(f32 width, Vec3f pos, u32 color);
 	void drawArrow3d(f32 width, f32 lenInPixels, Vec3f pos, Vec3f dir, Vec3f nrm, u32 color);
 	void drawArrow3d_Segment(f32 width, f32 lenInPixels, Vec3f pos0, Vec3f pos1, Vec3f nrm, u32 color);
+	void drawEntity3D(const EditorSector* sector, const EditorObject* obj, s32 id, u32 objColor, const Vec3f& cameraRgtXZ, bool drawEntityBounds, bool drawHighlights);
 	void drawNoteIcon3d(LevelNote* note, s32 id, u32 objColor, const Vec3f& cameraRgt, const Vec3f& cameraUp);
+	void drawTransformGizmo();
 	bool computeSignCorners(const EditorSector* sector, const EditorWall* wall, Vec3f* corners);
+	void computeFlatUv(const Vec2f* pos, const Vec2f* offset, Vec2f* uv);
 
 	void viewport_init()
 	{
@@ -313,6 +318,27 @@ namespace LevelEditor
 		camera.projMtx.m2.w = 0.0f;
 		camera.projMtx.m3.w = 1.0f;
 	}
+
+	void drawTransformGizmo()
+	{
+		if (!edit_isTransformToolActive()) { return; }
+		switch (edit_getTransformMode())
+		{
+			case TRANS_MOVE:
+			{
+				const Vec3f p0 = edit_getTransformAnchor();
+				const Vec3f p1 = edit_getTransformPos();
+				if (s_view == EDIT_VIEW_2D) { gizmo_drawMove2d(p0, p1); }
+				else { gizmo_drawMove3d(p0, p1); }
+			} break;
+			case TRANS_ROTATE:
+			{
+				const Vec3f centerWS = edit_getTransformAnchor();
+				if (s_view == EDIT_VIEW_2D) { gizmo_drawRotation2d({ centerWS.x, centerWS.z }); }
+				else { gizmo_drawRotation3d(centerWS); }
+			} break;
+		}
+	}
 		
 	void renderLevel2D()
 	{
@@ -326,7 +352,7 @@ namespace LevelEditor
 		const Vec4f viewportBoundsWS = viewportBoundsWS2d(1.0f);
 
 		// Draw lower layers, if enabled.
-		if (s_editFlags & LEF_SHOW_LOWER_LAYERS)
+		if ((s_editFlags & LEF_SHOW_LOWER_LAYERS) && !(s_editFlags & LEF_SHOW_ALL_LAYERS))
 		{
 			renderSectorWalls2d(s_level.layerRange[0], s_curLayer - 1);
 		}
@@ -350,14 +376,20 @@ namespace LevelEditor
 		renderGuidelines2d(viewportBoundsWS);
 
 		// Draw the current layer.
-		renderSectorWalls2d(s_curLayer, s_curLayer);
+		s32 startLayer = s_curLayer, endLayer = s_curLayer;
+		if (s_editFlags & LEF_SHOW_ALL_LAYERS)
+		{
+			startLayer = s_level.layerRange[0];
+			endLayer = s_level.layerRange[1];
+		}
+		renderSectorWalls2d(startLayer, endLayer);
 
 		// Gather objects
 		const size_t count = s_level.sectors.size();
 		EditorSector* sector = s_level.sectors.data();
 		for (size_t s = 0; s < count; s++, sector++)
 		{
-			if (sector->layer < s_curLayer || sector->layer > s_curLayer) { continue; }
+			if (!sector_onActiveLayer(sector)) { continue; }
 			if (sector_isHidden(sector)) { continue; }
 			// TODO: Cull
 			const s32 objCount = (s32)sector->obj.size();
@@ -372,21 +404,24 @@ namespace LevelEditor
 
 		// Draw the hovered and selected sectors.
 		// Note they intentionally overlap if s_featureHovered.sector == s_featureCur.sector.
-		bool hasHovered = selection_hasHovered();
+		const bool hasHovered = selection_hasHovered();
 		if (selection_hasHovered() && s_editMode == LEDIT_SECTOR)
 		{
 			selection_getSector(SEL_INDEX_HOVERED, sector);
 			drawSector2d(sector, HL_HOVERED);
 		}
-		// TODO: Draw the full list.
 		if (selection_getCount() > 0 && s_editMode == LEDIT_SECTOR)
 		{
-			selection_getSector(0, sector);
-			drawSector2d(sector, HL_SELECTED);
+			uint32_t count = selection_getCount();
+			for (u32 i = 0; i < count; i++)
+			{
+				selection_getSector(i, sector);
+				drawSector2d(sector, HL_SELECTED);
+			}
 		}
 
 		// Draw the hovered and selected walls.
-		if (selection_hasHovered() && s_editMode == LEDIT_WALL)
+		if (hasHovered && s_editMode == LEDIT_WALL)
 		{
 			EditorSector* sector = nullptr;
 			s32 featureIndex = -1;
@@ -402,16 +437,13 @@ namespace LevelEditor
 
 			for (size_t i = 0; i < count; i++)
 			{
-				for (size_t i = 0; i < count; i++)
-				{
-					s32 featureIndex;
-					HitPart part;
-					bool overlapped;
-					EditorSector* sector = unpackFeatureId(list[i], &featureIndex, (s32*)&part, &overlapped);
-					if (overlapped || !sector || part == HP_FLOOR || part == HP_CEIL) { continue; }
+				s32 featureIndex;
+				HitPart part;
+				bool overlapped;
+				EditorSector* sector = unpackFeatureId(list[i], &featureIndex, (s32*)&part, &overlapped);
+				if (overlapped || !sector || part == HP_FLOOR || part == HP_CEIL) { continue; }
 
-					drawWall2d(sector, &sector->walls[featureIndex], 1.5f, HL_SELECTED, true);
-				}
+				drawWall2d(sector, &sector->walls[featureIndex], 1.5f, HL_SELECTED, true);
 			}
 		}
 
@@ -511,6 +543,9 @@ namespace LevelEditor
 			lineDraw2d_addLine(2.0f, &vtx[3], colors);
 		}
 
+		// Transform Gizmos
+		drawTransformGizmo();
+
 		// Compute the camera and projection for the model draw.
 		Camera3d camera;
 		compute2dCamera(camera);
@@ -554,7 +589,7 @@ namespace LevelEditor
 			EditorSector* sector = nullptr;
 			HitPart part = HP_NONE;
 			s32 featureIndex = -1;
-			bool hasHovered = selection_hasHovered();
+			const bool hasHovered = selection_hasHovered();
 			if (s_editMode == LevelEditMode::LEDIT_SECTOR)
 			{
 				selection_getSector(hasHovered ? SEL_INDEX_HOVERED : 0, sector);
@@ -1070,6 +1105,41 @@ namespace LevelEditor
 				const Vec3f pos = { knot->x, s_grid.height, knot->z };
 				drawPositionKnot3d(2.0f, pos, 0xffffa500);
 			}
+
+			const size_t subdivCount = guideLine->subdiv.size();
+			const size_t offsetCount = guideLine->offsets.size();
+			const GuidelineSubDiv* subdiv = guideLine->subdiv.data();
+			const f32* offsets = guideLine->offsets.data();
+			const Vec2f* vtx = guideLine->vtx.data();
+			for (size_t k = 0; k < subdivCount; k++, subdiv++)
+			{
+				const s32 e = subdiv->edge;
+				const f32 u = subdiv->param;
+				const GuidelineEdge* edge = &guideLine->edge[e];
+				const Vec2f v0 = vtx[edge->idx[0]];
+				const Vec2f v1 = vtx[edge->idx[1]];
+				Vec2f pos, nrm;
+				if (edge->idx[2] >= 0) // Curve
+				{
+					const Vec2f c = vtx[edge->idx[2]];
+					evaluateQuadraticBezier(v0, v1, c, u, &pos, &nrm);
+				}
+				else // Line
+				{
+					pos.x = v0.x*(1.0f - u) + v1.x*u;
+					pos.z = v0.z*(1.0f - u) + v1.z*u;
+					nrm.x = -(v1.z - v0.z);
+					nrm.z = v1.x - v0.x;
+					nrm = TFE_Math::normalize(&nrm);
+				}
+
+				drawPositionKnot3d(1.5f, { pos.x, s_grid.height, pos.z }, 0x8000a5ff);
+				for (size_t o = 0; o < offsetCount; o++)
+				{
+					const Vec2f offsetPos = { pos.x + nrm.x * offsets[o], pos.z + nrm.z * offsets[o] };
+					drawPositionKnot3d(1.5f, { offsetPos.x, s_grid.height, offsetPos.z }, 0x8000a5ff);
+				}
+			}
 		}
 	}
 
@@ -1170,7 +1240,7 @@ namespace LevelEditor
 					  { vtx[v].x, sector->ceilHeight + ceilBias, vtx[v].z } };
 					TFE_RenderShared::lineDraw3d_addLine(width, line2, &color);
 				}
-				else
+				else if (next)
 				{
 					// Top
 					if (next->ceilHeight < sector->ceilHeight)
@@ -1617,23 +1687,26 @@ namespace LevelEditor
 
 	void drawSelectedSector3D()
 	{
-		EditorSector* hoveredSector = nullptr;
-		EditorSector* curSector = nullptr;
-		selection_getSector(SEL_INDEX_HOVERED, hoveredSector);
-		selection_getSector(0, curSector);
+		FeatureId* list = nullptr;
+		const u32 count = selection_getList(list);
 
-		bool hoverAndSelect = hoveredSector == curSector;
-		// TODO: Draw full list.
-		if (curSector)
+		EditorSector* hoveredSector = nullptr;
+		selection_getSector(SEL_INDEX_HOVERED, hoveredSector);
+
+		bool hoverAndSelect = false;
+		for (u32 i = 0; i < count; i++)
 		{
-			drawFlat3D_Highlighted(curSector, HP_FLOOR, 3.5f, HL_SELECTED, false, true);
-			drawFlat3D_Highlighted(curSector, HP_CEIL, 3.5f, HL_SELECTED, false, true);
-			const size_t wallCount = curSector->walls.size();
-			const EditorWall* wall = curSector->walls.data();
+			EditorSector* featureSector = unpackFeatureId(list[i]);
+			hoverAndSelect = featureSector == hoveredSector;
+
+			drawFlat3D_Highlighted(featureSector, HP_FLOOR, 3.5f, HL_SELECTED, false, true);
+			drawFlat3D_Highlighted(featureSector, HP_CEIL, 3.5f, HL_SELECTED, false, true);
+			const size_t wallCount = featureSector->walls.size();
+			const EditorWall* wall = featureSector->walls.data();
 			for (size_t w = 0; w < wallCount; w++, wall++)
 			{
 				EditorSector* next = wall->adjoinId < 0 ? nullptr : &s_level.sectors[wall->adjoinId];
-				drawWallLines3D_Highlighted(curSector, next, wall, 3.5f, HL_SELECTED, false);
+				drawWallLines3D_Highlighted(featureSector, next, wall, 3.5f, HL_SELECTED, false);
 			}
 		}
 		if (hoveredSector)
@@ -1719,11 +1792,11 @@ namespace LevelEditor
 	{
 		const f32 scale = TFE_Math::distance(vtx, &s_camera.pos) / f32(s_viewportSize.z);
 		const f32 size = 8.0f * scale;
-		drawBox(vtx, size, 3.0f, color);
+		drawBox3d(vtx, size, 3.0f, color);
 	}
 
 	// Render highlighted 3d elements.
-	void renderHighlighted3d()
+	void renderHighlighted3d(s32 visObjCount, const EditorSector** visObjSector, const EditorObject** visObj, const s32* visObjId, Vec3f cameraRgtXZ)
 	{
 		lineDraw3d_begin(s_viewportSize.x, s_viewportSize.z);
 		triDraw3d_begin(&s_grid);
@@ -1782,6 +1855,16 @@ namespace LevelEditor
 				drawVertex3d(&s_hoveredVtxPos, hoveredSector, c_vertexClr[HL_HOVERED]);
 			}
 		}
+		else if (s_editMode == LEDIT_ENTITY)
+		{
+			// Draw objects.
+			for (s32 o = 0; o < visObjCount; o++)
+			{
+				bool locked = sector_isLocked((EditorSector*)visObjSector[o]);
+				if (locked) { continue; }
+				drawEntity3D(visObjSector[o], visObj[o], visObjId[o], 0xffffffff, cameraRgtXZ, true, true);
+			}
+		}
 
 		// Draw level notes so the borders show up on top.
 		if (!(s_editorConfig.interfaceFlags & PIF_HIDE_NOTES))
@@ -1804,6 +1887,15 @@ namespace LevelEditor
 		}
 
 		triDraw3d_draw(&s_camera, (f32)s_viewportSize.x, (f32)s_viewportSize.z, s_grid.size, 0.0f);
+		lineDraw3d_drawLines(&s_camera, false, false);
+
+		// Draw transform gizmo, on top of other geometry.
+		triDraw3d_begin(&s_grid);
+		lineDraw3d_begin(s_viewportSize.x, s_viewportSize.z);
+
+		drawTransformGizmo();
+
+		triDraw3d_draw(&s_camera, (f32)s_viewportSize.x, (f32)s_viewportSize.z, s_grid.size, 0.0f, false, false);
 		lineDraw3d_drawLines(&s_camera, false, false);
 	}
 
@@ -1922,8 +2014,136 @@ namespace LevelEditor
 			}
 		}
 	}
+
+	f32 adjustWidthForView(f32 width, const EditorObject* obj, const Entity* entity, const Vec2f** srcUv)
+	{
+		// Which direction?
+		f32 dir = fmodf(obj->angle / (2.0f * PI), 1.0f);
+		if (dir < 0.0f) { dir += 1.0f; }
+
+		f32 angleDiff = fmodf((s_camera.yaw - obj->angle) / (2.0f * PI), 1.0f);
+		if (angleDiff < 0.0f) { angleDiff += 1.0f; }
+
+		const s32 viewIndex = 31 - (s32(angleDiff * 32.0f) & 31);
+		assert(viewIndex >= 0 && viewIndex < 32);
+
+		const SpriteView* view = &entity->views[viewIndex];
+		if (srcUv) { *srcUv = view->uv; }
+
+		// Adjust the width.
+		width *= (view->st[1].x - view->st[0].x) / (entity->views[0].st[1].x - entity->views[0].st[0].x);
+		return width;
+	}
+
+	void computePlaneFromVtx(Vec3f v0, Vec3f v1, Vec3f v2, Vec4f* outPlane)
+	{
+		Vec3f s = { v1.x - v0.x, v1.y - v0.y, v1.z - v0.z };
+		Vec3f t = { v2.x - v0.x, v2.y - v0.y, v2.z - v0.z };
+		Vec3f n = TFE_Math::cross(&s, &t);
+		n = TFE_Math::normalize(&n);
+
+		outPlane->x = n.x;
+		outPlane->y = n.y;
+		outPlane->z = n.z;
+		outPlane->w = -TFE_Math::dot(&v0, &n);
+	}
+
+	// Compute planes from world positions.
+	void computePlanesFromOBBCorners(const Vec3f* vtxWorld, Vec4f* outPlanes)
+	{
+		// Top/Bottom
+		computePlaneFromVtx(vtxWorld[4], vtxWorld[5], vtxWorld[6], &outPlanes[0]);
+		computePlaneFromVtx(vtxWorld[0], vtxWorld[2], vtxWorld[1], &outPlanes[1]);
+		// Sides
+		for (s32 i = 0; i < 4; i++)
+		{
+			const s32 i0 = i, i1 = (i + 1) & 3, i2 = 4 + i1;
+			computePlaneFromVtx(vtxWorld[i0], vtxWorld[i1], vtxWorld[i2], &outPlanes[i + 2]);
+		}
+	}
+
+	// Planes are pointing inward.
+	void computeOBB(const Vec3f* bounds, const Mat3* mtx, const Vec3f* pos, Vec4f* outPlanes)
+	{
+		const Vec3f vtxLocal[8] =
+		{
+			{ bounds[0].x, bounds[0].y, bounds[0].z },
+			{ bounds[1].x, bounds[0].y, bounds[0].z },
+			{ bounds[1].x, bounds[0].y, bounds[1].z },
+			{ bounds[0].x, bounds[0].y, bounds[1].z },
+
+			{ bounds[0].x, bounds[1].y, bounds[0].z },
+			{ bounds[1].x, bounds[1].y, bounds[0].z },
+			{ bounds[1].x, bounds[1].y, bounds[1].z },
+			{ bounds[0].x, bounds[1].y, bounds[1].z },
+		};
+		Vec3f vtxWorld[8];
+		for (s32 v = 0; v < 8; v++)
+		{
+			vtxWorld[v].x = vtxLocal[v].x * mtx->m0.x + vtxLocal[v].y * mtx->m0.y + vtxLocal[v].z * mtx->m0.z + pos->x;
+			vtxWorld[v].y = vtxLocal[v].x * mtx->m1.x + vtxLocal[v].y * mtx->m1.y + vtxLocal[v].z * mtx->m1.z + pos->y;
+			vtxWorld[v].z = vtxLocal[v].x * mtx->m2.x + vtxLocal[v].y * mtx->m2.y + vtxLocal[v].z * mtx->m2.z + pos->z;
+		}
+
+		computePlanesFromOBBCorners(vtxWorld, outPlanes);
+	}
+
+	void computeOBB(const Vec3f* center, const Vec3f* size, Vec4f* outPlanes)
+	{
+		const f32 w = size->x * 0.5f;
+		const f32 h = size->y * 0.5f;
+		const f32 d = size->z * 0.5f;
+		const Vec3f vtxWorld[] =
+		{
+			{center->x - w, center->y - h, center->z - d},
+			{center->x + w, center->y - h, center->z - d},
+			{center->x + w, center->y - h, center->z + d},
+			{center->x - w, center->y - h, center->z + d},
+
+			{center->x - w, center->y + h, center->z - d},
+			{center->x + w, center->y + h, center->z - d},
+			{center->x + w, center->y + h, center->z + d},
+			{center->x - w, center->y + h, center->z + d},
+		};
+
+		computePlanesFromOBBCorners(vtxWorld, outPlanes);
+	}
+
+	void viewport_computeEntityBoundingPlanes(const EditorSector* sector, const EditorObject* obj, Vec4f* boundingPlanes)
+	{
+		const Entity* entity = &s_level.entities[obj->entityId];
+		const Vec3f pos = obj->pos;
+
+		f32 width = entity->size.x * 0.5f;
+		f32 height = entity->size.z;
+		f32 y = pos.y;
+		if (entity->type != ETYPE_SPIRIT && entity->type != ETYPE_SAFE)
+		{
+			f32 offset = -(entity->offset.y + fabsf(entity->st[1].z - entity->st[0].z)) * 0.1f;
+			// If the entity is on the floor, make sure it doesn't stick through it for editor visualization.
+			if (fabsf(pos.y - sector->floorHeight) < 0.5f) { offset = max(0.0f, offset); }
+			y = pos.y + offset;
+		}
+
+		// Adjust the width based on the view
+		if (!entity->obj3d && entity->views.size() >= 32)
+		{
+			width = adjustWidthForView(width, obj, entity, nullptr);
+		}
+
+		if (entity->obj3d)
+		{
+			computeOBB(entity->obj3d->bounds, &obj->transform, &obj->pos, boundingPlanes);
+		}
+		else
+		{
+			Vec3f center = { pos.x, y + height * 0.5f, pos.z };
+			Vec3f size = { width*2.0f, height, width*2.0f };
+			computeOBB(&center, &size, boundingPlanes);
+		}
+	}
 			
-	void drawEntity3D(const EditorSector* sector, const EditorObject* obj, s32 id, u32 objColor, const Vec3f& cameraRgtXZ, bool drawEntityBounds)
+	void drawEntity3D(const EditorSector* sector, const EditorObject* obj, s32 id, u32 objColor, const Vec3f& cameraRgtXZ, bool drawEntityBounds, bool drawHighlights)
 	{
 		const Entity* entity = &s_level.entities[obj->entityId];
 		const Vec3f pos = obj->pos;
@@ -1939,67 +2159,59 @@ namespace LevelEditor
 			y = pos.y + offset;
 		}
 
-		if (entity->obj3d)
+		if (!drawHighlights)
 		{
-			draw3dObject(obj, entity, sector, objColor);
-		}
-		else
-		{
-			const Vec2f* srcUv = entity->uv;
-			if (entity->views.size() >= 32)
+			if (entity->obj3d)
 			{
-				// Which direction?
-				f32 dir = fmodf(obj->angle / (2.0f * PI), 1.0f);
-				if (dir < 0.0f) { dir += 1.0f; }
-
-				f32 angleDiff = fmodf((s_camera.yaw - obj->angle) / (2.0f * PI), 1.0f);
-				if (angleDiff < 0.0f) { angleDiff += 1.0f; }
-
-				const s32 viewIndex = 31 - (s32(angleDiff * 32.0f) & 31);
-				assert(viewIndex >= 0 && viewIndex < 32);
-
-				const SpriteView* view = &entity->views[viewIndex];
-				srcUv = view->uv;
-
-				// Adjust the width.
-				width *= (view->st[1].x - view->st[0].x) / (entity->views[0].st[1].x - entity->views[0].st[0].x);
+				draw3dObject(obj, entity, sector, objColor);
 			}
+			else
+			{
+				const Vec2f* srcUv = entity->uv;
+				if (entity->views.size() >= 32)
+				{
+					width = adjustWidthForView(width, obj, entity, &srcUv);
+				}
 
-			Vec3f corners[] =
-			{
-				{ pos.x - width * cameraRgtXZ.x, y + height, pos.z - width * cameraRgtXZ.z },
-				{ pos.x + width * cameraRgtXZ.x, y + height, pos.z + width * cameraRgtXZ.z },
-				{ pos.x + width * cameraRgtXZ.x, y,          pos.z + width * cameraRgtXZ.z },
-				{ pos.x - width * cameraRgtXZ.x, y,          pos.z - width * cameraRgtXZ.z }
-			};
-			Vec2f uv[] =
-			{
-				{ srcUv[0].x, srcUv[0].z },
-				{ srcUv[1].x, srcUv[0].z },
-				{ srcUv[1].x, srcUv[1].z },
-				{ srcUv[0].x, srcUv[1].z }
-			};
-			s32 idx[] = { 0, 1, 2, 0, 2, 3 };
-			triDraw3d_addTextured(TRIMODE_BLEND, 6, 4, corners, uv, idx, objColor, false, entity->image, false, false);
+				Vec3f corners[] =
+				{
+					{ pos.x - width * cameraRgtXZ.x, y + height, pos.z - width * cameraRgtXZ.z },
+					{ pos.x + width * cameraRgtXZ.x, y + height, pos.z + width * cameraRgtXZ.z },
+					{ pos.x + width * cameraRgtXZ.x, y,          pos.z + width * cameraRgtXZ.z },
+					{ pos.x - width * cameraRgtXZ.x, y,          pos.z - width * cameraRgtXZ.z }
+				};
+				Vec2f uv[] =
+				{
+					{ srcUv[0].x, srcUv[0].z },
+					{ srcUv[1].x, srcUv[0].z },
+					{ srcUv[1].x, srcUv[1].z },
+					{ srcUv[0].x, srcUv[1].z }
+				};
+				s32 idx[] = { 0, 1, 2, 0, 2, 3 };
+				triDraw3d_addTextured(TRIMODE_BLEND, 6, 4, corners, uv, idx, objColor, false, entity->image, false, false);
+			}
+		}
+		else if (!entity->obj3d && entity->views.size() >= 32)
+		{
+			width = adjustWidthForView(width, obj, entity, nullptr);
 		}
 
 		if (s_editMode == LEDIT_ENTITY && drawEntityBounds)
 		{
 			EditorSector* hoveredSector = nullptr;
-			EditorSector* curSector = nullptr;
-			s32 hoveredFeatureIndex, curFeatureIndex;
-			bool hasHovered = selection_getEntity(SEL_INDEX_HOVERED, hoveredSector, hoveredFeatureIndex);
-			bool hasCur = selection_getEntity(0, curSector, curFeatureIndex);
+			s32 hoveredFeatureIndex = -1;
+			selection_getEntity(SEL_INDEX_HOVERED, hoveredSector, hoveredFeatureIndex);
 
 			Highlight hl = HL_NONE;
-			if (hasHovered && sector == curSector && curFeatureIndex == id)
+			if (selection_entity(SA_CHECK_INCLUSION, (EditorSector*)sector, id))
 			{
 				hl = HL_SELECTED;
 			}
-			if (hasCur && sector == hoveredSector && hoveredFeatureIndex == id)
+			if (sector == hoveredSector && hoveredFeatureIndex == id)
 			{
 				hl = (hl == HL_SELECTED) ? Highlight(HL_SELECTED + 1) : HL_HOVERED;
 			}
+			if ((drawHighlights && hl == HL_NONE) || (!drawHighlights && hl != HL_NONE)) { return; }
 
 			// Draw bounds.
 			if (entity->obj3d)
@@ -2098,7 +2310,7 @@ namespace LevelEditor
 
 		return u32(colorSum.x * 255.0f) | (u32(colorSum.y * 255.0f) << 8) | (u32(colorSum.z * 255.0f) << 16) | (u32(alpha * 255.0f) << 24);
 	}
-
+				
 	void renderLevel3D()
 	{
 		viewport_updateRail();
@@ -2119,7 +2331,7 @@ namespace LevelEditor
 
 		// Draw guidelines.
 		renderGuidelines3d();
-				
+
 		const EditorObject* visObj[1024];
 		const EditorSector* visObjSector[1024];
 		s32 visObjId[1024];
@@ -2146,7 +2358,7 @@ namespace LevelEditor
 		for (size_t s = 0; s < count; s++, sector++)
 		{
 			// Skip other layers unless all layers is enabled.
-			if (sector->layer != s_curLayer && !(s_editFlags & LEF_SHOW_ALL_LAYERS)) { continue; }
+			if (!sector_onActiveLayer(sector)) { continue; }
 			if (sector_isHidden(sector)) { continue; }
 
 			// Add objects...
@@ -2171,20 +2383,20 @@ namespace LevelEditor
 			f32 ceilBias  = (s_camera.pos.y <= sector->ceilHeight)  ? -bias :  bias;
 
 			// Draw lines.
-			const size_t wallCount = sector->walls.size();
+			const s32 wallCount = (s32)sector->walls.size();
 			const Vec2f* vtx = sector->vtx.data();
 			EditorWall* wall = sector->walls.data();
-			for (size_t w = 0; w < wallCount; w++, wall++)
+			for (s32 w = 0; w < wallCount; w++, wall++)
 			{
 				// Skip hovered or selected walls.
 				bool skipLines = false;
 				if (s_editMode == LEDIT_WALL && ((hoveredSector == sector && hoveredFeatureIndex == w) ||
-					(curSector == sector && curFeatureIndex == w)))
+					selection_action(SA_CHECK_INCLUSION, sector, w)))
 				{
 					skipLines = true;
 				}
 
-				EditorSector* next = wall->adjoinId < 0 ? nullptr : &s_level.sectors[wall->adjoinId];
+				EditorSector* next = (wall->adjoinId < 0 || wall->adjoinId >= (s32)count) ? nullptr : &s_level.sectors[wall->adjoinId];
 				const Vec2f& v0 = sector->vtx[wall->idx[0]];
 				const Vec2f& v1 = sector->vtx[wall->idx[1]];
 
@@ -2311,7 +2523,7 @@ namespace LevelEditor
 						if (!botSign && wall->tex[WP_SIGN].texIndex >= 0 && (s_sectorDrawMode == SDM_TEXTURED_FLOOR || s_sectorDrawMode == SDM_TEXTURED_CEIL))
 						{
 							const EditorTexture* tex = calculateSignTextureCoords(wall, &wall->tex[WP_TOP], &wall->tex[WP_SIGN], wallLengthTexels, topHeight, false, uvCorners);
-							TFE_RenderShared::triDraw3d_addQuadTextured(TRIMODE_CLAMP, corners, uvCorners, wallColor, tex->frames[0]);
+							if (tex) { TFE_RenderShared::triDraw3d_addQuadTextured(TRIMODE_CLAMP, corners, uvCorners, wallColor, tex->frames[0]); }
 						}
 					}
 					// Mid only for mask textures.
@@ -2321,7 +2533,7 @@ namespace LevelEditor
 											{v1.x, max(next->floorHeight, sector->floorHeight), v1.z} };
 
 						const EditorTexture* tex = calculateTextureCoords(wall, &wall->tex[WP_MID], wallLengthTexels, fabsf(corners[1].y - corners[0].y), flipHorz, uvCorners);
-						TFE_RenderShared::triDraw3d_addQuadTextured(TRIMODE_BLEND, corners, uvCorners, wallColor, tex->frames[0]);
+						if (tex) { TFE_RenderShared::triDraw3d_addQuadTextured(TRIMODE_BLEND, corners, uvCorners, wallColor, tex->frames[0]); }
 					}
 				}
 			}
@@ -2368,8 +2580,8 @@ namespace LevelEditor
 			{
 				for (u32 v = 0; v < vtxCount; v++)
 				{
-					uvFlr[v]  = { (triVtx[v].x - floorOffset.x) / 8.0f, (triVtx[v].z - floorOffset.z) / 8.0f };
-					uvCeil[v] = { (triVtx[v].x - ceilOffset.x) / 8.0f, (triVtx[v].z - ceilOffset.z) / 8.0f };
+					computeFlatUv(&triVtx[v], &floorOffset, &uvFlr[v]);
+					computeFlatUv(&triVtx[v], &ceilOffset, &uvCeil[v]);
 				}
 			}
 
@@ -2413,23 +2625,23 @@ namespace LevelEditor
 		{
 			bool locked = sector_isLocked((EditorSector*)visObjSector[o]);
 			u32 objColor = (s_editMode == LEDIT_ENTITY && !locked) ? 0xffffffff : 0x80ffffff;
-			drawEntity3D(visObjSector[o], visObj[o], visObjId[o], objColor, cameraRgtXZ, !locked);
+			drawEntity3D(visObjSector[o], visObj[o], visObjId[o], objColor, cameraRgtXZ, !locked, false);
 		}
-				
+								
 		// Draw the 3D cursor.
 		{
 			const f32 distFromCam = TFE_Math::distance(&s_cursor3d, &s_camera.pos);
 			const f32 size = distFromCam * 16.0f / f32(s_viewportSize.z);
 			const f32 sizeExp = distFromCam * 18.0f / f32(s_viewportSize.z);
-			drawBox(&s_cursor3d, size, 3.0f, 0x80ff8020);
+			drawBox3d(&s_cursor3d, size, 3.0f, 0x80ff8020);
 		}
 
 		TFE_RenderShared::triDraw3d_draw(&s_camera, (f32)s_viewportSize.x, (f32)s_viewportSize.z, s_grid.size, s_gridOpacity);
 		TFE_RenderShared::modelDraw_draw(&s_camera, (f32)s_viewportSize.x, (f32)s_viewportSize.z);
 		TFE_RenderShared::lineDraw3d_drawLines(&s_camera, true, false);
-		
-		renderHighlighted3d();
-				
+
+		renderHighlighted3d(visObjCount, visObjSector, visObj, visObjId, cameraRgtXZ);
+												
 		// Movement "rail", if active.
 		if (s_rail.active && s_rail.dirCount > 0)
 		{
@@ -2443,7 +2655,7 @@ namespace LevelEditor
 			}
 			TFE_RenderShared::lineDraw3d_drawLines(&s_camera, false, false);
 		}
-
+				
 		// Draw drag select, if active.
 		if (s_dragSelect.active)
 		{
@@ -2564,7 +2776,7 @@ namespace LevelEditor
 									if (!targetSector) { continue; }
 
 									Vec3f endPoint = { 0 };
-									if (targetWall < 0)
+									if (targetWall < 0 || targetWall >= (s32)targetSector->walls.size())
 									{
 										endPoint.x = (targetSector->bounds[0].x + targetSector->bounds[1].x) * 0.5f;
 										endPoint.y = (targetSector->bounds[0].y + targetSector->bounds[1].y) * 0.5f;
@@ -2703,6 +2915,12 @@ namespace LevelEditor
 		}
 	}
 
+	void computeFlatUv(const Vec2f* pos, const Vec2f* offset, Vec2f* uv)
+	{
+		uv->x =  (offset->x - pos->x) / 8.0f;
+		uv->z = -(offset->z - pos->z) / 8.0f;
+	}
+
 	void renderTexturedSectorPolygon2d(const Polygon* poly, u32 color, EditorTexture* tex, const Vec2f& offset)
 	{
 		const size_t idxCount = poly->triIdx.size();
@@ -2719,7 +2937,7 @@ namespace LevelEditor
 			for (size_t v = 0; v < vtxCount; v++, vtxData++)
 			{
 				transVtx[v] = { vtxData->x * s_viewportTrans2d.x + s_viewportTrans2d.y, vtxData->z * s_viewportTrans2d.z + s_viewportTrans2d.w };
-				uv[v] = { (vtxData->x - offset.x) / 8.0f, (vtxData->z - offset.z) / 8.0f };
+				computeFlatUv(vtxData, &offset, &uv[v]);
 			}
 			triDraw2D_addTextured((u32)idxCount, (u32)vtxCount, transVtx, uv, idxData, color, tex ? tex->frames[0] : nullptr);
 		}
@@ -2749,7 +2967,7 @@ namespace LevelEditor
 		}
 
 		u32 baseColor;
-		if (s_curLayer != sector->layer)
+		if (s_curLayer != sector->layer && !(s_editFlags & LEF_SHOW_ALL_LAYERS))
 		{
 			u32 alpha = 0x40 / (s_curLayer - sector->layer);
 			baseColor = 0x00808000 | (alpha << 24);
@@ -2766,22 +2984,11 @@ namespace LevelEditor
 	void drawSector2d(const EditorSector* sector, Highlight highlight)
 	{
 		EditorSector* hoveredSector = nullptr;
-		EditorSector* curSector = nullptr;
-		s32 hoveredFeatureIndex = -1, curFeatureIndex = -1;
-		HitPart hoveredPart, curPart;
-		if (s_editMode == LEDIT_SECTOR)
-		{
-			selection_getSector(SEL_INDEX_HOVERED, hoveredSector);
-			selection_getSector(0, curSector);
-		}
-		else if (s_editMode == LEDIT_WALL)
-		{
-			selection_getSurface(SEL_INDEX_HOVERED, hoveredSector, hoveredFeatureIndex, &hoveredPart);
-			selection_getSurface(0, curSector, curFeatureIndex, &curPart);
-		}
+		s32 hoveredFeatureIndex = -1;
+		selection_get(SEL_INDEX_HOVERED, hoveredSector, hoveredFeatureIndex);
 
 		// Draw a background polygon to help sectors stand out a bit.
-		if (sector->layer == s_curLayer)
+		if (sector_onActiveLayer(sector))
 		{
 			if (s_sectorDrawMode == SDM_GROUP_COLOR)
 			{
@@ -2798,18 +3005,17 @@ namespace LevelEditor
 		}
 
 		// Draw lines.
-		const size_t wallCount = sector->walls.size();
+		const size_t wallCount = (s32)sector->walls.size();
 		const EditorWall* wall = sector->walls.data();
 		const Vec2f* vtx = sector->vtx.data();
-		for (size_t w = 0; w < wallCount; w++, wall++)
+		for (s32 w = 0; w < wallCount; w++, wall++)
 		{
 			// Skip hovered or selected walls.
 			if (s_editMode == LEDIT_WALL && ((hoveredSector == sector && hoveredFeatureIndex == w) ||
-				(curSector == sector && curFeatureIndex == w)))
+				selection_action(SA_CHECK_INCLUSION, (EditorSector*)sector, w, HP_MID)))
 			{
 				continue;
 			}
-
 			drawWall2d(sector, wall, 1.0f, highlight);
 		}
 	}
@@ -2926,7 +3132,7 @@ namespace LevelEditor
 
 				// Draw bounds.
 				Highlight hl = HL_NONE;
-				if (sector == curSector && curFeatureIndex == id)
+				if (selection_entity(SA_CHECK_INCLUSION, (EditorSector*)sector, id))
 				{
 					hl = HL_SELECTED;
 				}
@@ -2945,7 +3151,7 @@ namespace LevelEditor
 				Vec2f size = { width*2.0f, width*2.0f };
 
 				Highlight hl = HL_NONE;
-				if (sector == curSector && curFeatureIndex == id)
+				if (selection_entity(SA_CHECK_INCLUSION, (EditorSector*)sector, id))
 				{
 					hl = HL_SELECTED;
 				}
@@ -3007,14 +3213,14 @@ namespace LevelEditor
 		return a->floorHeight < b->floorHeight;
 	}
 
-	void sortSectorPolygons(s32 layer)
+	void sortSectorPolygons()
 	{
 		s_sortedSectors.clear();
 		const size_t count = s_level.sectors.size();
 		EditorSector* sector = s_level.sectors.data();
 		for (size_t s = 0; s < count; s++, sector++)
 		{
-			if (sector->layer != layer) { continue; }
+			if (!sector_onActiveLayer(sector)) { continue; }
 			if (sector_isHidden(sector)) { continue; }
 
 			s_sortedSectors.push_back(sector);
@@ -3027,7 +3233,7 @@ namespace LevelEditor
 		if (s_sectorDrawMode != SDM_TEXTURED_FLOOR && s_sectorDrawMode != SDM_TEXTURED_CEIL && s_sectorDrawMode != SDM_LIGHTING) { return; }
 
 		// Sort polygons.
-		sortSectorPolygons(s_curLayer);
+		sortSectorPolygons();
 
 		// Draw them bottom to top.
 		const size_t count = s_sortedSectors.size();
@@ -3035,6 +3241,7 @@ namespace LevelEditor
 		for (size_t s = 0; s < count; s++)
 		{
 			EditorSector* sector = sectorList[s];
+			if (!sector_inViewRange(sector)) { continue; }
 			bool locked = sector_isLocked(sector);
 			
 			const u32 colorIndex = (s_editFlags & LEF_FULLBRIGHT) && s_sectorDrawMode != SDM_LIGHTING ? 31 : sector->ambient;
@@ -3383,6 +3590,41 @@ namespace LevelEditor
 				const Vec2f pos = { knot->x, knot->z };
 				drawPositionKnot2d(2.0f, pos, 0xffffa500);
 			}
+
+			const size_t subdivCount = guideLine->subdiv.size();
+			const size_t offsetCount = guideLine->offsets.size();
+			const GuidelineSubDiv* subdiv = guideLine->subdiv.data();
+			const f32* offsets = guideLine->offsets.data();
+			const Vec2f* vtx = guideLine->vtx.data();
+			for (size_t k = 0; k < subdivCount; k++, subdiv++)
+			{
+				const s32 e = subdiv->edge;
+				const f32 u = subdiv->param;
+				const GuidelineEdge* edge = &guideLine->edge[e];
+				const Vec2f v0 = vtx[edge->idx[0]];
+				const Vec2f v1 = vtx[edge->idx[1]];
+				Vec2f pos, nrm;
+				if (edge->idx[2] >= 0) // Curve
+				{
+					const Vec2f c = vtx[edge->idx[2]];
+					evaluateQuadraticBezier(v0, v1, c, u, &pos, &nrm);
+				}
+				else // Line
+				{
+					pos.x = v0.x*(1.0f - u) + v1.x*u;
+					pos.z = v0.z*(1.0f - u) + v1.z*u;
+					nrm.x = -(v1.z - v0.z);
+					nrm.z =   v1.x - v0.x;
+					nrm = TFE_Math::normalize(&nrm);
+				}
+
+				drawPositionKnot2d(1.5f, pos, 0x8000a5ff);
+				for (size_t o = 0; o < offsetCount; o++)
+				{
+					const Vec2f offsetPos = { pos.x + nrm.x * offsets[o], pos.z + nrm.z * offsets[o] };
+					drawPositionKnot2d(1.5f, offsetPos, 0x8000a5ff);
+				}
+			}
 		}
 	}
 	
@@ -3391,27 +3633,20 @@ namespace LevelEditor
 		if (layerEnd < layerStart) { return; }
 
 		EditorSector* hoveredSector = nullptr;
-		EditorSector* curSector = nullptr;
-		s32 hoveredFeatureIndex = -1, curFeatureIndex = -1;
 		if (s_editMode == LEDIT_SECTOR)
 		{
 			selection_getSector(SEL_INDEX_HOVERED, hoveredSector);
-			selection_getSector(0, curSector);
 		}
-		else if (s_editMode == LEDIT_WALL)
-		{
-			selection_getSurface(SEL_INDEX_HOVERED, hoveredSector, hoveredFeatureIndex);
-			selection_getSurface(0, curSector, curFeatureIndex);
-		}
-		
+				
 		const size_t count = s_level.sectors.size();
 		EditorSector* sector = s_level.sectors.data();
 		for (size_t s = 0; s < count; s++, sector++)
 		{
 			if (sector->layer < layerStart || sector->layer > layerEnd) { continue; }
 			if (sector_isHidden(sector)) { continue; }
+			if (s_editMode == LEDIT_SECTOR && (sector == hoveredSector || selection_sector(SA_CHECK_INCLUSION, sector))) { continue; }
+			if (!sector_inViewRange(sector)) { continue; }
 
-			if ((sector == hoveredSector || sector == curSector) && s_editMode == LEDIT_SECTOR) { continue; }
 			drawSector2d(sector, sector_isLocked(sector) ? HL_LOCKED : HL_NONE);
 		}
 	}
@@ -3462,7 +3697,7 @@ namespace LevelEditor
 		EditorSector* sector = s_level.sectors.data();
 		for (size_t s = 0; s < sectorCount; s++, sector++)
 		{
-			if (sector->layer != s_curLayer) { continue; }
+			if (!sector_onActiveLayer(sector)) { continue; }
 			if (sector_isHidden(sector)) { continue; }
 
 			const size_t vtxCount = sector->vtx.size();
@@ -3506,36 +3741,7 @@ namespace LevelEditor
 		};
 		triDraw3d_addColored(TRIMODE_OPAQUE, 36, 8, vtx, idx, color, false);
 	}
-
-	void drawBox(const Vec3f* center, f32 side, f32 lineWidth, u32 color)
-	{
-		const f32 w = side * 0.5f;
-		const Vec3f lines[] =
-		{
-			{center->x - w, center->y - w, center->z - w}, {center->x + w, center->y - w, center->z - w},
-			{center->x + w, center->y - w, center->z - w}, {center->x + w, center->y - w, center->z + w},
-			{center->x + w, center->y - w, center->z + w}, {center->x - w, center->y - w, center->z + w},
-			{center->x - w, center->y - w, center->z + w}, {center->x - w, center->y - w, center->z - w},
-
-			{center->x - w, center->y + w, center->z - w}, {center->x + w, center->y + w, center->z - w},
-			{center->x + w, center->y + w, center->z - w}, {center->x + w, center->y + w, center->z + w},
-			{center->x + w, center->y + w, center->z + w}, {center->x - w, center->y + w, center->z + w},
-			{center->x - w, center->y + w, center->z + w}, {center->x - w, center->y + w, center->z - w},
-
-			{center->x - w, center->y - w, center->z - w}, {center->x - w, center->y + w, center->z - w},
-			{center->x + w, center->y - w, center->z - w}, {center->x + w, center->y + w, center->z - w},
-			{center->x + w, center->y - w, center->z + w}, {center->x + w, center->y + w, center->z + w},
-			{center->x - w, center->y - w, center->z + w}, {center->x - w, center->y + w, center->z + w},
-		};
-		u32 colors[12];
-		for (u32 i = 0; i < 12; i++)
-		{
-			colors[i] = color;
-		}
-
-		lineDraw3d_addLines(12, lineWidth, lines, colors);
-	}
-
+	
 	void drawBounds(const Vec3f* center, Vec3f size, f32 lineWidth, u32 color)
 	{
 		const f32 w = size.x * 0.5f;

@@ -11,8 +11,6 @@
 
 #include "VrWrapper/VrWrapper.h"
 
-extern bool s_inMenu;
-
 namespace vr
 {
 	vrw::VrWrapper* g_VrWrapper = nullptr;
@@ -842,7 +840,7 @@ namespace vr
 		if (mouseRelX == 0 && mouseRelY == 0) // ignore if mouse is currently moving
 		{
 			// emulate mouse move & left mouse click if in any menu
-			if (s_inMenu)
+			if (TFE_Settings::getTempSettings()->inMenu)
 			{
 				TFE_Settings_Vr::ScreenToVr* screenToVr = nullptr;
 

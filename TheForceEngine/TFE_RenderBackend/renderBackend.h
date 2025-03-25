@@ -102,7 +102,7 @@ namespace TFE_RenderBackend
 	void setClearColor(const f32* color);
 	void swap(bool blitVirtualDisplay);
 	void queueScreenshot(const char* screenshotPath);
-	void startGifRecording(const char* path);
+	void startGifRecording(const char* path, bool skipCountdown = false);
 	void stopGifRecording();
 	void captureScreenToMemory(u32* mem);
 

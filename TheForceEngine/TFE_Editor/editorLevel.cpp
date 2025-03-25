@@ -41,12 +41,22 @@ namespace TFE_Editor
 		"EXECUTOR",
 		"ARC",
 	};
-
+		
 	static NewLevel s_newLevel = {};
+
+	const char* level_getDarkForcesSlotName(s32 index)
+	{
+		return c_darkForcesSlots[index];
+	}
+
+	s32 level_getDarkForcesSlotCount()
+	{
+		return TFE_ARRAYSIZE(c_darkForcesSlots);
+	}
 
 	void level_prepareNew()
 	{
-		s_newLevel = {};
+		s_newLevel = NewLevel{};
 	}
 
 	bool level_createEmpty(NewLevel& level)

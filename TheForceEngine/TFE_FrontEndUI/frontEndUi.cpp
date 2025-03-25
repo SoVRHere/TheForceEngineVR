@@ -24,11 +24,15 @@
 #include <TFE_Archive/gobMemoryArchive.h>
 #include <TFE_Input/inputMapping.h>
 #include <TFE_Input/touchInput.h>
+#include <TFE_Input/replay.h>
 #include <TFE_Asset/imageAsset.h>
 #include <TFE_Ui/ui.h>
 #include <TFE_Ui/markdown.h>
 #include <TFE_System/utf8.h>
 #include <TFE_Vr/vr.h>
+#include <TFE_ExternalData/dfLogics.h>
+#include <TFE_ExternalData/weaponExternal.h>
+#include <TFE_ExternalData/pickupExternal.h>
 // Game
 #include <TFE_DarkForces/mission.h>
 #include <TFE_DarkForces/gameMusic.h>
@@ -37,7 +41,8 @@
 #include <TFE_DarkForces/config.h>
 #include <TFE_DarkForces/player.h>
 #include <TFE_DarkForces/hud.h>
-
+#include <TFE_Jedi/Renderer/RClassic_Float/rlightingFloat.h>
+#include <TFE_DarkForces/darkForcesMain.h>
 #include <climits>
 #if defined(ANDROID)
 #include <TFE_System/android.h>
@@ -83,6 +88,7 @@ namespace TFE_FrontEndUI
 		CONFIG_GAME,
 		CONFIG_SAVE,
 		CONFIG_LOAD,
+		CONFIG_REPLAY,
 		CONFIG_INPUT,
 		CONFIG_GRAPHICS,
 		CONFIG_HUD,
@@ -93,6 +99,7 @@ namespace TFE_FrontEndUI
 		CONFIG_SOUND,
 		CONFIG_SYSTEM,
 		CONFIG_A11Y,
+		CONFIG_DEVELOPER,
 		CONFIG_COUNT,
 	};
 
@@ -114,6 +121,7 @@ namespace TFE_FrontEndUI
 		"Game Settings",
 		"Save",
 		"Load",
+		"Replay",
 		"Input",
 		"Graphics",
 		"Hud",
@@ -121,7 +129,8 @@ namespace TFE_FrontEndUI
 		"Enhancements",
 		"Sound",
 		"System",
-		"Accessibility (beta)"
+		"Accessibility",
+		"Developer"
 	};
 
 	static const Vec2i c_resolutionDim[] =
@@ -216,6 +225,7 @@ namespace TFE_FrontEndUI
 	static ConfigTab s_configTab;
 	static bool s_modLoaded = false;
 	static bool s_saveLoadSetupRequired = true;
+	static bool s_replaySetupRequired = true;
 	static bool s_bindingPopupOpen = false;
 
 	static bool s_consoleActive = false;
@@ -265,6 +275,7 @@ namespace TFE_FrontEndUI
 
 	// Mod Support
 	static char s_selectedModCmd[TFE_MAX_PATH] = "";
+	std::vector<std::string> s_selectedModOverride;
 
 	void configAbout();
 	void configGame();
@@ -272,6 +283,7 @@ namespace TFE_FrontEndUI
 	bool configEnhancements();
 	void configSave();
 	void configLoad();
+	void configReplay();
 	void configInput();
 	void configGraphics();
 	void configHud();
@@ -283,10 +295,12 @@ namespace TFE_FrontEndUI
 	void DrawLabelledIntSlider(float labelWidth, float valueWidth, const char* label, const char* tag, int* value, int min, int max);
 	void DrawLabelledFloatSlider(float labelWidth, float valueWidth, const char* label, const char* tag, float* value, float min, float max);
 	void configA11y(s32 tabWidth, u32 height);
+	void configDeveloper();
 	void pickCurrentResolution();
 	void manual();
 	void credits();
 
+	void setupReplay();
 	void configSaveLoadBegin(bool save);
 	void renderBackground(bool forceTextureUpdate = false);
 	void Tooltip(const char* text);
@@ -577,6 +591,11 @@ namespace TFE_FrontEndUI
 		s_selectedModCmd[0] = 0;
 		s_relativeMode = false;
 		TFE_Input::enableRelativeMode(s_relativeMode);
+		TFE_ExternalData::getExternalLogics()->actorLogics.clear();		// clear custom logics
+		TFE_ExternalData::clearExternalWeapons();						// clear weapons
+		TFE_ExternalData::clearExternalProjectiles();					// clear projectiles
+		TFE_ExternalData::clearExternalEffects();						// clear effects
+		TFE_ExternalData::clearExternalPickups();						// clear pickups
 
 		if (TFE_Settings::getSystemSettings()->returnToModLoader && s_modLoaded)
 		{
@@ -903,6 +922,11 @@ namespace TFE_FrontEndUI
 		ImGui::PopStyleVar();
 	}
 
+	IGame* getCurrentGame()
+	{
+		return s_game;
+	}
+
 	void draw(bool drawFrontEnd, bool noGameData, bool setDefaults, bool showFps)
 	{
 		const u32 windowInvisFlags = ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoSavedSettings;
@@ -1224,6 +1248,13 @@ namespace TFE_FrontEndUI
 				TFE_Settings::writeToDisk();
 				inputMapping_serialize();
 			}
+			if (ImGui::Button("Replay", sideBarButtonSize))
+			{
+				s_configTab = CONFIG_REPLAY;
+				setupReplay();
+				TFE_Settings::writeToDisk();
+				inputMapping_serialize();
+			}
 			if (ImGui::Button("Input", sideBarButtonSize))
 			{
 				s_configTab = CONFIG_INPUT;
@@ -1268,6 +1299,12 @@ namespace TFE_FrontEndUI
 				TFE_Settings::writeToDisk();
 				inputMapping_serialize();
 			}
+			if (ImGui::Button("Developer", sideBarButtonSize))
+			{
+				s_configTab = CONFIG_DEVELOPER;
+				TFE_Settings::writeToDisk();
+				inputMapping_serialize();
+			}
 			ImGui::Separator();
 			if (ImGui::Button("Return", sideBarButtonSize))
 			{
@@ -1293,9 +1330,9 @@ namespace TFE_FrontEndUI
 
 			ImGui::End();
 
-			// adjust the width based on tab.
+			// Adjust the width based on tab.
 			s32 tabWidth = w - s32(160*s_uiScale);
-			if (s_configTab >= CONFIG_INPUT && s_configTab < CONFIG_SYSTEM || s_configTab == CONFIG_A11Y)
+			if (s_configTab >= CONFIG_INPUT && s_configTab < CONFIG_SYSTEM || s_configTab == CONFIG_A11Y || s_configTab == CONFIG_DEVELOPER)
 			{
 				tabWidth = s32(414*s_uiScale);
 			}
@@ -1333,6 +1370,9 @@ namespace TFE_FrontEndUI
 			case CONFIG_LOAD:
 				configLoad();
 				break;
+			case CONFIG_REPLAY:
+				configReplay();
+				break;
 			case CONFIG_INPUT:
 				configInput();
 				break;
@@ -1355,6 +1395,9 @@ namespace TFE_FrontEndUI
 				break;
 			case CONFIG_A11Y:
 				configA11y(tabWidth, h);
+				break;
+			case CONFIG_DEVELOPER:
+				configDeveloper();
 				break;
 			};
 			renderBackground(forceTextureUpdate);
@@ -1608,6 +1651,18 @@ namespace TFE_FrontEndUI
 			gameSettings->df_solidWallFlagFix = solidWallFlagFix;
 		}
 
+		bool enableUnusedItem = gameSettings->df_enableUnusedItem;
+		if (ImGui::Checkbox("Enable unused inventory item \"ITEM10\"", &enableUnusedItem))
+		{
+			gameSettings->df_enableUnusedItem = enableUnusedItem;
+		}
+
+		bool jsonAiLogics = gameSettings->df_jsonAiLogics;
+		if (ImGui::Checkbox("Enable custom AI logics from JSON files", &jsonAiLogics))
+		{
+			gameSettings->df_jsonAiLogics = jsonAiLogics;
+		}
+
 		if (s_drawNoGameDataMsg)
 		{
 			ImGui::Separator();
@@ -1800,6 +1855,31 @@ namespace TFE_FrontEndUI
 		}
 	}
 
+	bool enhanceGOBExists()
+	{
+		TFE_GameHeader* darkForces = TFE_Settings::getGameHeader("Dark Forces");
+		char testFile[TFE_MAX_PATH];
+		sprintf(testFile, "%senhanced.gob", darkForces->sourcePath);
+		return FileUtil::exists(testFile);
+	}
+
+	// Expose the function to toggle enhancements.
+	bool toggleEnhancements()
+	{
+		if (enhanceGOBExists())
+		{
+			TFE_Settings_Enhancements* enhancements = TFE_Settings::getEnhancementsSettings();
+			bool useHdAssets = enhancements->enableHdTextures && enhancements->enableHdSprites && enhancements->enableHdHud;
+			enhancements->enableHdTextures = !useHdAssets;
+			enhancements->enableHdSprites = !useHdAssets;
+			enhancements->enableHdHud = !useHdAssets;
+
+			renderBackground(true);
+			return useHdAssets;
+		}
+		return false;
+	}
+
 	bool configEnhancements()
 	{
 		s32 browseWinOpen = -1;
@@ -1808,19 +1888,12 @@ namespace TFE_FrontEndUI
 		//////////////////////////////////////////////////////
 		// Source Game Data
 		//////////////////////////////////////////////////////
-		TFE_GameHeader* darkForces = TFE_Settings::getGameHeader("Dark Forces");
 		ImGui::PushFont(s_dialogFont);
 		ImGui::LabelText("##ConfigLabel", "Enhanced Assets");
 		ImGui::PopFont();
 
 		// Try to open 'enhanced.gob'.
-		bool enhancedGobExists = false;
-		char testFile[TFE_MAX_PATH];
-		sprintf(testFile, "%senhanced.gob", darkForces->sourcePath);
-		if (FileUtil::exists(testFile))
-		{
-			enhancedGobExists = true;
-		}
+		bool enhancedGobExists = enhanceGOBExists();
 
 		if (enhancedGobExists)
 		{
@@ -1855,6 +1928,15 @@ namespace TFE_FrontEndUI
 			enhancements->enableHdSprites = false;
 			enhancements->enableHdHud = false;
 		}
+
+		ImGui::Spacing();
+		bool useHdAssets = enhancements->enableHdTextures && enhancements->enableHdSprites && enhancements->enableHdHud;
+		if (ImGui::Checkbox("Use HD Assets", &useHdAssets))
+		{
+			toggleEnhancements();
+		}
+		ImGui::Separator();
+		ImGui::Spacing();
 
 		bool useHdTextures = enhancements->enableHdTextures;
 		if (ImGui::Checkbox("Use HD Textures", &useHdTextures))
@@ -2247,6 +2329,464 @@ namespace TFE_FrontEndUI
 	{
 		saveLoadDialog(false);
 	}
+
+	
+
+	///////////////////////////////////////////////////////////////////////////////
+	// Replay  UI
+	///////////////////////////////////////////////////////////////////////////////
+
+	static std::vector<TFE_SaveSystem::SaveHeader> s_replayDirContents;
+	static TextureGpu* s_replayImageView = nullptr;
+	static s32 s_selectedReplay = -1;
+	static s32 s_selectedReplaySlot = -1;
+	static char s_replayFileName[TFE_MAX_PATH];
+	static char s_replayGameConfirmMsg[TFE_MAX_PATH];
+	static char s_newReplayName[256];
+	static char s_replayLevelId[256];
+	static char s_modReplayName[256];
+	static char s_levelReplayName[256];
+	static s32  s_replayVersion = 0;
+
+	static const char * c_frameRecording[] =
+	{
+		"30",
+		"60",
+		"90",
+		"120",
+		"240",
+	};
+
+	static const char* c_framePlayback[] =
+	{
+		"Original",
+		"30",
+		"60",
+		"90",
+		"120",
+		"240",
+		"Unlimited"
+	};
+
+	void clearReplayImage()
+	{
+		u32 zero[TFE_SaveSystem::SAVE_IMAGE_WIDTH * TFE_SaveSystem::SAVE_IMAGE_HEIGHT];
+		memset(zero, 0, sizeof(u32) * TFE_SaveSystem::SAVE_IMAGE_WIDTH * TFE_SaveSystem::SAVE_IMAGE_HEIGHT);
+		s_replayImageView->update(zero, TFE_SaveSystem::SAVE_IMAGE_WIDTH * TFE_SaveSystem::SAVE_IMAGE_HEIGHT * 4);
+	}
+
+	void updateReplayImage(s32 index)
+	{
+		s_replayImageView->update(s_replayDirContents[index].imageData, TFE_SaveSystem::SAVE_IMAGE_WIDTH * TFE_SaveSystem::SAVE_IMAGE_HEIGHT * 4);
+	}
+
+	void openReplayConfirmPopup()
+	{
+		sprintf(s_replayGameConfirmMsg, "   Load Replay?");
+		ImGui::OpenPopup(s_replayGameConfirmMsg);
+		s_popupOpen = true;
+		s_popupSetFocus = true;
+	}
+
+	void closeReplayEditPopup()
+	{
+		s_popupOpen = false;
+		s_popupSetFocus = false;
+		ImGui::CloseCurrentPopup();
+	}
+
+	void exitReplayMenu()
+	{
+		s_subUI = FEUI_NONE;
+		if (s_appState != APP_STATE_GAME)
+		{
+			s_appState = s_menuRetState;
+		}
+		s_drawNoGameDataMsg = false;
+		TFE_Input::enableRelativeMode(s_relativeMode);
+	}
+
+	void setupReplay()
+	{
+		s_selectedReplay = 0;
+
+		if (!s_replayImageView)
+		{
+			s_replayImageView = TFE_RenderBackend::createTexture(TFE_SaveSystem::SAVE_IMAGE_WIDTH, TFE_SaveSystem::SAVE_IMAGE_HEIGHT, TexFormat::TEX_RGBA8);
+		}
+		TFE_Input::populateReplayDirectory(s_replayDirContents);
+
+		if (!s_replayDirContents.empty())
+		{
+			updateReplayImage(s_selectedReplay);
+		}
+		else
+		{
+			clearReplayImage();
+		}
+
+		s_popupOpen = false;
+		s_replaySetupRequired = false;
+		s_popupSetFocus = false;
+	}
+
+	void replayDialog()
+	{
+		if (s_replaySetupRequired)
+		{
+			setupReplay();
+		}
+
+		// Create the current display info to adjust menu sizes.
+		DisplayInfo displayInfo;
+		TFE_RenderBackend::getDisplayInfo(&displayInfo);
+
+		f32 leftColumn = displayInfo.width < 1200 ? 196.0f * s_uiScale : 256.0f * s_uiScale;
+		f32 rightColumn = leftColumn + ((f32)TFE_SaveSystem::SAVE_IMAGE_WIDTH + 32.0f) * s_uiScale;
+		const s32 listOffset = 0;
+
+		// Left Column
+		ImGui::SetNextWindowPos(ImVec2(leftColumn, floorf(displayInfo.height * 0.07f)));
+
+		ImGui::BeginChild("##ImageAndInfo");
+		{
+			// Image
+			ImVec2 size((f32)TFE_SaveSystem::SAVE_IMAGE_WIDTH, (f32)TFE_SaveSystem::SAVE_IMAGE_HEIGHT);
+			size.x *= s_uiScale;
+			size.y *= s_uiScale;
+
+			ImGui::Image(TFE_RenderBackend::getGpuPtr(s_replayImageView), size,
+				ImVec2(0, 0), ImVec2(1, 1), ImVec4(1, 1, 1, 1), ImVec4(0.5f, 0.5f, 0.5f, 1.0f));			
+
+			// Replay Info
+			size.y = 200 * s_uiScale;
+			ImGui::BeginChild("##InfoWithBorder", size, true, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+			{
+				if (!s_replayDirContents.empty())
+				{
+					ImGui::PushFont(s_dialogFont);
+					ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+
+					char textBuffer[TFE_MAX_PATH];
+					bool modExist = modLoader_exist(s_replayDirContents[s_selectedReplay - listOffset].modNames);
+					char modExistStr[256];
+
+					string versionStr = std::to_string(s_replayDirContents[s_selectedReplay - listOffset].saveVersion);
+					if (!TFE_SaveSystem::versionValid(s_replayDirContents[s_selectedReplay - listOffset].saveVersion))
+					{
+						versionStr = versionStr + " ( INCOMPATIBLE! )";
+					}
+					sprintf(modExistStr, modExist ? "" : "Missing %s", s_replayDirContents[s_selectedReplay - listOffset].modNames);
+					sprintf(textBuffer, "Game: Dark Forces\nTime: %s\nLevel: %s\nLevel Id: %s\nMods: %s\n%s\nDuration: %d\nVersion: %s", s_replayDirContents[s_selectedReplay - listOffset].dateTime,
+						s_replayDirContents[s_selectedReplay - listOffset].levelName, s_replayDirContents[s_selectedReplay - listOffset].levelId, s_replayDirContents[s_selectedReplay - listOffset].modNames, modExistStr, s_replayDirContents[s_selectedReplay - listOffset].replayCounter, versionStr.c_str());
+					ImGui::InputTextMultiline("##Info", textBuffer, strlen(textBuffer) + 1, size, ImGuiInputTextFlags_ReadOnly);
+
+					ImGui::PopFont();
+					ImGui::PopStyleColor();
+				}
+				else
+				{
+					ImGui::PushFont(s_dialogFont);
+					ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+
+					char textBuffer[TFE_MAX_PATH];
+					sprintf(textBuffer, "Game: Dark Forces\nTime:\n\nLevel:\nLevel Id:\nMods:\n");
+					ImGui::InputTextMultiline("##Info", textBuffer, strlen(textBuffer) + 1, size, ImGuiInputTextFlags_ReadOnly);
+
+					ImGui::PopFont();
+					ImGui::PopStyleColor();
+				}
+			}
+			ImGui::EndChild();
+			ImGui::Spacing();
+			ImGui::TextWrapped("Note: Pausing the game will stop demo playback/recording");
+			ImGui::TextWrapped("Press the");
+			ImGui::SameLine(0.0f);
+			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 0.8f));
+			ImGui::TextWrapped("Escape");
+			ImGui::PopStyleColor();
+			ImGui::SameLine(0.0f);
+			ImGui::TextWrapped("key to stop and save recording.");
+			ImGui::Spacing();
+
+			ImGui::PushFont(s_dialogFont);
+			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.0f, 0.0f, 0.8f));
+			ImGui::LabelText("##ConfigLabel", "Recording");
+			ImGui::PopStyleColor();
+			ImGui::PopFont();
+			ImGui::Spacing();
+
+			TFE_Settings_Game* gameSettings = TFE_Settings::getGameSettings();
+			bool enableRecordAll = gameSettings->df_enableRecordingAll;
+			bool enableRecord = gameSettings->df_enableRecording || enableRecordAll;
+
+			if (enableRecordAll)
+			{
+				enableRecord = true;
+			}
+
+			size.x = 420 * s_uiScale;
+			#ifdef _WIN32
+			size.y = 85 * s_uiScale;
+			#else
+			size.y = 100 * s_uiScale;
+			#endif		
+			
+			ImGui::BeginChild("##InfoWithBorderRecord", size, true);
+			{
+				ImGui::TextWrapped("When this checkbox is pressed simply start any mission and the game will record the mission for replay.");
+				ImGui::Spacing();
+
+				// Change the colors if recording all.
+				if (enableRecordAll)
+				{
+					ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.5f, 0.5f, 0.5f, 0.8f));
+					ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.5f, 0.5f, 0.5f, 0.8f));
+					ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4(0.5f, 0.5f, 0.5f, 0.8f));
+					ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(0.5f, 0.5f, 0.5f, 0.8f));
+				}
+
+				if (ImGui::Checkbox("Record next mission", &enableRecord))
+				{
+					gameSettings->df_enableRecording = enableRecord;
+					gameSettings->df_enableReplay = false;
+					TFE_DarkForces::enableCutscenes(true);
+				}
+
+				if (enableRecordAll)
+				{
+					ImGui::PopStyleColor();
+					ImGui::PopStyleColor();
+					ImGui::PopStyleColor();
+					ImGui::PopStyleColor();
+					gameSettings->df_enableRecording = true;
+				}
+				ImGui::SameLine(0.0f);
+				if (ImGui::Checkbox("Always Record missions", &enableRecordAll))
+				{
+					gameSettings->df_enableRecordingAll = enableRecordAll;
+					gameSettings->df_enableRecording = true;
+					gameSettings->df_enableReplay = false;
+					TFE_DarkForces::enableCutscenes(true);
+				}
+
+				ImGui::LabelText("##FrameRecord", "Recording FrameRate");
+				ImGui::SameLine(160 * s_uiScale);
+				ImGui::SetNextItemWidth(64.0f);
+				ImGui::Combo("##frameRecordingText", &gameSettings->df_recordFrameRate, c_frameRecording, IM_ARRAYSIZE(c_frameRecording));
+				ImGui::Spacing();
+
+			}
+			ImGui::EndChild();
+
+			ImGui::PushFont(s_dialogFont);
+			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.0f, 1.0f, 0.0f, 0.8f));
+
+			ImGui::LabelText("##InfoReplay5", "Playback");
+			ImGui::PopStyleColor();
+			ImGui::PopFont();
+
+			#ifdef _WIN32
+			size.y = 100 * s_uiScale;
+			#else
+			size.y = 120 * s_uiScale;
+			#endif		
+
+			ImGui::BeginChild("##InfoWithBorderPlayBack", size, true);
+			{
+				ImGui::Spacing();
+				ImGui::LabelText("##InfoReplay6", "Playback FrameRate");
+				ImGui::SameLine(135 * s_uiScale);
+				ImGui::SetNextItemWidth(140.0f);
+				ImGui::Combo("##framePlayback", &gameSettings->df_playbackFrameRate, c_framePlayback, IM_ARRAYSIZE(c_framePlayback));
+				ImGui::Spacing();
+				ImGui::TextWrapped("You can speed-up or slow-down playback with Numpad +/-\nYou can rebind these in the Inputs section");
+
+				ImGui::Checkbox("Show Record/Playback progress", &gameSettings->df_showReplayCounter);
+				ImGui::Checkbox("Enable Demo Logging", &gameSettings->df_demologging);
+			}
+			ImGui::EndChild();
+
+			#ifdef _WIN32
+			ImGui::Spacing();
+			if (ImGui::Button("Open Replay Folder")) 
+			{
+				if (!TFE_System::osShellExecute(s_replayDir, NULL, NULL, false))
+				{
+					TFE_System::logWrite(LOG_ERROR, "frontEndUi", "Failed to open the directory: '%s'", s_replayDir);
+				}
+			}
+			ImGui::SameLine(0.0f);
+            #endif		
+
+			if (ImGui::Button("Refresh Demo Folder"))
+			{
+				TFE_Input::populateReplayDirectory(s_replayDirContents);
+				if (!s_replayDirContents.empty())
+				{
+					updateReplayImage(s_selectedReplay - listOffset);
+				}
+				else
+				{
+					clearReplayImage();
+				}
+			}
+		}
+		ImGui::EndChild();
+
+		// Right Column
+		f32 rwidth = 1024.0f * s_uiScale;
+		if (rightColumn + rwidth > displayInfo.width - 64.0f)
+		{
+			rwidth = displayInfo.width - 64.0f - rightColumn;
+		}
+
+		f32 rheight = displayInfo.height - 100.0f;
+		ImGui::SetNextWindowPos(ImVec2(rightColumn, 64.0f * s_uiScale));
+		ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(1.0f, 0.0f, 0.0f, 0.0f));
+		ImGui::BeginChild("##FileList", ImVec2(rwidth, rheight), true);
+		{
+			const size_t count = s_replayDirContents.size() + size_t(listOffset);
+			const TFE_SaveSystem::SaveHeader* header = s_replayDirContents.data();
+			ImVec2 buttonSize(rwidth - 2.0f, floorf(20 * s_uiScale + 0.5f));
+			ImGui::PushFont(s_dialogFont);
+			s32 prevSelected = s_selectedReplay;
+			for (size_t i = 0; i < count; i++)
+			{
+				bool selected = i == s_selectedReplay;
+				const char* replayName;
+				replayName = header[i - listOffset].fileName;
+				
+				// Color things differently depending if the mod exists or if the version is valid.
+				if (!TFE_SaveSystem::versionValid(s_replayDirContents[s32(i) - listOffset].saveVersion))
+				{
+					ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.0f, 0.0f, 0.75f));
+				}
+				else
+				{
+					if (!modLoader_exist(s_replayDirContents[s32(i) - listOffset].modNames))
+					{
+						ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 0.75f));
+					}
+					else
+					{
+						ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.0f, 1.0f, 0.0f, 0.75f));
+					}
+				}
+
+				if (ImGui::Selectable(replayName, selected, ImGuiSelectableFlags_None, buttonSize))
+				{
+					if (!s_popupOpen)
+					{
+						s_selectedReplay = s32(i);
+						s_selectedReplaySlot = s_selectedReplay - listOffset;
+						bool shouldExit = false;
+						strcpy(s_replayFileName, s_replayDirContents[s_selectedReplaySlot].fileName);
+						strcpy(s_newReplayName, s_replayDirContents[s_selectedReplaySlot].saveName);
+						strcpy(s_modReplayName, s_replayDirContents[s_selectedReplaySlot].modNames);
+						strcpy(s_levelReplayName, s_replayDirContents[s_selectedReplaySlot].levelName);
+						strcpy(s_replayLevelId, s_replayDirContents[s_selectedReplaySlot].levelId);
+						s_replayVersion = s_replayDirContents[s_selectedReplaySlot].saveVersion;
+						openReplayConfirmPopup();
+						if (shouldExit)
+						{
+							exitLoadSaveMenu();
+						}
+					}
+				}
+				else if ((ImGui::IsItemHovered() || ImGui::IsItemClicked()) && !s_popupOpen)
+				{
+					s_selectedReplay = s32(i);
+				}
+
+				ImGui::PopStyleColor();
+			}
+			if (prevSelected != s_selectedReplay)
+			{
+				s32 index = s_selectedReplay - listOffset;
+				if (index >= 0)
+				{
+					updateReplayImage(s_selectedReplay - listOffset);
+				}
+				else
+				{
+					clearReplayImage();
+				}
+			}
+			prevSelected = s_selectedReplay;
+			if (ImGui::BeginPopupModal(s_replayGameConfirmMsg, NULL, ImGuiWindowFlags_AlwaysAutoResize))
+			{
+				bool shouldExit = false;
+				if (s_popupSetFocus)
+				{
+					ImGui::SetKeyboardFocusHere();
+					s_popupSetFocus = false;
+				}
+
+				if (!TFE_SaveSystem::versionValid(s_replayVersion))
+				{
+					ImGui::Text("Incompatible Replay Version", s_modReplayName);
+				}
+				else if (modLoader_exist(s_modReplayName))
+				{
+					ImGui::SetNextItemWidth(768 * s_uiScale);
+
+					// Set the replay path	
+					char replayFilePath[TFE_MAX_PATH];
+					sprintf(replayFilePath, "%s%s", s_replayDir, s_replayFileName);
+					if (TFE_Input::keyPressed(KEY_RETURN))
+					{
+						shouldExit = true;
+						loadReplayWrapper(replayFilePath, s_modReplayName, s_replayLevelId);
+					}
+					if (ImGui::Button("OK", ImVec2(120, 0)))
+					{
+						shouldExit = true;
+						loadReplayWrapper(replayFilePath, s_modReplayName, s_replayLevelId);
+					}
+				}
+				else 
+				{
+					ImGui::Text("Mod %s not found", s_modReplayName);
+				}
+				ImGui::SameLine(0.0f, 32.0f);
+				if (ImGui::Button("Cancel", ImVec2(120, 0)))
+				{
+					shouldExit = false;
+					closeReplayEditPopup();
+				}
+				ImGui::EndPopup();
+
+				if (shouldExit)
+				{
+					exitReplayMenu();
+				}
+			}
+			ImGui::PopFont();
+			ImGui::PopStyleColor();
+		}
+		ImGui::EndChild();
+		s_selectedReplaySlot = s_selectedReplay - listOffset;
+	}
+
+	int getRecordFramerate()
+	{
+		TFE_Settings_Game* gameSettings = TFE_Settings::getGameSettings();
+		return std::atoi(c_frameRecording[gameSettings->df_recordFrameRate]);
+	}
+
+	std::string getPlaybackFramerate()
+	{
+		TFE_Settings_Game* gameSettings = TFE_Settings::getGameSettings();
+		return std::string(c_framePlayback[gameSettings->df_playbackFrameRate]);
+	}
+
+	void configReplay()
+	{
+		replayDialog();
+	}
+
+	// INPUT HANDLING
 		
 	void getBindingString(InputBinding* binding, char* inputName)
 	{
@@ -2592,13 +3132,21 @@ namespace TFE_FrontEndUI
 				inputMapping("Headwave",          IADF_HEADWAVE_TOGGLE);
 				inputMapping("HUD Toggle",        IADF_HUD_TOGGLE);
 				inputMapping("Holster Weapon",    IADF_HOLSTER_WEAPON);
+				inputMapping("HD Asset Toggle",   IADF_HD_ASSET_TOGGLE);
 				inputMapping("Automount Toggle",  IADF_AUTOMOUNT_TOGGLE);
 				inputMapping("Cycle Prev Weapon", IADF_CYCLEWPN_PREV);
 				inputMapping("Cycle Next Weapon", IADF_CYCLEWPN_NEXT);
 				inputMapping("Prev Weapon",       IADF_WPN_PREV);
 				inputMapping("Pause",             IADF_PAUSE);
 				inputMapping("Automap",           IADF_AUTOMAP);
-								
+				inputMapping("Screenshot",        IADF_SCREENSHOT);
+				inputMapping("GIF Recording",     IADF_GIF_RECORD);				
+				Tooltip("Display a countdown and then start recording a GIF. Press again to stop recording.");
+				inputMapping("Instant GIF Record",IADF_GIF_RECORD_NO_COUNTDOWN);
+				Tooltip("Start recording immediately without the countdown. Press again to stop recording.");
+				inputMapping("Playback Speedup",  IADF_DEMO_SPEEDUP);
+				inputMapping("Playback Slowdown", IADF_DEMO_SLOWDOWN);
+				
 				ImGui::Separator();
 
 				ImGui::PushFont(s_dialogFont);
@@ -3162,7 +3710,7 @@ namespace TFE_FrontEndUI
 		ImGui::Separator();
 
 		ImGui::SetNextItemWidth(196*s_uiScale);
-		ImGui::SliderFloat("Scale", &hud->scale, 0.0f, 15.0f, "%.2f"); ImGui::SameLine(0.0f, 32.0f*s_uiScale);
+		ImGui::SliderFloat("Scale", &hud->scale, 0.0f, 15.0f, "%.2f"); ImGui::SameLine(0.0f, 29.5f*s_uiScale);
 		ImGui::SetNextItemWidth(128 * s_uiScale);
 		ImGui::InputFloat("##HudScaleText", &hud->scale, 0.01f, 0.1f, "%.3f", ImGuiInputTextFlags_CharsHexadecimal);
 
@@ -3730,8 +4278,38 @@ namespace TFE_FrontEndUI
 		f32 labelW = 140 * s_uiScale;
 		f32 valueW = 260 * s_uiScale - 10;
 		s32 framerate = (s32)system->gifRecordingFramerate;
-		DrawLabelledIntSlider(labelW, valueW - 2, "GIF Recording Framerate", "##CBO", &framerate, 10, 30);
+		DrawLabelledIntSlider(labelW, valueW - 2, "GIF Record Framerate", "##CBO", &framerate, 10, 30);
+		Tooltip("Number of frames per second to capture when recording a GIF.");
 		system->gifRecordingFramerate = (f32)framerate;
+
+		bool showGifPathConfirmation = system->showGifPathConfirmation;
+		if (ImGui::Checkbox("Show file path when recording ends", &showGifPathConfirmation))
+		{
+			system->showGifPathConfirmation = showGifPathConfirmation;
+		}
+		Tooltip("Appears in upper-left corner of screen. If disabled, a generic 'recording saved' message will be shown instead.");
+
+	#ifdef _WIN32
+		ImGui::Separator();
+		if (ImGui::Button("Open Log Folder"))
+		{
+			char logDir[TFE_MAX_PATH];
+			TFE_Paths::appendPath(TFE_PathType::PATH_USER_DOCUMENTS, "", logDir);
+			if (!TFE_System::osShellExecute(logDir, NULL, NULL, false))
+			{
+				TFE_System::logWrite(LOG_ERROR, "Settings", "Failed to open directory: '%s'", logDir);
+			}
+		}
+		if (ImGui::Button("Open Screenshots Folder"))
+		{
+			char screenshotDir[TFE_MAX_PATH];
+			TFE_Paths::appendPath(TFE_PathType::PATH_USER_DOCUMENTS, "Screenshots/", screenshotDir);
+			if (!TFE_System::osShellExecute(screenshotDir, NULL, NULL, false))
+			{
+				TFE_System::logWrite(LOG_ERROR, "Settings", "Failed to open directory: '%s'", screenshotDir);
+			}
+		}
+	#endif
 	}
 
 	void DrawFontSizeCombo(float labelWidth, float valueWidth, const char* label, const char* comboTag, s32* currentValue)
@@ -3771,6 +4349,15 @@ namespace TFE_FrontEndUI
 		ImGui::SetNextItemWidth(valueWidth);
 		ImGui::SliderFloat(tag, value, min, max);
 	}
+
+	void DrawLabelledFloat3Slider(float labelWidth, float valueWidth, const char* label, const char* tag, float* value, float min, float max)
+	{
+		ImGui::SetNextItemWidth(labelWidth);
+		ImGui::LabelText("##ConfigLabel", "%s", label);
+		ImGui::SameLine();
+		ImGui::SetNextItemWidth(valueWidth);
+		ImGui::SliderFloat3(tag, value, min, max);
+	}
 	
 	void DrawLabelledIntSlider(float labelWidth, float valueWidth, const char* label, const char* tag, int* value, int min, int max)
 	{
@@ -3805,7 +4392,25 @@ namespace TFE_FrontEndUI
 		return currentFilePath;	
 	}
 
+	void pickCurrentResolution()
+	{
+		TFE_Settings_Graphics* graphics = TFE_Settings::getGraphicsSettings();
+
+		const size_t count = TFE_ARRAYSIZE(c_resolutionDim);
+		for (size_t i = 0; i < count; i++)
+		{
+			if (graphics->gameResolution.z == c_resolutionDim[i].z)
+			{
+				s_resIndex = s32(i);
+				return;
+			}
+		}
+		s_resIndex = count;
+	}
+
+	////////////////////////////////////////////////////////////////
 	// Accessibility
+	////////////////////////////////////////////////////////////////
 	void configA11y(s32 tabWidth, u32 height)
 	{
 		// WINDOW --------------------------------------------
@@ -3873,7 +4478,7 @@ namespace TFE_FrontEndUI
 		Tooltip("Reimport caption and font files. Use if you add, remove, or modify caption or font files in a TFE directory while TFE is running. Please wait a moment for files to refresh.");
 
 		// CUTSCENES -----------------------------------------
-		ImGui::Dummy(ImVec2(0.0f, 10.0f));
+		ImGui::Dummy(ImVec2(0.0f, 10.0f)); // Makes some empty space.
 		ImGui::PushFont(s_versionFont);
 		ImGui::LabelText("##ConfigLabel", "Cutscenes");
 		ImGui::PopFont();
@@ -3938,20 +4543,75 @@ namespace TFE_FrontEndUI
 			", implicitly enabled in VR.");
 	}
 
-	void pickCurrentResolution()
-	{
-		TFE_Settings_Graphics* graphics = TFE_Settings::getGraphicsSettings();
+	////////////////////////////////////////////////////////////////
+  // Developer controls
+  ////////////////////////////////////////////////////////////////
+	void drawLightControls(s32 index)
 
-		const size_t count = TFE_ARRAYSIZE(c_resolutionDim);
-		for (size_t i = 0; i < count; i++)
+	{
+		f32 labelW = 80 * s_uiScale;
+		f32 valueW = 260 * s_uiScale - 10;
+		string label1 = "Light " + to_string(index);
+		string tag2 = "##LB" + to_string(index);
+		string tag3 = "##LVS" + to_string(index);
+		string tag4 = "##LWS" + to_string(index);
+		ImGui::LabelText("##ConfigLabel3", label1.c_str());
+		DrawLabelledFloatSlider(labelW, valueW * 0.5f - 2, "  Brightness", tag2.c_str(), &RClassic_Float::s_cameraLight[index].brightness, 0.0f, 8.0f);
+		Tooltip("Values above 1.0 only affect obliquely lit faces.");
+
+		vec3_float* lightWS = &RClassic_Float::s_cameraLight[index].lightWS;
+		DrawLabelledFloat3Slider(labelW, valueW, "  WS", tag4.c_str(), &lightWS->x, -150, 150);
+		Tooltip("World-space position of the light source.");
+	}
+
+	void resetLighting()
+	{
+		RClassic_Float::s_cameraLight[0].brightness = 1;
+		RClassic_Float::s_cameraLight[0].lightWS = { 0.0f, 0.0f, 1.0f };
+		RClassic_Float::s_cameraLight[1].brightness = 1;
+		RClassic_Float::s_cameraLight[1].lightWS = { 0.0f, 1.0f, 0.0f };
+		RClassic_Float::s_cameraLight[2].brightness = 1;
+		RClassic_Float::s_cameraLight[2].lightWS = { 1.0f, 0.0f, 0.0f };
+	}
+
+	void configDeveloper()
+	{
+		ImGui::PushFont(s_dialogFont);
+		ImGui::LabelText("##ConfigLabel", "Lighting");
+		ImGui::PopFont();
+
+		TFE_Settings_Graphics* graphicsSettings = TFE_Settings::getGraphicsSettings();
+
+		ImGui::Checkbox("Force Gouraud Shading (Restart Required)", &graphicsSettings->forceGouraudShading);
+		Tooltip("Use gouraud shading for all 3DO models.");
+
+		bool wasOverrideEnabled = graphicsSettings->overrideLighting;
+		if (graphicsSettings->rendererIndex != 0)
 		{
-			if (graphics->gameResolution.z == c_resolutionDim[i].z)
-			{
-				s_resIndex = s32(i);
-				return;
-			}
+			ImGui::TextWrapped("Lighting controls are only available with the software renderer.");
+			return;
 		}
-		s_resIndex = count;
+		ImGui::Checkbox("Override 3DO Lighting (Software Renderer Only)", &graphicsSettings->overrideLighting);
+		Tooltip("If selected, 3DO lighting will be controlled manually from this screen, rather than using engine/map defaults. This setting is not saved.");
+
+		if (!graphicsSettings->overrideLighting)
+		{
+			if (wasOverrideEnabled) { resetLighting(); }
+			return;
+		}
+
+		ImGui::Dummy(ImVec2(0.0f, 10.0f)); // Makes some empty space.
+		ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.75f, 0.75f, 0, 1.0f));
+		ImGui::PopStyleColor();
+
+		drawLightControls(0);
+		drawLightControls(1);
+		drawLightControls(2);
+
+		if (ImGui::Button("Reset"))
+		{
+			resetLighting();
+		}
 	}
 
 	////////////////////////////////////////////////////////////////
@@ -4019,6 +4679,16 @@ namespace TFE_FrontEndUI
 	void setSelectedMod(const char* mod)
 	{
 		strcpy(s_selectedModCmd, mod);
+	}
+
+	void setModOverrides(std::vector<std::string> & argv)
+	{
+		s_selectedModOverride = argv;
+	}
+
+	std::vector<std::string> getModOverrides()
+	{
+		return s_selectedModOverride;
 	}
 
 	void* getGradientTexture()
@@ -4105,6 +4775,8 @@ namespace TFE_FrontEndUI
 				gameSettings->df_smoothVUEs = true;
 				gameSettings->df_pitchLimit = (temp == TEMPLATE_MODERN) ? PITCH_MAXIMUM : PITCH_VANILLA_PLUS;
 				gameSettings->df_solidWallFlagFix = true;
+				gameSettings->df_enableUnusedItem = true;
+				gameSettings->df_jsonAiLogics = true;
 				// Graphics
 				graphicsSettings->rendererIndex = RENDERER_HARDWARE;
 				graphicsSettings->skyMode = SKYMODE_CYLINDER;
@@ -4154,6 +4826,8 @@ namespace TFE_FrontEndUI
 				gameSettings->df_bobaFettFacePlayer = false;
 				gameSettings->df_smoothVUEs = false;
 				gameSettings->df_solidWallFlagFix = false;
+				gameSettings->df_enableUnusedItem = false;
+				gameSettings->df_jsonAiLogics = false;
 				// Graphics
 				graphicsSettings->rendererIndex = RENDERER_SOFTWARE;
 				graphicsSettings->widescreen = false;
@@ -4172,5 +4846,10 @@ namespace TFE_FrontEndUI
 
 		TFE_Settings::writeToDisk();
 		inputMapping_serialize();
+	}
+
+	bool isModUI()
+	{
+		return s_subUI == FEUI_MODS;
 	}
 }

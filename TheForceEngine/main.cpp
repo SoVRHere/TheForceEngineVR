@@ -36,20 +36,24 @@
 #include <sys/types.h>
 #include <sys/timeb.h>
 #endif
+#include <TFE_DarkForces/hud.h>
+#include <TFE_DarkForces/mission.h>
+#include <TFE_DarkForces/GameUI/escapeMenu.h>
+#include <TFE_DarkForces/GameUI/pda.h>
+#include <TFE_Jedi/Renderer/jediRenderer.h>
+#include <TFE_FrontEndUI/frontEndUi.h>
+#include <TFE_Input/replay.h>
 
 #if defined(ANDROID)
 #include <TFE_System/android.h>
 #endif
 
-#include <TFE_Jedi/Renderer/jediRenderer.h>
 #include <TFE_Vr/vr.h>
 
 #ifdef ENABLE_EDITOR
 #include <TFE_Editor/editor.h>
 #endif
-#ifdef ENABLE_FORCE_SCRIPT
 #include <TFE_ForceScript/forceScript.h>
-#endif
 
 #include <TFE_Audio/midiPlayer.h>
 
@@ -61,10 +65,6 @@
 #undef max
 #endif
 #endif
-
-#include <TFE_DarkForces/GameUI/escapeMenu.h>
-#include <TFE_DarkForces/GameUI/pda.h>
-#include <TFE_FrontEndUI/frontEndUi.h>
 
 #define PROGRAM_ERROR   1
 #define PROGRAM_SUCCESS 0
@@ -94,8 +94,6 @@ static char s_screenshotTime[TFE_MAX_PATH];
 static s32  s_startupGame = -1;
 static IGame* s_curGame = nullptr;
 static const char* s_loadRequestFilename = nullptr;
-
-bool s_inMenu = false;
 
 void parseOption(const char* name, const std::vector<const char*>& values, bool longName);
 bool validatePath();
@@ -176,43 +174,7 @@ void handleEvent(const SDL_Event& Event)
 				{
 					windowSettings->fullscreen = !windowSettings->fullscreen;
 					TFE_RenderBackend::enableFullscreen(windowSettings->fullscreen);
-				}
-				else if (code == KeyboardCode::KEY_PRINTSCREEN)
-				{
-					static u64 _screenshotIndex = 0;
-
-					char screenshotDir[TFE_MAX_PATH];
-					TFE_Paths::appendPath(TFE_PathType::PATH_USER_DOCUMENTS, "Screenshots/", screenshotDir);
-										
-					char screenshotPath[TFE_MAX_PATH];
-					sprintf(screenshotPath, "%stfe_screenshot_%s_%" PRIu64 ".png", screenshotDir, s_screenshotTime, _screenshotIndex);
-					_screenshotIndex++;
-
-					TFE_RenderBackend::queueScreenshot(screenshotPath);
-				}
-				else if (code == KeyboardCode::KEY_F2 && altHeld)
-				{
-					static u64 _gifIndex = 0;
-					static bool _recording = false;
-
-					if (!_recording)
-					{
-						char screenshotDir[TFE_MAX_PATH];
-						TFE_Paths::appendPath(TFE_PathType::PATH_USER_DOCUMENTS, "Screenshots/", screenshotDir);
-
-						char gifPath[TFE_MAX_PATH];
-						sprintf(gifPath, "%stfe_gif_%s_%" PRIu64 ".gif", screenshotDir, s_screenshotTime, _gifIndex);
-						_gifIndex++;
-
-						TFE_RenderBackend::startGifRecording(gifPath);
-						_recording = true;
-					}
-					else
-					{
-						TFE_RenderBackend::stopGifRecording();
-						_recording = false;
-					}
-				}
+				}				
 			}
 		} break;
 		case SDL_TEXTINPUT:
@@ -273,70 +235,6 @@ void handleEvent(const SDL_Event& Event)
 		{
 			//TFE_INFO("SDL event", "unknown 0x{:x}", Event.type);
 		} break;
-	}
-}
-
-// emulate mouse move/click by controller if in any menu,
-// ImGui works with SDL events, Agent Menu & PDA with TFE_Input
-void emulateMouseByController(s32 mouseAbsX, s32 mouseAbsY)
-{
-	if (s_inMenu && (!TFE_Settings::getTempSettings()->vr || TFE_Settings::getVrSettings()->ignoreVrControllers))
-	{
-		const f32 elapsed = (f32)TFE_System::getDeltaTime();
-		const f32 moveX = 600.0f * elapsed * TFE_Input::getAxis(Axis::AXIS_RIGHT_X);
-		const f32 moveY = -600.0f * elapsed * TFE_Input::getAxis(Axis::AXIS_RIGHT_Y);
-
-		if ((s32)moveX != 0 || (s32)moveY != 0)
-		{
-			s32 posX, posY;
-			
-			DisplayInfo displayInfo;
-			TFE_RenderBackend::getDisplayInfo(&displayInfo);
-			SDL_Window* wnd = (SDL_Window*)TFE_RenderBackend::getWindow();
-			if (TFE_Settings::getTempSettings()->vr)
-			{
-				s32 w, h;
-				SDL_GetWindowSize(wnd, &w, &h);
-
-				posX = s32((mouseAbsX + moveX) * ((float)w / (float)displayInfo.width));
-				posY = s32((mouseAbsY + moveY) * ((float)h / (float)displayInfo.height));
-			}
-			else
-			{
-				posX = s32(mouseAbsX + moveX);
-				posY = s32(mouseAbsY + moveY);
-			}
-			posX = std::clamp(posX, 0, (s32)displayInfo.width);
-			posY = std::clamp(posY, 0, (s32)displayInfo.height);
-			SDL_WarpMouseInWindow(wnd, posX, posY);
-			TFE_Input::setMousePos(posX, posY);
-		}
-
-		static bool buttonPressed = false;
-		if (TFE_Input::buttonDown(Button::CONTROLLER_BUTTON_A) || TFE_Input::getAxis(AXIS_RIGHT_TRIGGER) > 0.5f)
-		{
-			if (!buttonPressed)
-			{
-				SDL_Event event;
-				event.type = SDL_MOUSEBUTTONDOWN;
-				event.button.which = 0;
-				event.button.button = SDL_BUTTON_LEFT;
-				handleEvent(event);
-				buttonPressed = true;
-			}
-		}
-		else
-		{
-			if (buttonPressed)
-			{
-				SDL_Event event;
-				event.type = SDL_MOUSEBUTTONUP;
-				event.button.which = 0;
-				event.button.button = SDL_BUTTON_LEFT;
-				handleEvent(event);
-				buttonPressed = false;
-			}
-		}
 	}
 }
 
@@ -497,7 +395,7 @@ void setAppState(AppState newState, int argc, char* argv[])
 		if (validatePath())
 		{
 			TFE_Game* gameInfo = TFE_Settings::getGame();
-			if (!s_curGame || gameInfo->id != s_curGame->id)
+			if (!s_curGame || gameInfo->id != s_curGame->id || startReplayStatus())
 			{
 				s_soundPaused = false;
 				if (s_curGame)
@@ -542,7 +440,6 @@ bool systemMenuKeyCombo()
 
 void parseCommandLine(s32 argc, char* argv[])
 {
-	//TFE_SaveSystem::postLoadRequest("save001.tfe"); // load
 	if (argc < 1) { return; }
 
 	const char* curOptionName = nullptr;
@@ -552,6 +449,8 @@ void parseCommandLine(s32 argc, char* argv[])
 	{
 		const char* opt = argv[i];
 		const size_t len = strlen(opt);
+
+		TFE_System::logWrite(LOG_MSG, "Main", "Parsing parameter %s", opt);
 
 		// Is this an option name or value?
 		const char* optValue = nullptr;
@@ -817,6 +716,9 @@ int main(int argc, char* argv[])
 	}
 	generateScreenshotTime();
 
+	// Create Replay Directory
+	initReplays();
+
 	// Initialize SDL
 	if (!sdlInit())
 	{
@@ -888,11 +790,8 @@ int main(int argc, char* argv[])
 
 	// Optional Reticle.
 	reticle_init();
-
-	// Test
-#ifdef ENABLE_FORCE_SCRIPT
+	// Scripting system.
 	TFE_ForceScript::init();
-#endif
 
 	// Start up the game and skip the title screen.
 	if (firstRun)
@@ -923,7 +822,6 @@ int main(int argc, char* argv[])
 	{
 		TFE_FRAME_BEGIN();
 		TFE_System::frameLimiter_begin();
-
 		bool enableRelative = TFE_Input::relativeModeEnabled();
 		if (enableRelative != relativeMode)
 		{
@@ -940,46 +838,19 @@ int main(int argc, char* argv[])
 			}
 		}
 
-		s_inMenu = !s_curGame || s_curGame->getState() != IGame::State::Mission || TFE_FrontEndUI::isConfigMenuOpen() || TFE_DarkForces::escapeMenu_isOpen() || TFE_DarkForces::pda_isOpen();
+		TFE_Settings::getTempSettings()->inMenu = !s_curGame || s_curGame->getState() != IGame::State::Mission || TFE_FrontEndUI::isConfigMenuOpen() || TFE_DarkForces::escapeMenu_isOpen() || TFE_DarkForces::pda_isOpen();
 
 		// System events
 		SDL_Event event;
 		while (SDL_PollEvent(&event)) { handleEvent(event); }
 
-		// Handle mouse state.
-		s32 mouseX, mouseY;
-		s32 mouseAbsX, mouseAbsY;
-		u32 state = SDL_GetRelativeMouseState(&mouseX, &mouseY);
-		SDL_GetMouseState(&mouseAbsX, &mouseAbsY);
-		bool mouseMoveEmulatedByVrController = false;
-#if defined(ANDROID) && !defined(ENABLE_VR)
-		SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, s_inMenu ? "1" : "0");
-#elif defined(ENABLE_VR)
-		if (TFE_Settings::getTempSettings()->vr)
+		// Inputs Main Entry - skip frame any further processing during replay pause
+		if (!inputMapping_handleInputs((SDL_Window*)TFE_RenderBackend::getWindow(), handleEvent, s_curGame ? s_curGame->getState() : IGame::State::Unknown))
 		{
-			mouseMoveEmulatedByVrController = vr::HandleControllerEvents(s_curGame ? s_curGame->getState() : IGame::State::Unknown, mouseX, mouseY);
-			const std::vector<SDL_Event> generatedEvents = vr::GetGeneratedSDLEvents();
-			for (const SDL_Event& e : generatedEvents)
-			{
-				handleEvent(e);
-			}
-
-			// absolute mouse position is returned for current window, not the VR window,
-			// we have to convert it to VR window coordinates
-			const Vec2ui& targetSize = vr::GetRenderTargetSize();
-			mouseAbsX = (s32)((f32)mouseAbsX * (f32)targetSize.x / (f32)s_displayWidth);
-			mouseAbsY = (s32)((f32)mouseAbsY * (f32)targetSize.y / (f32)s_displayHeight);
+			TFE_Input::endFrame();
+			inputMapping_endFrame();
+			continue;
 		}
-#endif
-		if (!mouseMoveEmulatedByVrController && (mouseX != 0 || mouseY != 0))
-		{
-			TFE_Input::setRelativeMousePos(mouseX, mouseY);
-			TFE_Input::setMousePos(mouseAbsX, mouseAbsY);
-		}
-
-		emulateMouseByController(mouseAbsX, mouseAbsY);
-
-		inputMapping_updateInput();
 
 		// Can we save?
 		TFE_FrontEndUI::setCanSave(s_curGame ? s_curGame->canSave() : false);
@@ -1011,14 +882,36 @@ int main(int argc, char* argv[])
 
 			char* selectedMod = TFE_FrontEndUI::getSelectedMod();
 			if (selectedMod && selectedMod[0] && appState == APP_STATE_GAME)
-			{
+			{				
+
+				// Handle mod overrides and setings including calls from replay module
 				char* newArgs[16];
-				for (s32 i = 0; i < argc && i < 15; i++)
+				newArgs[0] = argv[0];
+
+				std::vector<std::string> modOverrides;
+				modOverrides = TFE_FrontEndUI::getModOverrides();
+
+				size_t newArgc = 0;
+				newArgs[newArgc] = argv[newArgc];
+				size_t modOverrideSize = modOverrides.size();
+				newArgc += modOverrideSize + 1;
+				if (modOverrideSize > 0)
 				{
-					newArgs[i] = argv[i];
+					for (s32 i = 0; i < modOverrides.size(); i++)
+					{
+						newArgs[i + 1] = new char[modOverrides[i].size() + 1];
+						std::strcpy(newArgs[i + 1], modOverrides[i].c_str());
+					}
 				}
-				newArgs[argc] = selectedMod;
-				setAppState(appState, argc + 1, newArgs);
+				else
+				{
+					for (s32 i = 1; i < argc && i < 15; i++)
+					{
+						newArgs[i] = argv[i];
+					}
+				}
+				newArgs[newArgc] = selectedMod;
+				setAppState(appState, newArgc + 1, newArgs);
 			}
 			else
 			{
@@ -1029,6 +922,7 @@ int main(int argc, char* argv[])
 		if (TFE_A11Y::hasPendingFont()) { TFE_A11Y::loadPendingFont(); } // Can't load new fonts between TFE_Ui::begin() and TFE_Ui::render();
 		TFE_Ui::begin();
 		TFE_System::update();
+		TFE_ForceScript::update();
 
 		// Update
 		if (TFE_FrontEndUI::uiControlsEnabled() && task_canRun())
@@ -1099,9 +993,46 @@ int main(int argc, char* argv[])
 			}
 		}
 
-#ifdef ENABLE_FORCE_SCRIPT
-		TFE_ForceScript::update();
-#endif
+		// Take screenshot handler
+		if (inputMapping_getActionState(IADF_SCREENSHOT) == STATE_PRESSED)
+		{
+			static u64 _screenshotIndex = 0;
+
+			char screenshotDir[TFE_MAX_PATH];
+			TFE_Paths::appendPath(TFE_PathType::PATH_USER_DOCUMENTS, "Screenshots/", screenshotDir);
+
+			char screenshotPath[TFE_MAX_PATH];
+			sprintf(screenshotPath, "%stfe_screenshot_%s_%" PRIu64 ".png", screenshotDir, s_screenshotTime, _screenshotIndex);
+			_screenshotIndex++;
+
+			TFE_RenderBackend::queueScreenshot(screenshotPath);
+		}
+
+		bool pressedRecordNoCountdown = inputMapping_getActionState(IADF_GIF_RECORD_NO_COUNTDOWN) == STATE_PRESSED;
+		// Gif recording handler
+		if (inputMapping_getActionState(IADF_GIF_RECORD) == STATE_PRESSED || pressedRecordNoCountdown)
+		{
+			static u64 _gifIndex = 0;
+			static bool _recording = false;
+
+			if (!_recording)
+			{
+				char screenshotDir[TFE_MAX_PATH];
+				TFE_Paths::appendPath(TFE_PathType::PATH_USER_DOCUMENTS, "Screenshots/", screenshotDir);
+
+				char gifPath[TFE_MAX_PATH];
+				sprintf(gifPath, "%stfe_gif_%s_%" PRIu64 ".gif", screenshotDir, s_screenshotTime, _gifIndex);
+				_gifIndex++;
+
+				TFE_RenderBackend::startGifRecording(gifPath, pressedRecordNoCountdown);
+				_recording = true;
+			}
+			else
+			{
+				TFE_RenderBackend::stopGifRecording();
+				_recording = false;
+			}
+		}
 
 		const bool isConsoleOpen = TFE_FrontEndUI::isConsoleOpen();
 		bool endInputFrame = true;
@@ -1142,7 +1073,7 @@ int main(int argc, char* argv[])
 			TFE_RenderBackend::clearWindow();
 		}
 
-		bool drawFps = s_curGame && graphics->showFps;
+		bool drawFps =  s_curGame&& graphics->showFps;
 		if (s_curGame) { drawFps = drawFps && (!s_curGame->isPaused()); }
 
 		TFE_FrontEndUI::setCurrentGame(s_curGame);
@@ -1191,7 +1122,7 @@ int main(int argc, char* argv[])
 		{
 			TFE_FRAME_END();
 		}
-	}
+	}	
 
 	if (s_curGame)
 	{
@@ -1218,13 +1149,9 @@ int main(int argc, char* argv[])
 #endif
 	TFE_RenderBackend::destroy();
 	TFE_SaveSystem::destroy();
-	SDL_Quit();
-
-#ifdef ENABLE_FORCE_SCRIPT
 	TFE_ForceScript::destroy();
-#endif
-
-	TFE_System::logWrite(LOG_MSG, "Program Flow", "The Force Engine Game Loop Ended.");
+	SDL_Quit();
+	TFE_System::logWrite(LOG_MSG, "Progam Flow", "The Force Engine Game Loop Ended.");
 	TFE_System::logClose();
 	TFE_System::freeMessages();
 #if defined(ANDROID)
@@ -1249,6 +1176,11 @@ void parseOption(const char* name, const std::vector<const char*>& values, bool 
 			{
 				s_startupGame = Game_Dark_Forces;
 			}
+		}
+		else if (name[0] == 'r')
+		{
+			// -r<replay_path>
+			TFE_Input::loadReplayFromPath(&name[1]);
 		}
 		else if (strcasecmp(name, "nosound") == 0)
 		{
@@ -1288,6 +1220,14 @@ void parseOption(const char* name, const std::vector<const char*>& values, bool 
 		else if (strcasecmp(name, "skip_load_delay") == 0)
 		{
 			TFE_Settings::getTempSettings()->skipLoadDelay = true;
+		}
+		else if (strcasecmp(name, "demo_logging") == 0)
+		{
+			TFE_Settings::getTempSettings()->df_demologging = true;
+		}
+		else if (strcasecmp(name, "exit_after_replay") == 0)
+		{
+			TFE_Settings::getTempSettings()->exit_after_replay = true;
 		}
 		else if (strcasecmp(name, "load") == 0)
 		{

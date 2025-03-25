@@ -42,17 +42,22 @@ namespace TFE_System
 	// Return the delta time.
 	f64 getDeltaTime();
 	f64 getDeltaTimeRaw();
-	// Get the absolute time since the last start time.
+	// Get the absolute time since the last start time, in seconds.
 	f64 getTime();
 
 	u64 getCurrentTimeInTicks();
 	f64 convertFromTicksToSeconds(u64 ticks);
+	f64 convertFromTicksToMillis(u64 ticks);
 	f64 microsecondsToSeconds(f64 mu);
+	u64 getStartTime();
+	void setStartTime(u64 startTime);
 
 	void getDateTimeString(char* output);
+	void getDateTimeStringForFile(char* output);
 
 	// Log
-	bool logOpen(const char* filename);
+	void logTimeToggle();
+	bool logOpen(const char* filename, bool append=false);
 	void logClose();
 	void logWrite(LogWriteType type, const char* tag, const char* str, ...);
 
@@ -75,6 +80,9 @@ namespace TFE_System
 	bool openURL(const std::string& url);
 
 	extern f64 c_gameTimeScale;
+
+	void setFrame(u32 frame);
+	u32 getFrame();
 }
 
 // _strlwr/_strupr exist on Windows; roll our own

@@ -7,6 +7,7 @@
 #include <TFE_System/cJSON.h>
 #include <TFE_System/parser.h>
 #include <TFE_System/system.h>
+#include <TFE_A11y/accessibility.h>
 #include <assert.h>
 #include <algorithm>
 #include <vector>
@@ -108,6 +109,14 @@ namespace TFE_Settings
 	static TFE_Settings_Vr s_vrSettings = {};
 	static std::vector<char> s_iniBuffer;
 
+
+	//MOD CONF Version ENUM
+	enum ModConfVersion
+	{
+		MOD_CONF_INIT_VER = 0x00000001,
+		MOD_CONF_CUR_VERSION = MOD_CONF_INIT_VER
+	};
+
 	enum SectionID
 	{
 		SECTION_WINDOW = 0,
@@ -176,7 +185,6 @@ namespace TFE_Settings
 	void parseDark_ForcesSettings(const char* key, const char* value);
 	void parseOutlawsSettings(const char* key, const char* value);
 	void parseCVars(const char* key, const char* value);
-	void checkGameData();
 
 	//////////////////////////////////////////////////////////////////////////////////
 	// Implementation
@@ -514,6 +522,7 @@ namespace TFE_Settings
 		writeKeyValue_Int(settings, "renderer", s_graphicsSettings.rendererIndex);
 		writeKeyValue_Int(settings, "colorMode", s_graphicsSettings.colorMode);
 		writeKeyValue_Int(settings, "skyMode", s_graphicsSettings.skyMode);
+		writeKeyValue_Bool(settings, "forceGouraud", s_graphicsSettings.forceGouraudShading);
 	}
 
 	void writeEnhancementsSettings(FileStream& settings)
@@ -596,6 +605,7 @@ namespace TFE_Settings
 		writeKeyValue_Bool(settings, "gameExitsToMenu", s_systemSettings.gameQuitExitsToMenu);
 		writeKeyValue_Bool(settings, "returnToModLoader", s_systemSettings.returnToModLoader);
 		writeKeyValue_Float(settings, "gifRecordingFramerate", s_systemSettings.gifRecordingFramerate);
+		writeKeyValue_Bool(settings, "showGifPathConfirmation", s_systemSettings.showGifPathConfirmation);
 	}
 
 	void writeA11ySettings(FileStream& settings)
@@ -635,6 +645,30 @@ namespace TFE_Settings
 		writeKeyValue_String(settings, "game", s_game.game);
 	}
 
+	void writeDarkForcesGameSettings(FileStream& settings)
+	{
+		writeKeyValue_Int(settings, "airControl", s_gameSettings.df_airControl);
+		writeKeyValue_Bool(settings, "bobaFettFacePlayer", s_gameSettings.df_bobaFettFacePlayer);
+		writeKeyValue_Bool(settings, "smoothVUEs", s_gameSettings.df_smoothVUEs);
+		writeKeyValue_Bool(settings, "disableFightMusic", s_gameSettings.df_disableFightMusic);
+		writeKeyValue_Bool(settings, "enableAutoaim", s_gameSettings.df_enableAutoaim);
+		writeKeyValue_Bool(settings, "showSecretFoundMsg", s_gameSettings.df_showSecretFoundMsg);
+		writeKeyValue_Bool(settings, "autorun", s_gameSettings.df_autorun);
+		writeKeyValue_Bool(settings, "crouchToggle", s_gameSettings.df_crouchToggle);
+		writeKeyValue_Bool(settings, "ignoreInfLimit", s_gameSettings.df_ignoreInfLimit);
+		writeKeyValue_Bool(settings, "stepSecondAlt", s_gameSettings.df_stepSecondAlt);
+		writeKeyValue_Int(settings, "pitchLimit", s_gameSettings.df_pitchLimit);
+		writeKeyValue_Bool(settings, "solidWallFlagFix", s_gameSettings.df_solidWallFlagFix);
+		writeKeyValue_Bool(settings, "enableUnusedItem", s_gameSettings.df_enableUnusedItem);
+		writeKeyValue_Bool(settings, "jsonAiLogics", s_gameSettings.df_jsonAiLogics);
+		writeKeyValue_Bool(settings, "df_showReplayCounter", s_gameSettings.df_showReplayCounter);
+		writeKeyValue_Int(settings,  "df_recordFrameRate", s_gameSettings.df_recordFrameRate);
+		writeKeyValue_Int(settings,  "df_playbackFrameRate", s_gameSettings.df_playbackFrameRate);
+		writeKeyValue_Bool(settings, "df_enableRecording", s_gameSettings.df_enableRecording);
+		writeKeyValue_Bool(settings, "df_enableRecordingAll", s_gameSettings.df_enableRecordingAll);
+		writeKeyValue_Bool(settings, "df_demologging", s_gameSettings.df_demologging);
+	}
+
 	void writePerGameSettings(FileStream& settings)
 	{
 		for (u32 i = 0; i < Game_Count; i++)
@@ -645,18 +679,7 @@ namespace TFE_Settings
 
 			if (i == Game_Dark_Forces)
 			{
-				writeKeyValue_Int(settings, "airControl", s_gameSettings.df_airControl);
-				writeKeyValue_Bool(settings, "bobaFettFacePlayer", s_gameSettings.df_bobaFettFacePlayer);
-				writeKeyValue_Bool(settings, "smoothVUEs", s_gameSettings.df_smoothVUEs);
-				writeKeyValue_Bool(settings, "disableFightMusic", s_gameSettings.df_disableFightMusic);
-				writeKeyValue_Bool(settings, "enableAutoaim", s_gameSettings.df_enableAutoaim);
-				writeKeyValue_Bool(settings, "showSecretFoundMsg", s_gameSettings.df_showSecretFoundMsg);
-				writeKeyValue_Bool(settings, "autorun", s_gameSettings.df_autorun);
-				writeKeyValue_Bool(settings, "crouchToggle", s_gameSettings.df_crouchToggle);
-				writeKeyValue_Bool(settings, "ignoreInfLimit", s_gameSettings.df_ignoreInfLimit);
-				writeKeyValue_Bool(settings, "stepSecondAlt", s_gameSettings.df_stepSecondAlt);
-				writeKeyValue_Int(settings, "pitchLimit", s_gameSettings.df_pitchLimit);
-				writeKeyValue_Bool(settings, "solidWallFlagFix", s_gameSettings.df_solidWallFlagFix);
+				writeDarkForcesGameSettings(settings);
 			}
 		}
 	}
@@ -972,6 +995,10 @@ namespace TFE_Settings
 		{
 			s_graphicsSettings.skyMode = SkyMode(parseInt(value));
 		}
+		else if (strcasecmp("forceGouraud", key) == 0)
+		{
+			s_graphicsSettings.forceGouraudShading = parseBool(value);
+		}	
 	}
 
 	void parseEnhancementsSettings(const char* key, const char* value)
@@ -1170,6 +1197,10 @@ namespace TFE_Settings
 		{
 			s_systemSettings.gifRecordingFramerate = parseFloat(value);
 		}
+		else if (strcasecmp("showGifPathConfirmation", key) == 0)
+		{
+			s_systemSettings.showGifPathConfirmation = parseBool(value);
+		}
 	}
 	
 	void parseA11ySettings(const char* key, const char* value)
@@ -1352,6 +1383,38 @@ namespace TFE_Settings
 		{
 			s_gameSettings.df_solidWallFlagFix = parseBool(value);
 		}
+		else if (strcasecmp("enableUnusedItem", key) == 0)
+		{
+			s_gameSettings.df_enableUnusedItem = parseBool(value);
+		}
+		else if (strcasecmp("jsonAiLogics", key) == 0)
+		{
+			s_gameSettings.df_jsonAiLogics = parseBool(value);
+		}
+		else if (strcasecmp("df_showReplayCounter", key) == 0)
+		{
+			s_gameSettings.df_showReplayCounter = parseBool(value);
+		}		
+		else if (strcasecmp("df_recordFrameRate", key) == 0)
+		{
+			s_gameSettings.df_recordFrameRate = parseInt(value);
+		}
+		else if (strcasecmp("df_playbackFrameRate", key) == 0)
+		{
+			s_gameSettings.df_playbackFrameRate = parseInt(value);
+		}
+		else if (strcasecmp("df_enableRecording", key) == 0)
+		{
+			s_gameSettings.df_enableRecording = parseBool(value);
+		}
+		else if (strcasecmp("df_enableRecordingAll", key) == 0)
+		{
+			s_gameSettings.df_enableRecordingAll = parseBool(value);
+		}
+		else if (strcasecmp("df_demologging", key) == 0)
+		{
+			s_gameSettings.df_demologging = parseBool(value);
+		}
 	}
 
 	void parseOutlawsSettings(const char* key, const char* value)
@@ -1493,13 +1556,22 @@ namespace TFE_Settings
 		return s_gameSettings.df_stepSecondAlt;
 	}
 
-	bool soidWallFlagFix()
+	bool solidWallFlagFix()
 	{
 		if (s_modSettings.solidWallFlagFix != MSO_NOT_SET)
 		{
 			return s_modSettings.solidWallFlagFix == MSO_TRUE ? true : false;
 		}
 		return s_gameSettings.df_solidWallFlagFix;
+	}
+
+	bool enableUnusedItem()
+	{
+		if (s_modSettings.enableUnusedItem != MSO_NOT_SET)
+		{
+			return s_modSettings.enableUnusedItem == MSO_TRUE ? true : false;
+		}
+		return s_gameSettings.df_enableUnusedItem;
 	}
 
 	bool extendAdjoinLimits()
@@ -1528,10 +1600,31 @@ namespace TFE_Settings
 		}
 		return s_graphicsSettings.fix3doNormalOverflow;
 	}
+
+	bool jsonAiLogics()
+	{
+		if (s_modSettings.jsonAiLogics != MSO_NOT_SET)
+		{
+			return s_modSettings.jsonAiLogics == MSO_TRUE ? true : false;
+		}
+		return s_gameSettings.df_jsonAiLogics;
+	}
 		
 	//////////////////////////////////////////////////
 	// Mod Settings/Overrides.
 	//////////////////////////////////////////////////
+
+	ModSettingLevelOverride getLevelOverrides(string levelName)
+	{
+		string lowerLevel = TFE_A11Y::toLower(levelName);
+		if (s_modSettings.levelOverrides.find(lowerLevel) != s_modSettings.levelOverrides.end())
+		{
+			return s_modSettings.levelOverrides[lowerLevel];
+		}
+		ModSettingLevelOverride empty;
+		return empty;
+	}
+
 	ModSettingOverride parseJSonBoolToOverride(const cJSON* item)
 	{
 		ModSettingOverride value = MSO_NOT_SET;  // default
@@ -1550,6 +1643,46 @@ namespace TFE_Settings
 		return value;
 	}
 
+	s32 parseJSonIntToOverride(const cJSON* item)
+	{
+		s32 value = -1;  // default is -1
+
+		// Check if it is a json numerical
+		if (cJSON_IsNumber(item))
+		{
+			value = (s32)cJSON_GetNumberValue(item);
+		}
+		else
+		{
+			std::string valueString = item->valuestring;
+			if (valueString.find_first_not_of("0123456789") == string::npos)
+			{
+				value = std::stoi(valueString);
+			}
+			else
+			{
+				TFE_System::logWrite(LOG_WARNING, "MOD_CONF", "Override '%s' is an invalid type and should be an integer. Ignoring override.", item->string);
+			}
+		}
+		return value;
+	};
+
+	float parseJsonFloatToOverride(const cJSON* item)
+	{
+		float value = -9999;
+
+		// Check if it is a json numerical
+		if (cJSON_IsNumber(item))
+		{
+			value = cJSON_GetNumberValue(item);
+		}
+		else
+		{
+			TFE_System::logWrite(LOG_WARNING, "MOD_CONF", "Override '%s' is an invalid type and should be a number. Ignoring override.", item->string);
+		}
+		return value;
+	};
+
 	void parseTfeOverride(TFE_ModSettings* modSettings, const cJSON* tfeOverride)
 	{
 		if (!tfeOverride || !tfeOverride->string) { return; }
@@ -1566,6 +1699,10 @@ namespace TFE_Settings
 		{
 			modSettings->solidWallFlagFix = parseJSonBoolToOverride(tfeOverride);
 		}
+		else if (strcasecmp(tfeOverride->string, "enableUnusedItem") == 0)
+		{
+			modSettings->enableUnusedItem = parseJSonBoolToOverride(tfeOverride);
+		}
 		else if (strcasecmp(tfeOverride->string, "extendAjoinLimits") == 0)
 		{
 			modSettings->extendAjoinLimits = parseJSonBoolToOverride(tfeOverride);
@@ -1577,6 +1714,107 @@ namespace TFE_Settings
 		else if (strcasecmp(tfeOverride->string, "3doNormalFix") == 0)
 		{
 			modSettings->normalFix3do = parseJSonBoolToOverride(tfeOverride);
+		}
+		else if (strcasecmp(tfeOverride->string, "jsonAiLogics") == 0)
+		{
+			modSettings->jsonAiLogics = parseJSonBoolToOverride(tfeOverride);
+		}
+		else if (strcasecmp(tfeOverride->string, "levelOverrides") == 0)
+		{
+			const cJSON* levelIter = tfeOverride->child;
+			if (!levelIter)
+			{
+				TFE_System::logWrite(LOG_WARNING, "MOD_CONF", "Level String is Empty", tfeOverride->string);
+			}
+			for (; levelIter; levelIter = levelIter->next)
+			{
+				if (!levelIter->string)
+				{
+					TFE_System::logWrite(LOG_WARNING, "MOD_CONF", "Level override for '%s' has no name, skipping.", levelIter->string);
+					continue;
+				}
+				else
+				{
+
+					// Remove the .lev extension if it exists.
+					std::string levelName = TFE_A11Y::toLower(levelIter->string);
+					if (levelName.size() >= 4 && levelName.rfind(".lev") == (levelName.size() - 4)) {
+						levelName.erase(levelName.size() - 4, 4);
+					}
+
+					ModSettingLevelOverride levelOverride;
+					levelOverride.levName = levelName;
+
+					const cJSON* levelOverrideIter = levelIter->child;
+					for (; levelOverrideIter; levelOverrideIter = levelOverrideIter->next)
+					{
+						if (!levelOverrideIter->string)
+						{
+							TFE_System::logWrite(LOG_WARNING, "MOD_CONF", "Level override for '%s' has no name, skipping.", levelOverrideIter->string);
+							continue;
+						}
+						else
+						{
+							const char* overrideName = levelOverrideIter->string;
+
+							// Check if it is an integer-type override
+							int intArraySize = sizeof(modIntOverrides) / sizeof(modIntOverrides[0]);
+							bool isIntParam = false;
+							for (int i = 0; i < intArraySize; ++i) {
+								if (strcasecmp(modIntOverrides[i], overrideName) == 0) {
+
+									// Parse the integer value.
+									s32 jsonIntResult = parseJSonIntToOverride(levelOverrideIter);
+									if (jsonIntResult != -1)
+									{
+										levelOverride.intOverrideMap[overrideName] = jsonIntResult;
+										isIntParam = true;
+										break;
+									}
+								}
+							}
+
+							// Skip checking further if it is of type integer.
+							if (isIntParam) {
+								continue;
+							}
+
+							// Check if float-type override
+							int floatArraySize = sizeof(modFloatOverrides) / sizeof(modFloatOverrides[0]);
+							bool isFloatParam = false;
+							for (int i = 0; i < floatArraySize; i++)
+							{
+								if (strcasecmp(modFloatOverrides[i], overrideName) == 0)
+								{
+									float result = parseJsonFloatToOverride(levelOverrideIter);
+									if (result != -9999)
+									{
+										levelOverride.floatOverrideMap[overrideName] = result;
+										isFloatParam = true;
+										break;
+									}
+								}
+							}
+
+							// Skip checking further if it is of type float
+							if (isFloatParam)
+							{
+								continue;
+							}
+
+							// Check if it is an bool-type override
+							int boolArraySize = sizeof(modBoolOverrides) / sizeof(modBoolOverrides[0]);
+							for (int i = 0; i < boolArraySize; ++i) {
+								if (strcmp(modBoolOverrides[i], overrideName) == 0) {
+									levelOverride.boolOverrideMap[overrideName] = parseJSonBoolToOverride(levelOverrideIter) == MSO_TRUE ? JTRUE : JFALSE;
+									break;
+								}
+							}
+						}
+					}
+					modSettings->levelOverrides[levelName] = levelOverride;
+				}
+			}
 		}
 	}
 
@@ -1640,6 +1878,17 @@ namespace TFE_Settings
 			for (; curElem; curElem = curElem->next)
 			{
 				if (!curElem->string) { continue; }
+
+				// Ensure the version is supported.
+				if (strcasecmp(curElem->string, "TFE_VERSION") == 0)
+				{
+					s32 modVersion = parseJSonIntToOverride(curElem);
+					if (modVersion < MOD_CONF_CUR_VERSION)
+					{
+						TFE_System::logWrite(LOG_WARNING, "MOD_CONF", "This MOD Conf version is not supported by this Force Engine release.");
+						return;
+					}
+				}
 
 				if (strcasecmp(curElem->string, "TFE_OVERRIDES") == 0 && cJSON_IsObject(curElem))
 				{

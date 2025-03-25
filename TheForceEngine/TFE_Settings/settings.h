@@ -13,6 +13,7 @@
 #include <TFE_FileSystem/paths.h>
 #include <TFE_Audio/midiDevice.h>
 #include "gameSourceData.h"
+#include <map>
 
 enum SkyMode
 {
@@ -40,6 +41,10 @@ struct TFE_Settings_Temp
 {
 	bool skipLoadDelay = false;
 	bool forceFullscreen = false;
+	bool df_demologging = false;
+	bool exit_after_replay = false;
+	bool inMenu = false; // includes PDA, Agent Menu, ImGui stuff, ...
+
 #if defined(START_VR)
 	bool vr = true;
 #else
@@ -76,6 +81,8 @@ struct TFE_Settings_Graphics
 	bool  showFps = false;
 	bool  fix3doNormalOverflow = true;
 	bool  ignore3doLimits = true;
+	bool  forceGouraudShading = false;
+	bool  overrideLighting = false;
 	s32   frameRateLimit = 240;
 	f32   brightness = 1.0f;
 	f32   contrast = 1.0f;
@@ -231,14 +238,24 @@ struct TFE_Settings_Game
 	bool df_ignoreInfLimit = true;		// Ignore the vanilla INF limit.
 	bool df_stepSecondAlt = false;		// Allow the player to step up onto second heights, similar to the way normal stairs work.
 	bool df_solidWallFlagFix = true;	// Solid wall flag is enforced for collision with moving walls.
+	bool df_enableUnusedItem = true;	// Enables the unused item in the inventory (delt 10).
+	bool df_jsonAiLogics = true;		// AI logics can be loaded from external JSON files
+	bool df_enableRecording = false;    // Enable recording of gameplay
+	bool df_enableRecordingAll = false; // Always record gameplay. 
+	bool df_enableReplay = false;       // Enable replay of gameplay.
+	bool df_showReplayCounter = false;  // Show the replay counter on the HUD.
+	bool df_demologging = false;        // Log the record/playback logging
+	s32  df_recordFrameRate = 4;        // Recording Framerate value
+	s32  df_playbackFrameRate = 2;      // Playback Framerate value
 	PitchLimit df_pitchLimit  = PITCH_VANILLA_PLUS;
 };
 
 struct TFE_Settings_System
 {
-	bool gameQuitExitsToMenu = true;	// Quitting from the game returns to the main menu instead.
-	bool returnToModLoader = true;		// Return to the Mod Loader if running a mod.
-	f32 gifRecordingFramerate = 18;		// Used with GIF recording (Alt-F2)
+	bool gameQuitExitsToMenu = true;		// Quitting from the game returns to the main menu instead.
+	bool returnToModLoader = true;			// Return to the Mod Loader if running a mod.
+	f32 gifRecordingFramerate = 18;			// Used with GIF recording (Alt-F2)
+	bool showGifPathConfirmation = true;	// Used with GIF recording (Alt-F2)
 };
 
 struct TFE_Settings_A11y
@@ -302,6 +319,94 @@ struct ModHdIgnoreList
 	std::vector<std::string> waxIgnoreList;
 };
 
+static const char* modIntOverrides[] =
+{
+	"energy",
+	"power",
+	"plasma",
+	"detonator",
+	"shell",
+	"mine",
+	"missile",
+	"shields",
+	"health",
+	"lives",
+	"battery",
+
+	// Custom int overrides
+	"defaultWeapon",
+	"fogLevel",
+
+	"floorDamageLow",
+	"floorDamageHigh",
+	"gasDamage",
+	"wallDamage",
+	"gravity",
+	"projectileGravity",
+	"shieldSuperchargeDuration",
+	"weaponSuperchargeDuration",
+};
+
+// Float overrides for mod levels
+static const char* modFloatOverrides[] =
+{
+	"headlampBatteryConsumption",
+	"gogglesBatteryConsumption",
+	"maskBatteryConsumption",
+};
+
+// Boolean overrides for mod levels 
+static const char* modBoolOverrides[] =
+{
+	// Enable inventory items on start
+	"enableMask",
+	"enableCleats",
+	"enableNightVision",
+	"enableHeadlamp",
+
+	// Add/Remove Weapons
+	"pistol",
+	"rifle",
+	"autogun",
+	"mortar",
+	"fusion",
+	"concussion",
+	"cannon",
+
+	// Toggleable items
+	"mask",
+	"goggles",
+	"cleats",
+
+	// Inventory items
+	"plans",
+	"phrik",
+	"datatape",
+	"nava",
+	"dtWeapon",
+	"code1",
+	"code2",
+	"code3",
+	"code4",
+	"code5",
+
+	// Keys
+	"yellowKey",
+	"redKey",
+	"blueKey",
+
+	// Resets everything to only use bryar like the first mission.
+	"bryarOnly"
+};
+
+struct ModSettingLevelOverride
+{
+	std::string levName;
+	std::map<std::string, int>  intOverrideMap = {};
+	std::map<std::string, float> floatOverrideMap = {};
+	std::map<std::string, bool> boolOverrideMap = {};
+};
+
 struct TFE_ModSettings
 {
 	ModSettingOverride ignoreInfLimits   = MSO_NOT_SET;
@@ -310,7 +415,10 @@ struct TFE_ModSettings
 	ModSettingOverride extendAjoinLimits = MSO_NOT_SET;
 	ModSettingOverride ignore3doLimits   = MSO_NOT_SET;
 	ModSettingOverride normalFix3do      = MSO_NOT_SET;
+	ModSettingOverride enableUnusedItem  = MSO_NOT_SET;
+	ModSettingOverride jsonAiLogics      = MSO_NOT_SET;
 
+	std::map<std::string, ModSettingLevelOverride> levelOverrides;
 	std::vector<ModHdIgnoreList> ignoreList;
 };
 
@@ -420,13 +528,20 @@ namespace TFE_Settings
 	// Settings factoring in mod overrides.
 	bool ignoreInfLimits();
 	bool stepSecondAlt();
-	bool soidWallFlagFix();
+	bool solidWallFlagFix();
 	bool extendAdjoinLimits();
 	bool ignore3doLimits();
 	bool normalFix3do();
+	bool enableUnusedItem();
+	bool jsonAiLogics();
+
+	// Settings for level mod overrides.
+	ModSettingLevelOverride getLevelOverrides(string levelName);
 
 	bool validatePath(const char* path, const char* sentinel);
 	void autodetectGamePaths();
 	void clearModSettings();
 	void loadCustomModSettings();
+	void parseIniFile(const char* buffer, size_t len);
+	void writeDarkForcesGameSettings(FileStream& settings);
 }

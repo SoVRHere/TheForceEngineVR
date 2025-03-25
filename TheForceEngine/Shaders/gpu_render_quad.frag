@@ -127,6 +127,7 @@ void main()
 	// Sample the texture.
 #ifdef OPT_TRUE_COLOR
 	vec4 baseColor = vec4(float(color));
+	float emissive = 0.0;
 	if (textureId < 65535)
 	{
 		baseColor = sampleTextureClamp(textureId, Frag_Uv);
@@ -139,6 +140,11 @@ void main()
 				int index = clamp((alpha - 128) >> 4, 0, 7);
 				baseColor = IndexedColors[index];
 			}
+		}
+		else
+		{
+			// Get the emissive factor (0 = normal, 1 = 100% fullbright).
+			emissive = clamp((baseColor.a - 0.5) * 2.0, 0.0, 1.0);
 		}
 
 		if (baseColor.a < 0.01)
@@ -160,7 +166,7 @@ void main()
 
 	// Get the final attenuated color.
 #ifdef OPT_TRUE_COLOR
-	Out_Color.rgb = getAttenuatedColor(baseColor.rgb, float(lightLevel));
+	Out_Color.rgb = mix(getAttenuatedColor(baseColor.rgb, float(lightLevel)), baseColor.rgb, emissive);
 	Out_Color.rgb = handlePaletteFx(Out_Color.rgb);
 #else
 	Out_Color.rgb = getAttenuatedColor(baseColor, lightLevel);

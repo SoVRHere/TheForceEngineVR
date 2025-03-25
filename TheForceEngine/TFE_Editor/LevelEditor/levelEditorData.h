@@ -10,6 +10,7 @@
 #include "entity.h"
 #include "groups.h"
 #include "note.h"
+#include "featureId.h"
 #include <TFE_Editor/EditorAsset/editorAsset.h>
 #include <TFE_Editor/EditorAsset/editorTexture.h>
 #include <TFE_Editor/editorProject.h>
@@ -30,7 +31,9 @@ namespace LevelEditor
 		LEF_Groups     = 8,
 		LEF_LevelNotes =10,
 		LEF_Guidelines =11,
-		LEF_CurVersion =11,
+		LEF_ScriptCall1=12,
+		LEF_GuidelineV2=13,
+		LEF_CurVersion =13,
 	};
 
 	enum LevelEditMode
@@ -44,6 +47,7 @@ namespace LevelEditor
 		// Special
 		LEDIT_GUIDELINES,
 		LEDIT_NOTES,
+		LEDIT_UNKNOWN,
 	};
 		
 	enum DrawMode
@@ -139,6 +143,11 @@ namespace LevelEditor
 		u32 searchKey = 0;
 	};
 
+	struct IndexPair
+	{
+		s32 i0, i1;
+	};
+
 	enum GuidelineFlags
 	{
 		GLFLAG_NONE = 0,
@@ -149,6 +158,12 @@ namespace LevelEditor
 	struct GuidelineEdge
 	{
 		s32 idx[3] = { -1, -1, -1 };	// curve if idx[2] >= 0
+	};
+
+	struct GuidelineSubDiv
+	{
+		s32 edge;
+		f32 param;
 	};
 		
 	struct Guideline
@@ -163,11 +178,15 @@ namespace LevelEditor
 		Vec4f bounds = { 0 };
 		f32 maxOffset = 0.0f;
 
+		// Derived (don't serialize).
+		std::vector<GuidelineSubDiv> subdiv;
+
 		// Settings
 		u32 flags = GLFLAG_NONE;		// GuidelineFlags
 		f32 maxHeight = 0.0f;
 		f32 minHeight = 0.0f;
 		f32 maxSnapRange = 0.0f;		// Set based on the grid at creation time.
+		f32 subDivLen = 0.0f;			// Default = no subdivision.
 	};
 
 	typedef std::vector<EditorSector*> SectorList;
@@ -208,7 +227,6 @@ namespace LevelEditor
 		Vec3f origin;
 		Vec3f dir;
 		f32 maxDist;
-		s32 layer;
 	};
 
 	struct RayHitInfo
@@ -232,21 +250,37 @@ namespace LevelEditor
 		EditorSector* sector;
 	};
 
-	bool loadLevelFromAsset(TFE_Editor::Asset* asset);
+	struct LevelExportInfo
+	{
+		std::string slot;
+		const TFE_Editor::Asset* asset;
+	};
+
+	void levelClear();
+	bool loadLevelFromAsset(const TFE_Editor::Asset* asset);
 	TFE_Editor::AssetHandle loadTexture(const char* bmTextureName);
 	TFE_Editor::AssetHandle loadPalette(const char* paletteName);
 	TFE_Editor::AssetHandle loadColormap(const char* colormapName);
+
+	bool exportLevels(const char* workPath, const char* exportPath, const char* gobName, const std::vector<LevelExportInfo>& levelList);
 	
 	bool saveLevel();
+	bool saveLevelToPath(const char* filePath, bool cleanLevel = true);
+	bool loadFromTFL(const char* name);
+	bool loadFromTFLWithPath(const char* filePath);
+	void updateLevelBounds(EditorSector* sector = nullptr);
+
 	bool exportLevel(const char* path, const char* name, const StartPoint* start);
+	bool exportSelectionToText(std::string& buffer);
+	bool importFromText(const std::string& buffer, bool centerOnMouse = true);
 	void sectorToPolygon(EditorSector* sector);
 	void polygonToSector(EditorSector* sector);
 
 	s32 addEntityToLevel(const Entity* newEntity);
 	s32 addLevelNoteToLevel(const LevelNote* newNote);
-
+		
 	TFE_Editor::EditorTexture* getTexture(s32 index);
-	s32 getTextureIndex(const char* name);
+	s32 getTextureIndex(const char* name, bool* isNewTexture = nullptr);
 		
 	f32 getWallLength(const EditorSector* sector, const EditorWall* wall);
 	bool getSignExtents(const EditorSector* sector, const EditorWall* wall, Vec2f ext[2]);
@@ -254,21 +288,32 @@ namespace LevelEditor
 
 	void level_createSnapshot(TFE_Editor::SnapshotBuffer* buffer);
 	void level_createSectorSnapshot(TFE_Editor::SnapshotBuffer* buffer, std::vector<s32>& sectorIds);
+	void level_createSectorWallSnapshot(TFE_Editor::SnapshotBuffer* buffer, std::vector<IndexPair>& sectorWallIds);
+	void level_createSectorAttribSnapshot(TFE_Editor::SnapshotBuffer* buffer, std::vector<IndexPair>& sectorIds);
+	void level_createFeatureTextureSnapshot(TFE_Editor::SnapshotBuffer* buffer, s32 count, const FeatureId* feature);
 	void level_createEntiyListSnapshot(TFE_Editor::SnapshotBuffer* buffer, s32 sectorId);
+	void level_createGuidelineSnapshot(TFE_Editor::SnapshotBuffer* buffer);
+	void level_createSingleGuidelineSnapshot(TFE_Editor::SnapshotBuffer* buffer, s32 index);
 
 	void level_createLevelSectorSnapshotSameAssets(std::vector<EditorSector>& sectors);
 	void level_getLevelSnapshotDelta(std::vector<s32>& modifiedSectors, const std::vector<EditorSector>& sectorSnapshot);
 
 	void level_unpackSnapshot(s32 id, u32 size, void* data);
 	void level_unpackSectorSnapshot(u32 size, void* data);
+	void level_unpackSectorWallSnapshot(u32 size, void* data);
+	void level_unpackSectorAttribSnapshot(u32 size, void* data);
+	void level_unpackFeatureTextureSnapshot(u32 size, void* data);
 	void level_unpackEntiyListSnapshot(u32 size, void* data);
+	void level_unpackGuidelineSnapshot(u32 size, void* data);
+	void level_unpackSingleGuidelineSnapshot(u32 size, void* data);
 	
 	// Spatial Queries
 	s32  findSectorByName(const char* name, s32 excludeId = -1);
-	s32  findSector2d(s32 layer, const Vec2f* pos);
+	EditorSector* findSector2d(Vec2f pos);
+	EditorSector* findSector2d_closestHeight(Vec2f pos, f32 height);
 	bool traceRay(const Ray* ray, RayHitInfo* hitInfo, bool flipFaces, bool canHitSigns, bool canHitObjects = false);
 	// Get all sectors that have bounds that contain the point.
-	bool getOverlappingSectorsPt(const Vec3f* pos, s32 curLayer, SectorList* result, f32 padding = 0.0f);
+	bool getOverlappingSectorsPt(const Vec3f* pos, SectorList* result, f32 padding = 0.0f);
 	// Get all sectors that have bounds that overlap the input bounds.
 	bool getOverlappingSectorsBounds(const Vec3f bounds[2], SectorList* result);
 	// Helpers
@@ -276,10 +321,10 @@ namespace LevelEditor
 	bool aabbOverlap2d(const Vec3f* aabb0, const Vec3f* aabb1);
 	bool pointInsideAABB3d(const Vec3f* aabb, const Vec3f* pt);
 	bool pointInsideAABB2d(const Vec3f* aabb, const Vec3f* pt);
-	bool isPointInsideSector2d(EditorSector* sector, Vec2f pos, s32 layer);
-	bool isPointInsideSector3d(EditorSector* sector, Vec3f pos, s32 layer);
+	bool isPointInsideSector2d(EditorSector* sector, Vec2f pos);
+	bool isPointInsideSector3d(EditorSector* sector, Vec3f pos);
 	s32 findClosestWallInSector(const EditorSector* sector, const Vec2f* pos, f32 maxDistSq, f32* minDistToWallSq);
-	EditorSector* findSector3d(Vec3f pos, s32 layer);
+	EditorSector* findSector3d(Vec3f pos);
 
 	bool rayAABBIntersection(const Ray* ray, const Vec3f* bounds, f32* hitDist);
 		
@@ -295,6 +340,9 @@ namespace LevelEditor
 		assert(group);
 		return group;
 	}
+
+	bool sector_inViewRange(const EditorSector* sector);
+	bool sector_onActiveLayer(const EditorSector* sector);
 
 	inline bool sector_isHidden(EditorSector* sector)
 	{
@@ -346,4 +394,6 @@ namespace LevelEditor
 	}
 
 	extern std::vector<u8> s_fileData;
+	extern std::vector<IndexPair> s_pairs;
+	extern std::vector<IndexPair> s_prevPairs;
 }

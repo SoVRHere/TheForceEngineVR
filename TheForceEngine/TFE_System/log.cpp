@@ -9,6 +9,8 @@
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <ctime>
+#include <chrono>
 
 #ifdef _WIN32
 	#include <Windows.h>
@@ -30,12 +32,25 @@ namespace TFE_System
 		"Critical", //LOG_CRITICAL,
 	};
 
-	bool logOpen(const char* filename)
+	bool includeTime = true;
+
+	void logTimeToggle()
+	{
+		includeTime = !includeTime;
+	}
+
+	bool logOpen(const char* filename, bool append)
 	{
 		char logPath[TFE_MAX_PATH];
 		TFE_Paths::appendPath(PATH_USER_DOCUMENTS, filename, logPath);
-
-		return s_logFile.open(logPath, Stream::MODE_WRITE);
+		if (append)
+		{
+			return s_logFile.open(logPath, Stream::MODE_APPEND);
+		}
+		else
+		{
+			return s_logFile.open(logPath, Stream::MODE_WRITE);
+		}
 	}
 
 	void logClose()
@@ -67,20 +82,48 @@ namespace TFE_System
 	{
 		if (type >= LOG_COUNT || !s_logFile.isOpen() || !tag || !str) { return; }
 
+		auto now = std::chrono::system_clock::now();
+		std::time_t now_c = std::chrono::system_clock::to_time_t(now);
+		std::tm now_tm;
+		
+		#ifdef _WIN32
+			localtime_s(&now_tm, &now_c);  // For thread safety on Windows
+		#else
+			localtime_r(&now_c, &now_tm);  // For thread safety on Linux
+		#endif
+
+		auto milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(
+			now.time_since_epoch()) % 1000;
+
+		char timeStr[40];
+		if (includeTime)
+		{
+			strftime(timeStr, sizeof(timeStr) - 4, "%Y-%b-%d %H:%M:%S", &now_tm); // Leave space for milliseconds
+
+			// Add milliseconds to the formatted time
+			snprintf(timeStr + strlen(timeStr), 8, ".%03lld - ", milliseconds.count());
+		}
+		else
+		{
+			timeStr[0] = 0;
+		}
+
 		//Handle the variable input, "printf" style messages
 		va_list arg;
 		va_start(arg, str);
 		vsprintf(s_msgStr, str, arg);
 		va_end(arg);
-		//Format the message
+
+		//Format the message		
 		if (type != LOG_MSG)
 		{
-			sprintf(s_workStr, "[%s : %s] %s\r\n", c_typeNames[type], tag, s_msgStr);
+			sprintf(s_workStr, "%s[%s : %s] %s\r\n", timeStr, c_typeNames[type], tag, s_msgStr);
 		}
 		else
 		{
-			sprintf(s_workStr, "[%s] %s\r\n", tag, s_msgStr);
+			sprintf(s_workStr, "%s[%s] %s\r\n", timeStr, tag, s_msgStr);
 		}
+
 		//Write to disk
 		s_logFile.writeBuffer(s_workStr, (u32)strlen(s_workStr));
 		//Make sure to flush the file to disk if a crash is likely.
@@ -102,7 +145,7 @@ namespace TFE_System
 			assert(0);
 		}
 
-		sprintf(s_workStr, "[%s] %s", tag, s_msgStr);
+		sprintf(s_workStr, "%s - [%s] %s", timeStr, tag, s_msgStr);
 		size_t len = strlen(s_msgStr);
 		char* msg = s_msgStr;
 		char* msgStart = msg;

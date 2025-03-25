@@ -8,6 +8,8 @@
 #include <stdlib.h>
 #include <time.h> 
 #include <algorithm>
+#include <TFE_Input/input.h>
+#include <TFE_Input/replay.h>
 
 #ifdef _WIN32
 // Following includes for Windows LinkCallback
@@ -49,6 +51,17 @@ namespace TFE_System
 	static s32 s_missedFrameCount = 0;
 
 	static char s_versionString[64];
+	static u32 s_frame = 0;
+
+	void setFrame(u32 frame)
+	{
+		s_frame = frame;
+	}
+
+	u32 getFrame()
+	{
+		return s_frame;
+	}
 
 	void init(f32 refreshRate, bool synced, const char* versionString)
 	{
@@ -56,6 +69,7 @@ namespace TFE_System
 		s_time = SDL_GetPerformanceCounter();
 		s_lastSyncCheck = s_time;
 		s_startTime = s_time;
+		TFE_Input::recordReplayTime(s_startTime);
 
 		const u64 timerFreq = SDL_GetPerformanceFrequency();
 		s_syncCheckDelay = timerFreq * 10;	// 10 seconds.
@@ -106,12 +120,27 @@ namespace TFE_System
 		return dt;
 	}
 
+	u64 getStartTime()
+	{
+		return s_startTime;
+	}
+
+	void setStartTime(u64 startTime)
+	{
+		s_startTime = startTime;
+	}
+
+	u64 getTimePerf()
+	{
+		return SDL_GetPerformanceCounter();
+	}
+	
 	void update()
 	{
 		// This assumes that SDL_GetPerformanceCounter() is monotonic.
 		// However if errors do occur, the dt clamp later should limit the side effects.
 		const u64 curTime = SDL_GetPerformanceCounter();
-		const u64 uDt = (curTime > s_time) ? (curTime - s_time) : 1;	// Make sure time is monotonic.
+		const u64 uDt = (curTime > s_time) ? (curTime - s_time) : 1;	// Make sure time is monotonic.		
 		s_time = curTime;
 		if (s_resetStartTime)
 		{
@@ -171,7 +200,7 @@ namespace TFE_System
 		return s_dtRaw;
 	}
 
-	// Get time since "start time"
+	// Get time since "start time", in seconds.
 	f64 getTime()
 	{
 		const u64 uDt = s_time - s_startTime;
@@ -188,6 +217,11 @@ namespace TFE_System
 		return f64(ticks) * s_freq;
 	}
 
+	f64 convertFromTicksToMillis(u64 ticks)
+	{
+		return f64(ticks) * 1000.0 * s_freq;
+	}
+
 	f64 microsecondsToSeconds(f64 mu)
 	{
 		return mu / 1000000.0;
@@ -198,6 +232,13 @@ namespace TFE_System
 		time_t _tm = time(NULL);
 		struct tm* curtime = localtime(&_tm);
 		strcpy(output, asctime(curtime));
+	}
+
+	void getDateTimeStringForFile(char* output)
+	{
+		time_t _tm = time(NULL);
+		struct tm* curtime = localtime(&_tm);
+		sprintf(output, "%0.2d-%0.2d-%0.4d-%0.2d-%0.2d", curtime->tm_mon + 1, curtime->tm_mday, curtime->tm_year + 1900, curtime->tm_hour + 1, curtime->tm_min);
 	}
 
 	bool osShellExecute(const char* pathToExe, const char* exeDir, const char* param, bool waitForCompletion)
@@ -254,8 +295,6 @@ namespace TFE_System
 	{
 		s_systemUiRequestPosted = true;
 	}
-
-
 
 	bool quitMessagePosted()
 	{

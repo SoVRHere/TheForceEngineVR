@@ -1,5 +1,7 @@
 #include "editVertex.h"
 #include "editCommon.h"
+#include "editSurface.h"
+#include "editTransforms.h"
 #include "levelEditor.h"
 #include "hotkeys.h"
 #include "error.h"
@@ -46,113 +48,12 @@ namespace LevelEditor
 	////////////////////////////////////////
 	// API
 	////////////////////////////////////////
-	void handleMouseControlVertex(Vec2f worldPos, RayHitInfo* info/*=nullptr*/)
-	{
-		s32 mx, my;
-		TFE_Input::getMousePos(&mx, &my);
-
-		// Short names to make the logic easier to follow.
-		const bool selAdd = TFE_Input::keyModDown(KEYMOD_SHIFT);
-		const bool selRem = TFE_Input::keyModDown(KEYMOD_ALT);
-		const bool selToggle = TFE_Input::keyModDown(KEYMOD_CTRL);
-		const bool selToggleDrag = selAdd && selToggle;
-
-		const bool mousePressed = s_singleClick;
-		const bool mouseDown = TFE_Input::mouseDown(MouseButton::MBUTTON_LEFT);
-
-		const bool del = TFE_Input::keyPressed(KEY_DELETE);
-
-		bool hasHovered = selection_hasHovered();
-		bool hasFeature = selection_getCount() > 0;
-
-		s32 vertexIndex = -1;
-		EditorSector* sector = nullptr;
-		HitPart part = HP_FLOOR;
-		if (del && (hasHovered || hasFeature))
-		{
-			// TODO: Currently, you can only delete one vertex at a time. It should be possible to delete multiple.
-			// Choose the selected feature over the hovered feature.
-			selection_getVertex(hasFeature ? 0 : SEL_INDEX_HOVERED, sector, vertexIndex);
-			if (sector)
-			{
-				edit_deleteVertex(sector->id, vertexIndex, LName_DeleteVertex);
-			}
-			return;
-		}
-
-		if (mousePressed)
-		{
-			assert(!s_dragSelect.active);
-			if (!selToggle && (selAdd || selRem))
-			{
-				startDragSelect(mx, my, selAdd ? DSEL_ADD : DSEL_REM);
-			}
-			else if (selToggle)
-			{
-				if (hasHovered && selection_getVertex(SEL_INDEX_HOVERED, sector, vertexIndex, &part))
-				{
-					s_editMove = true;
-					adjustGridHeight(sector);
-					selection_vertex(SA_TOGGLE, sector, vertexIndex, part);
-				}
-			}
-			else
-			{
-				if (hasHovered && selection_getVertex(SEL_INDEX_HOVERED, sector, vertexIndex, &part))
-				{
-					handleSelectMode(sector, -1);
-					// If you click on a vertex already in the selection, then do nothing,
-					// otherwise SET the selection to the hovered vertex.
-					if (!selection_vertex(SA_CHECK_INCLUSION, sector, vertexIndex))
-					{
-						selection_vertex(SA_SET, sector, vertexIndex, part);
-					}
-
-					s_curVtxPos = s_hoveredVtxPos;
-					adjustGridHeight(sector);
-					s_editMove = true;
-				}
-				else if (!s_editMove)
-				{
-					startDragSelect(mx, my, DSEL_SET);
-				}
-			}
-		}
-		else if (mouseDown)
-		{
-			if (!s_dragSelect.active)
-			{
-				if (selToggleDrag && hasHovered && selection_getVertex(SEL_INDEX_HOVERED, sector, vertexIndex, &part))
-				{
-					s_editMove = true;
-					adjustGridHeight(sector);
-					selection_vertex(SA_ADD, sector, vertexIndex, part);
-				}
-			}
-			// Draw select continue.
-			else if (!selToggle && !s_editMove)
-			{
-				updateDragSelect(mx, my);
-			}
-			else
-			{
-				s_dragSelect.active = false;
-			}
-		}
-		else if (s_dragSelect.active)
-		{
-			s_dragSelect.active = false;
-		}
-
-		handleVertexInsert(worldPos, info);
-	}
-
 	void handleVertexInsert(Vec2f worldPos, RayHitInfo* info/*=nullptr*/)
 	{
 		const bool mousePressed = s_singleClick;
 		const bool mouseDown = TFE_Input::mouseDown(MouseButton::MBUTTON_LEFT);
 		// TODO: Hotkeys.
-		const bool insertVtx = TFE_Input::keyPressed(KEY_INSERT);
+		const bool insertVtx = isShortcutPressed(SHORTCUT_PLACE);
 		const bool snapToGridEnabled = !TFE_Input::keyModDown(KEYMOD_ALT) && s_grid.size > 0.0f;
 
 		// Early out.
@@ -183,7 +84,7 @@ namespace LevelEditor
 				else
 				{
 					HitPart part = HP_NONE;
-					checkForWallHit3d(info, sector, wallIndex, part, sector);
+					edit_checkForWallHit3d(info, sector, wallIndex, part, sector);
 					if (!sector || wallIndex < 0 || part == HP_FLOOR || part == HP_CEIL)
 					{
 						return;
@@ -192,11 +93,11 @@ namespace LevelEditor
 			}
 			else if (s_view == EDIT_VIEW_2D)
 			{
-				sector = edit_getHoverSector2dAtCursor(s_curLayer);
+				sector = edit_getHoverSector2dAtCursor();
 				if (sector)
 				{
 					HitPart part = HP_NONE;
-					checkForWallHit2d(worldPos, sector, wallIndex, part, sector);
+					edit_checkForWallHit2d(worldPos, sector, wallIndex, part, sector);
 					if (!sector || wallIndex < 0 || part == HP_FLOOR || part == HP_CEIL)
 					{
 						return;
@@ -279,7 +180,7 @@ namespace LevelEditor
 
 	void findHoveredVertex2d(EditorSector* hoveredSector, Vec2f worldPos)
 	{
-		if (hoveredSector && !sector_isInteractable(hoveredSector))
+		if (hoveredSector && (!sector_isInteractable(hoveredSector) || !sector_onActiveLayer(hoveredSector)))
 		{
 			hoveredSector = nullptr;
 			selection_clearHovered();
@@ -418,8 +319,7 @@ namespace LevelEditor
 			EditorSector* sector = s_level.sectors.data();
 			for (size_t s = 0; s < sectorCount; s++, sector++)
 			{
-				if (s_curLayer != sector->layer && s_curLayer != LAYER_ANY) { continue; }
-				if (!sector_isInteractable(sector)) { continue; }
+				if (!sector_isInteractable(sector) || !sector_onActiveLayer(sector)) { continue; }
 				if (!aabbOverlap2d(sector->bounds, aabb)) { continue; }
 
 				const size_t vtxCount = sector->vtx.size();
@@ -451,9 +351,7 @@ namespace LevelEditor
 			// Trace forward at the screen center to get the likely focus sector.
 			Vec3f centerViewDir = edit_viewportCoordToWorldDir3d({ s_viewportSize.x / 2, s_viewportSize.z / 2 });
 			RayHitInfo hitInfo;
-
-			s32 layer = (s_editFlags & LEF_SHOW_ALL_LAYERS) ? LAYER_ANY : s_curLayer;
-			Ray ray = { s_camera.pos, centerViewDir, 1000.0f, layer };
+			Ray ray = { s_camera.pos, centerViewDir, 1000.0f };
 
 			f32 nearDist = 1.0f;
 			f32 farDist = 100.0f;
@@ -512,8 +410,7 @@ namespace LevelEditor
 			EditorSector* sector = s_level.sectors.data();
 			for (size_t s = 0; s < sectorCount; s++, sector++)
 			{
-				if (layer != sector->layer && layer != LAYER_ANY) { continue; }
-				if (!sector_isInteractable(sector)) { continue; }
+				if (!sector_isInteractable(sector) || !sector_onActiveLayer(sector)) { continue; }
 
 				// For now, do them all...
 				const size_t vtxCount = sector->vtx.size();
@@ -615,9 +512,37 @@ namespace LevelEditor
 			s_moveStarted = true;
 			s_moveStartPos = sector->vtx[vertexIndex];
 			s_moveVertexPivot = &sector->vtx[vertexIndex];
+			edit_setTransformAnchor({ s_moveStartPos.x, s_cursor3d.y, s_moveStartPos.z });
 		}
 		// Current movement.
-		const Vec2f delta = { worldPos2d.x - s_moveVertexPivot->x, worldPos2d.z - s_moveVertexPivot->z };
+		u32 moveAxis = edit_getMoveAxis();
+		Vec2f delta = { worldPos2d.x - s_moveVertexPivot->x, worldPos2d.z - s_moveVertexPivot->z };
+		const Vec3f pos = edit_getTransformPos();
+		Vec3f transPos = { worldPos2d.x, pos.y, worldPos2d.z };
+				
+		if (s_view == EDIT_VIEW_3D)
+		{
+			// Avoid singularities.
+			const Vec2f cameraDelta = { transPos.x - s_camera.pos.x, transPos.z - s_camera.pos.z };
+			if (cameraDelta.x*s_rayDir.x + cameraDelta.z*s_rayDir.z < 0.0f || (s_cursor3d.x == 0.0f && s_cursor3d.z == 0.0f))
+			{
+				// Do not allow the object to be moved behind the camera.
+				return;
+			}
+		}
+
+		if (!(moveAxis & AXIS_X))
+		{
+			delta.x = 0.0f;
+			transPos.x = pos.x;
+		}
+		if (!(moveAxis & AXIS_Z))
+		{
+			delta.z = 0.0f;
+			transPos.z = pos.z;
+		}
+
+		edit_setTransformPos(transPos);
 		edit_moveSelectedVertices(delta);
 
 		s_curVtxPos.x = s_moveVertexPivot->x;
@@ -639,9 +564,8 @@ namespace LevelEditor
 
 		for (s32 i = 0; i < count; i++, sector++)
 		{
-			if (!sector_isInteractable(sector)) { continue; }
+			if (!sector_isInteractable(sector) || !sector_onActiveLayer(sector)) { continue; }
 			if (use3dCheck && (pos.y < sector->bounds[0].y || pos.y > sector->bounds[1].y)) { continue; }
-			if (!(s_editFlags & LEF_SHOW_ALL_LAYERS) && s_curLayer != sector->layer) { continue; }
 
 			if (pos.x + maxDist < sector->bounds[0].x || pos.x - maxDist > sector->bounds[1].x ||
 				pos.z + maxDist < sector->bounds[0].z || pos.z - maxDist > sector->bounds[1].z)

@@ -225,6 +225,7 @@ tasks.named('preBuild').configure {
         def srcDirs= [
                 "Captions",
                 "Documentation",
+                "ExternalData",
                 "UI_Text",
                 "UI_Images",
                 "Shaders",

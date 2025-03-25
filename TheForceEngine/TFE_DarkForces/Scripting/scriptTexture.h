@@ -6,16 +6,23 @@
 // in order to properly test elements in isolation without having
 // to "play" the game as intended.
 //////////////////////////////////////////////////////////////////////
+#include <TFE_System/system.h>
 #include <TFE_System/types.h>
-#include <string>
+#include <TFE_Jedi/Level/rtexture.h>
 
-class asIScriptEngine;
-
-namespace LevelEditor
+namespace TFE_DarkForces
 {
-	class LS_API
+	class ScriptTexture
 	{
 	public:
-		virtual bool scriptRegister(asIScriptEngine* engine) = 0;
+		ScriptTexture() : m_id(-1) {};
+		ScriptTexture(s32 id) : m_id(id) {};
+		void registerType();
+
+		static s32 getTextureIdFromData(TextureData** texData);
+		static bool isTextureValid(ScriptTexture* tex);
+
+	public:
+		s32 m_id;
 	};
 }

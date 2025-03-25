@@ -387,9 +387,10 @@ namespace TFE_RenderBackend
 		if (blitVirtualDisplay) { drawVirtualDisplay(); }
 		else { glClear(GL_COLOR_BUFFER_BIT); }
 
+		// Handle the UI.
 		TFE_ZONE_BEGIN(systemUi, "System UI");
 		pushGroup("System UI");
-		// Handle the UI.
+		if (TFE_Ui::isGuiFrameActive() && s_screenCapture->wantsToDrawGui()) { s_screenCapture->drawGui(); }
 		TFE_Ui::render();
 		// Reset the state due to UI changes.
 		TFE_RenderState::clear();
@@ -453,9 +454,9 @@ namespace TFE_RenderBackend
 		s_screenshotQueued = true;
 	}
 		
-	void startGifRecording(const char* path)
+	void startGifRecording(const char* path, bool skipCountdown)
 	{
-		s_screenCapture->beginRecording(path);
+		s_screenCapture->beginRecording(path, skipCountdown);
 	}
 
 	void stopGifRecording()
@@ -1052,11 +1053,13 @@ namespace TFE_RenderBackend
 
 	void invalidateRenderTarget()
 	{
+#if defined(ENABLE_VR)
 		if (TFE_Settings::getTempSettings()->vr)
 		{
 			RenderTarget& renderTarget = vr::GetRenderTarget(vr::Side::Left);
 			renderTarget.invalidate();
 		}
+#endif
 	}
 
 	void setViewport(s32 x, s32 y, s32 w, s32 h)

@@ -23,6 +23,7 @@ namespace TFE_Ui
 {
 const char* glsl_version = "#version 130";
 static s32 s_uiScale = 100;
+static bool s_guiFrameActive;
 
 bool init(void* window, void* context, s32 uiScale)
 {
@@ -126,6 +127,7 @@ void begin()
 #endif
 
 	ImGui::NewFrame();
+	s_guiFrameActive = true; // No way to check if we're inside a frame using ImGui's APIs?
 }
 
 void render()
@@ -136,7 +138,10 @@ void render()
 #else
 	TFE_RenderShared::imGuiDraw_render();
 #endif
+	s_guiFrameActive = false;
 }
+
+bool isGuiFrameActive() { return s_guiFrameActive; }
 
 void invalidateFontAtlas()
 {

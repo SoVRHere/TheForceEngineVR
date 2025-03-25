@@ -5,6 +5,8 @@ set(SOURCES
 	inputEnum.h
 	inputMapping.cpp
 	inputMapping.h
+	replay.cpp
+	replay.h
 	touchInput.cpp
 	touchInput.h
 )

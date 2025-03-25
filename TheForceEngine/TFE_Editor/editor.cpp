@@ -13,6 +13,9 @@
 #include <TFE_Editor/LevelEditor/levelEditorInf.h>
 #include <TFE_Editor/LevelEditor/groups.h>
 #include <TFE_Editor/LevelEditor/lighting.h>
+#include <TFE_Editor/LevelEditor/findSectorUI.h>
+#include <TFE_Editor/LevelEditor/snapshotUI.h>
+#include <TFE_Editor/LevelEditor/browser.h>
 #include <TFE_Editor/EditorAsset/editorAsset.h>
 #include <TFE_Editor/EditorAsset/editor3dThumbnails.h>
 #include <TFE_Input/input.h>
@@ -30,9 +33,6 @@
 
 namespace TFE_Editor
 {
-	// Set to 1 to enable
-	#define ENABLE_LEVEL_EDITOR 1
-
 	enum EditorMode
 	{
 		EDIT_ASSET_BROWSER = 0,
@@ -120,7 +120,7 @@ namespace TFE_Editor
 		TFE_RenderShared::modelDraw_init();
 		thumbnail_init(64);
 		TFE_Polygon::clipInit();
-		s_msgBox = {};
+		s_msgBox = MessageBox{};
 		s_gpuImages.clear();
 	}
 
@@ -293,6 +293,10 @@ namespace TFE_Editor
 			{
 				ImGui::OpenPopup("Project");
 			} break;
+			case POPUP_EXPORT_PROJECT:
+			{
+				ImGui::OpenPopup("Export Project");
+			} break;
 			case POPUP_NEW_LEVEL:
 			{
 				ImGui::OpenPopup("New Level");
@@ -309,6 +313,18 @@ namespace TFE_Editor
 			{
 				ImGui::OpenPopup("Edit INF");
 			} break;
+			case POPUP_FIND_SECTOR:
+			{
+				ImGui::OpenPopup("Find Sector");
+			} break;
+			case POPUP_SNAPSHOTS:
+			{
+				ImGui::OpenPopup("Snapshots");
+			} break;
+			case POPUP_TEX_SOURCES:
+			{
+				ImGui::OpenPopup("Texture Sources");
+			} break;
 			case POPUP_GROUP_NAME:
 			{
 				ImGui::OpenPopup("Choose Name");
@@ -320,6 +336,10 @@ namespace TFE_Editor
 			case POPUP_LEV_USER_PREF:
 			{
 				ImGui::OpenPopup("User Preferences");
+			} break;
+			case POPUP_LEV_TEST_OPTIONS:
+			{
+				ImGui::OpenPopup("Test Options");
 			} break;
 			case POPUP_HISTORY_VIEW:
 			{
@@ -374,6 +394,14 @@ namespace TFE_Editor
 					s_editorPopup = POPUP_NONE;
 				}
 			} break;
+			case POPUP_EXPORT_PROJECT:
+			{
+				if (project_exportUi())
+				{
+					ImGui::CloseCurrentPopup();
+					s_editorPopup = POPUP_NONE;
+				}
+			} break;
 			case POPUP_NEW_LEVEL:
 			{
 				if (level_newLevelUi())
@@ -407,6 +435,30 @@ namespace TFE_Editor
 					s_editorPopup = POPUP_NONE;
 				}
 			} break;
+			case POPUP_FIND_SECTOR:
+			{
+				if (LevelEditor::findSectorUI())
+				{
+					ImGui::CloseCurrentPopup();
+					s_editorPopup = POPUP_NONE;
+				}
+			} break;
+			case POPUP_SNAPSHOTS:
+			{
+				if (LevelEditor::snapshotUI())
+				{
+					ImGui::CloseCurrentPopup();
+					s_editorPopup = POPUP_NONE;
+				}
+			} break;
+			case POPUP_TEX_SOURCES:
+			{
+				if (LevelEditor::textureSourcesUI())
+				{
+					ImGui::CloseCurrentPopup();
+					s_editorPopup = POPUP_NONE;
+				}
+			} break;
 			case POPUP_GROUP_NAME:
 			{
 				if (LevelEditor::groups_chooseName())
@@ -426,6 +478,14 @@ namespace TFE_Editor
 			case POPUP_LEV_USER_PREF:
 			{
 				if (LevelEditor::userPreferences())
+				{
+					ImGui::CloseCurrentPopup();
+					s_editorPopup = POPUP_NONE;
+				}
+			} break;
+			case POPUP_LEV_TEST_OPTIONS:
+			{
+				if (LevelEditor::testOptions())
 				{
 					ImGui::CloseCurrentPopup();
 					s_editorPopup = POPUP_NONE;
@@ -562,12 +622,25 @@ namespace TFE_Editor
 		const s32 winWidth = info.width;
 
 		const Project* project = project_get();
+		char fullTitle[1024];
 		const char* title = project->active ? project->name : c_readOnly;
-		const s32 titleWidth = (s32)ImGui::CalcTextSize(title).x;
+		if (s_editorAssetType == TYPE_LEVEL)
+		{
+			sprintf(fullTitle, "%s - %s", title, LevelEditor::s_level.name.c_str());
+			if (LevelEditor::levelIsDirty())
+			{
+				strcat(fullTitle, "*");
+			}
+		}
+		else
+		{
+			strcpy(fullTitle, title);
+		}
+		const s32 titleWidth = (s32)ImGui::CalcTextSize(fullTitle).x;
 
 		const ImVec4 titleColor = getTextColor(project->active ? TEXTCLR_TITLE_ACTIVE : TEXTCLR_TITLE_INACTIVE);
 		ImGui::SameLine(f32((winWidth - titleWidth)/2));
-		ImGui::TextColored(titleColor, "%s", title);
+		ImGui::TextColored(titleColor, "%s", fullTitle);
 	}
 
 	void menu()
@@ -622,6 +695,13 @@ namespace TFE_Editor
 					{
 						AssetBrowser::selectAll();
 					}
+					else if (s_editorMode == EDIT_ASSET)
+					{
+						if (s_editorAssetType == TYPE_LEVEL)
+						{
+							LevelEditor::selectAll();
+						}
+					}
 				}
 				if (ImGui::MenuItem("Select None", NULL, (bool*)NULL))
 				{
@@ -642,6 +722,13 @@ namespace TFE_Editor
 					if (s_editorMode == EDIT_ASSET_BROWSER)
 					{
 						AssetBrowser::invertSelection();
+					}
+					else if (s_editorMode == EDIT_ASSET)
+					{
+						if (s_editorAssetType == TYPE_LEVEL)
+						{
+							LevelEditor::selectInvert();
+						}
 					}
 				}
 				ImGui::EndMenu();
@@ -679,11 +766,11 @@ namespace TFE_Editor
 				}
 				if (!projectActive) { enableNextItem(); }
 				ImGui::Separator();
-				disableNextItem();  // Disable until it does something...
 				if (ImGui::MenuItem("Export", NULL, (bool*)NULL))
 				{
+					s_editorPopup = POPUP_EXPORT_PROJECT;
+					project_prepareExportUi();
 				}
-				enableNextItem();
 				ImGui::Separator();
 				if (s_recents.empty()) { disableNextItem(); }
 				if (ImGui::BeginMenu("Recent Projects"))
@@ -828,6 +915,14 @@ namespace TFE_Editor
 			{
 				LevelEditor::editor_infEditBegin((char*)userPtr, userData == 0xffffffff ? -1 : userData);
 			} break;
+			case POPUP_FIND_SECTOR:
+			{
+				LevelEditor::findSectorUI_Begin();
+			} break;
+			case POPUP_SNAPSHOTS:
+			{
+				LevelEditor::snapshotUI_Begin();
+			} break;
 		}
 	}
 		
@@ -957,13 +1052,9 @@ namespace TFE_Editor
 		// TODO: Other asset editors.
 		if (asset->type == TYPE_LEVEL)
 		{
-		#if ENABLE_LEVEL_EDITOR
 			s_editorMode = EDIT_ASSET;
 			s_editorAssetType = asset->type;
 			LevelEditor::init(asset);
-		#else
-			showMessageBox("Warning", "The level editor is disabled and\nwill be enabled in the upcoming\nlevel editor release.");
-		#endif
 		}
 		else
 		{
@@ -974,6 +1065,7 @@ namespace TFE_Editor
 	void disableAssetEditor()
 	{
 		s_editorMode = EDIT_ASSET_BROWSER;
+		s_editorAssetType = TYPE_NOT_SET;
 	}
 
 	void updateTooltips()
@@ -1039,7 +1131,10 @@ namespace TFE_Editor
 		if (image)
 		{
 			gpuImage = TFE_RenderBackend::createTexture(image->w, image->h, (u32*)image->pixels, MAG_FILTER_LINEAR);
-			s_gpuImages[path] = gpuImage;
+			if (gpuImage)
+			{
+				s_gpuImages[path] = gpuImage;
+			}
 		}
 		return gpuImage;
 	}

@@ -2,6 +2,8 @@
 #include "levelEditorData.h"
 #include "levelEditorHistory.h"
 #include "editVertex.h"
+#include "editCommon.h"
+#include "hotkeys.h"
 #include "guidelines.h"
 #include "tabControl.h"
 #include "camera.h"
@@ -21,6 +23,7 @@
 #include <TFE_Jedi/Level/rwall.h>
 #include <TFE_Jedi/Level/rsector.h>
 #include <TFE_System/math.h>
+#include <TFE_System/system.h>
 #include <TFE_Ui/ui.h>
 
 #include <algorithm>
@@ -84,6 +87,10 @@ namespace LevelEditor
 	static char s_scriptLine[4096] = { 0 };
 	static char s_script[65536] = { 0 };
 	static bool s_allowScriptHistoryCallback = false;
+	
+	bool infoIntInput(const char* labelId, u32 width, s32* value, bool unset = false);
+	bool infoUIntInput(const char* labelId, u32 width, u32* value, bool unset = false);
+	bool infoFloatInput(const char* labelId, u32 width, f32* value, bool unset = false);
 		
 	void infoPanelClearMessages()
 	{
@@ -343,16 +350,9 @@ namespace LevelEditor
 		selection_clear();
 		selection_clearHovered();
 	}
-		
-	void selectAndScrollToSector(EditorSector* sector)
-	{
-		// Clear the selection, select the sector.
-		selection_clear();
 
-		// Set the edit mode to "Sector"
-		edit_setEditMode(LEDIT_SECTOR);
-		selection_sector(SA_SET, sector);
-				
+	void scrollToSector(EditorSector* sector)
+	{
 		// Set the correct layer.
 		if (!(s_editFlags & LEF_SHOW_ALL_LAYERS))
 		{
@@ -411,10 +411,22 @@ namespace LevelEditor
 		}
 	}
 		
+	void selectAndScrollToSector(EditorSector* sector)
+	{
+		// Clear the selection, select the sector.
+		selection_clear();
+
+		// Set the edit mode to "Sector"
+		edit_setEditMode(LEDIT_SECTOR);
+		selection_sector(SA_SET, sector);
+				
+		scrollToSector(sector);
+	}
+		
 	void listNamedSectorsInGroup(Group* group)
 	{
 		const s32 count = (s32)s_level.sectors.size();
-		const s32 groupId = group->id;
+		const s32 groupId = (s32)group->id;
 		EditorSector* sector = s_level.sectors.data();
 
 		Sublist sublist;
@@ -427,10 +439,36 @@ namespace LevelEditor
 			}
 			if (sublist_item(sublist, sector->name.c_str(), selection_featureInCurrentSelection(sector)))
 			{
-				
+				if (s_editMode == LEDIT_SECTOR)
+				{
+					const bool selToggle = TFE_Input::keyModDown(KEYMOD_CTRL);
+					const bool setOrAdd = !selToggle || !selection_sector(SA_CHECK_INCLUSION, sector);
+					if (selToggle)
+					{
+						selection_sector(setOrAdd ? SA_ADD : SA_REMOVE, sector);
+					}
+					else
+					{
+						selection_sector(SA_SET, sector);
+					}
+
+					if (setOrAdd)
+					{
+						scrollToSector(sector);
+					}
+				}
 			}
 		}
 		sublist_end(sublist);
+	}
+
+	void infoPanelOpenGroup(s32 groupId)
+	{
+		Group* group = groups_getById(groupId);
+		if (group)
+		{
+			s_groupOpen = group->index;
+		}
 	}
 
 	void infoPanelMap()
@@ -449,9 +487,19 @@ namespace LevelEditor
 			s_level.bounds[1].x, s_level.bounds[1].y, s_level.bounds[1].z);
 		ImGui::Text("Layer Range: [%d, %d]", s_level.layerRange[0], s_level.layerRange[1]);
 		ImGui::LabelText("##GridLabel", "Grid Height");
-		ImGui::SameLine(128.0f);
-		ImGui::SetNextItemWidth(196.0f);
+		ImGui::SameLine(108.0f);
+		ImGui::SetNextItemWidth(80.0f);
 		ImGui::InputFloat("##GridHeight", &s_grid.height, 0.0f, 0.0f, "%0.2f", ImGuiInputTextFlags_CharsDecimal);
+
+		ImGui::SameLine(0.0f, 16.0f);
+		ImGui::SetNextItemWidth(86.0f);
+		ImGui::LabelText("##DepthLabel", "View Depth");
+		ImGui::SameLine(0.0f, 8.0f);
+		ImGui::SetNextItemWidth(80.0f);
+		ImGui::InputFloat("##ViewDepth0", &s_viewDepth[0], 0.0f, 0.0f, "%0.2f", ImGuiInputTextFlags_CharsDecimal);
+		ImGui::SameLine(0.0f, 4.0f);
+		ImGui::SetNextItemWidth(80.0f);
+		ImGui::InputFloat("##ViewDepth1", &s_viewDepth[1], 0.0f, 0.0f, "%0.2f", ImGuiInputTextFlags_CharsDecimal);
 			
 		ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize
 			| ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoFocusOnAppearing;
@@ -646,68 +694,99 @@ namespace LevelEditor
 		s_prevVertexFeature.featureIndex = index;
 	}
 
+	bool editVertexPosition(EditorSector* sector, s32 index)
+	{
+		Vec2f curPos = sector->vtx[index];
+		ImGui::Text("Vertex %d of Sector %d", index, sector->id);
+
+		u32 compositeID = sector->id + (index << 16);
+		char vec2Id[512];
+		sprintf(vec2Id, "##VertexPosition%x", compositeID);
+		if (inputVec2f(vec2Id, &curPos))
+		{
+			sector->vtx[index] = curPos;
+			return true;
+		}
+		return false;
+	}
+
 	void infoPanelVertex()
 	{
 		s32 index = -1;
 		EditorSector* sector = nullptr;
 
-		const u32 count = selection_getCount();
-		if (count)
+		ImGui::BeginChild("##VertexList");
 		{
-			selection_getVertex(0, sector, index);
-		}
-		else if (selection_hasHovered())
-		{
-			selection_getVertex(SEL_INDEX_HOVERED, sector, index);
-		}
-
-		// If there is no selected vertex, just show vertex 0...
-		if (index < 0 || !sector)
-		{
-			getPrevVertexFeature(sector, index);
-		}
-		if (index < 0 || !sector) { return; }
-		setPrevVertexFeature(sector, index);
-
-		Vec2f* vtx = sector->vtx.data() + index;
-		if (count > 1)
-		{
-			ImGui::Text("Multiple vertices selected, enter a movement delta.");
-		}
-		else
-		{
-			ImGui::Text("Vertex %d of Sector %d", index, sector->id);
-		}
-
-		ImGui::NewLine();
-		ImGui::PushItemWidth(UI_SCALE(80));
-		ImGui::LabelText("##PositionLabel", "Position");
-		ImGui::PopItemWidth();
-
-		ImGui::SameLine();
-		Vec2f curPos = { 0 };
-		if (count <= 1)
-		{
-			curPos = *vtx;
-		}
-
-		Vec2f prevPos = curPos;
-		if (inputVec2f("##VertexPosition", &curPos))
-		{
-			if (count <= 1) // Move the single vertex.
+			const u32 count = selection_getCount();
+			if (count <= 1)
 			{
-				const FeatureId id = createFeatureId(sector, index, 0, false);
-				// cmd_addSetVertex(id, curPos);
-				edit_setVertexPos(id, curPos);
+				if (count)
+				{
+					selection_getVertex(0, sector, index);
+				}
+				else if (selection_hasHovered())
+				{
+					selection_getVertex(SEL_INDEX_HOVERED, sector, index);
+				}
+				else
+				{
+					getPrevVertexFeature(sector, index);
+				}
+				if (index < 0 || !sector) { return; }
+				setPrevVertexFeature(sector, index);
+				if (editVertexPosition(sector, index))
+				{
+					sectorToPolygon(sector);
+
+					s_idList.resize(1);
+					s_idList[0] = sector->id;
+					cmd_sectorSnapshot(LName_MoveVertex, s_idList);
+				}
 			}
-			else  // Move the whole group.
+			else
 			{
-				const Vec2f delta = { curPos.x - prevPos.x, curPos.z - prevPos.z };
-				// cmd_addMoveVertices((s32)s_selectionList.size(), s_selectionList.data(), delta);
-				edit_moveSelectedVertices(delta);
+				s_idList.clear();
+				s_searchKey++;
+
+				for (u32 i = 0; i < count; i++)
+				{
+					selection_getVertex(i, sector, index);
+					if (i == 0)
+					{
+						setPrevVertexFeature(sector, index);
+					}
+					if (editVertexPosition(sector, index))
+					{
+						if (sector->searchKey != s_searchKey)
+						{
+							sector->searchKey = s_searchKey;
+							s_idList.push_back(sector->id);
+						}
+					}
+					if (i < count - 1)
+					{
+						ImGui::Separator();
+					}
+				}
+
+				if (s_idList.empty())
+				{
+					// Take it back, no sectors added.
+					s_searchKey--;
+				}
+				else
+				{
+					const s32 sectorCount = (s32)s_idList.size();
+					const s32* idList = s_idList.data();
+					for (s32 i = 0; i < sectorCount; i++)
+					{
+						sectorToPolygon(&s_level.sectors[idList[i]]);
+					}
+					cmd_sectorSnapshot(LName_MoveVertex, s_idList);
+				}
 			}
 		}
-		ImGui::PopItemWidth();
+		ImGui::EndChild();
 	}
 
 	void infoLabel(const char* labelId, const char* labelText, u32 width)
@@ -717,26 +796,71 @@ namespace LevelEditor
 		ImGui::PopItemWidth();
 		ImGui::SameLine();
 	}
-
-	void infoIntInput(const char* labelId, u32 width, s32* value)
+		
+	bool infoIntInput(const char* labelId, u32 width, s32* value, bool unset)
 	{
 		ImGui::PushItemWidth(f32(width));
-		ImGui::InputInt(labelId, value);
+		bool result = false;
+		if (unset)
+		{
+			char buf[32] = { 0 };
+			result = ImGui::InputTextWithHint(labelId, "unset", buf, 32, ImGuiInputTextFlags_CharsDecimal);
+			if (result)
+			{
+				char* endPtr = nullptr;
+				*value = strtol(buf, &endPtr, 10);
+			}
+		}
+		else
+		{
+			result = ImGui::InputInt(labelId, value);
+		}
 		ImGui::PopItemWidth();
+		return result;
 	}
 
-	void infoUIntInput(const char* labelId, u32 width, u32* value)
+	bool infoUIntInput(const char* labelId, u32 width, u32* value, bool unset)
 	{
 		ImGui::PushItemWidth(f32(width));
-		ImGui::InputUInt(labelId, value);
+		bool result = false;
+		if (unset)
+		{
+			char buf[32] = { 0 };
+			result = ImGui::InputTextWithHint(labelId, "unset", buf, 32, ImGuiInputTextFlags_CharsDecimal);
+			if (result)
+			{
+				char* endPtr = nullptr;
+				*value = strtoul(buf, &endPtr, 10);
+			}
+		}
+		else
+		{
+			result = ImGui::InputUInt(labelId, value);
+		}
 		ImGui::PopItemWidth();
+		return result;
 	}
 
-	void infoFloatInput(const char* labelId, u32 width, f32* value)
+	bool infoFloatInput(const char* labelId, u32 width, f32* value, bool unset)
 	{
 		ImGui::PushItemWidth(f32(width));
-		ImGui::InputFloat(labelId, value, 0.0f, 0.0f, "%.2f");
+		bool result = false;
+		if (unset)
+		{
+			char buf[32] = { 0 };
+			result = ImGui::InputTextWithHint(labelId, "unset", buf, 32, ImGuiInputTextFlags_CharsDecimal);
+			if (result)
+			{
+				char* endPtr = nullptr;
+				*value = (f32)strtod(buf, &endPtr);
+			}
+		}
+		else
+		{
+			result = ImGui::InputFloat(labelId, value, 0.0f, 0.0f, "%.2f");
+		}
 		ImGui::PopItemWidth();
+		return result;
 	}
 
 	void getPrevWallFeature(EditorSector*& sector, s32& index)
@@ -760,256 +884,747 @@ namespace LevelEditor
 		index = s_prevWallFeature.featureIndex;
 	}
 
+	struct WallInfo
+	{
+		EditorSector* sector;
+		s32 wallIndex;
+	};
+	
+	enum WallChangeFlags : u32
+	{
+		WCF_NONE = 0,
+		WCF_LIGHT = FLAG_BIT(0),
+		WCF_FLAG1_SET = FLAG_BIT(1),
+		WCF_FLAG3_SET = FLAG_BIT(2),
+	};
+	enum SectorChangeFlags : u32
+	{
+		SCF_NONE = 0,
+		SCF_LAYER = FLAG_BIT(0),
+		SCF_AMBIENT = FLAG_BIT(1),
+		SCF_FLOOR_HEIGHT = FLAG_BIT(2),
+		SCF_SEC_HEIGHT = FLAG_BIT(3),
+		SCF_CEIL_HEIGHT = FLAG_BIT(4),
+		SCF_FLAG1_SET = FLAG_BIT(5),
+		SCF_FLAG2_SET = FLAG_BIT(6),
+		SCF_FLAG3_SET = FLAG_BIT(7),
+	};
+
+	struct WallChanges
+	{
+		bool applyChanges = false;
+		u32 changes = WCF_NONE;
+		s32 flags1Changed = 0;
+		s32 flags3Changed = 0;
+		s32 flags1Value = 0;
+		s32 flags3Value = 0;
+		s32 light = 0;
+		s32 flags1_set = 0;
+		s32 flags3_set = 0;
+	};
+
+	struct SectorChanges
+	{
+		bool applyChanges = false;
+		u32 changes = SCF_NONE;
+		s32 layer = 0;
+		s32 ambient = 0;
+		f32 floorHeight = 0.0f;
+		f32 secHeight = 0.0f;
+		f32 ceilHeight = 0.0f;
+		s32 flags1Changed = 0;
+		s32 flags1Value = 0;
+		s32 flags1_set = 0;
+		s32 flags2_set = 0;
+		s32 flags3_set = 0;
+	};
+
+	static WallChanges s_wallChanges = {};
+	static SectorChanges s_sectorChanges = {};
+	std::vector<WallInfo> s_wallInfo;
+	std::vector<EditorSector*> s_sectorInfo;
+	static std::vector<s32> s_wallFlags;
+	static std::vector<s32> s_sectorFlags;
+
+	void addSectorInfo(EditorSector* sector)
+	{
+		const s32 count = (s32)s_sectorInfo.size();
+		EditorSector** infoSector = s_sectorInfo.data();
+		for (s32 i = 0; i < count; i++, infoSector++)
+		{
+			if (infoSector[i] == sector) { return; }
+		}
+		s_sectorInfo.push_back(sector);
+		s_sectorFlags.push_back(sector->flags[0]);
+		s_sectorFlags.push_back(sector->flags[1]);
+		s_sectorFlags.push_back(sector->flags[2]);
+	}
+
+	void addWallInfo(EditorSector* sector, s32 wallIndex)
+	{
+		const s32 count = (s32)s_wallInfo.size();
+		const WallInfo* info = s_wallInfo.data();
+		for (s32 i = 0; i < count; i++, info++)
+		{
+			if (info->sector == sector && info->wallIndex == wallIndex) { return; }
+		}
+		s_wallInfo.push_back({ sector, wallIndex });
+		s_wallFlags.push_back(sector->walls[wallIndex].flags[0]);
+		s_wallFlags.push_back(sector->walls[wallIndex].flags[1]);
+		s_wallFlags.push_back(sector->walls[wallIndex].flags[2]);
+	}
+
+	u32 getWallInfoList()
+	{
+		if (!s_wallInfo.empty())
+		{
+			return (u32)s_wallInfo.size();
+		}
+
+		const u32 count = selection_getCount(SEL_SURFACE);
+		EditorSector* sector;
+		s32 wallIndex;
+		HitPart part;
+
+		s_wallInfo.clear();
+		s_wallFlags.clear();
+		for (u32 i = 0; i < count; i++)
+		{
+			selection_getSurface(i, sector, wallIndex, &part);
+			if (part != HP_FLOOR && part != HP_CEIL)
+			{
+				addWallInfo(sector, wallIndex);
+			}
+		}
+		return (u32)s_wallInfo.size();
+	}
+
+	u32 getSectorInfoList()
+	{
+		if (!s_sectorInfo.empty())
+		{
+			return (u32)s_sectorInfo.size();
+		}
+
+		s_sectorInfo.clear();
+		s_sectorFlags.clear();
+		const u32 count = selection_getCount();
+		EditorSector* sector = nullptr;
+		if (s_editMode == LEDIT_SECTOR)
+		{
+			s_sectorInfo.resize(count);
+			for (s32 s = 0; s < (s32)count; s++)
+			{
+				selection_getSector(s, sector);
+				s_sectorInfo[s] = sector;
+				s_sectorFlags.push_back(sector->flags[0]);
+				s_sectorFlags.push_back(sector->flags[1]);
+				s_sectorFlags.push_back(sector->flags[2]);
+			}
+		}
+		else if (s_editMode == LEDIT_WALL)
+		{
+			s32 wallIndex;
+			HitPart part;
+			for (s32 s = 0; s < (s32)count; s++)
+			{
+				selection_getSurface(s, sector, wallIndex, &part);
+				if (part == HP_FLOOR || part == HP_CEIL)
+				{
+					addSectorInfo(sector);
+				}
+			}
+		}
+		return (u32)s_sectorInfo.size();
+	}
+		
+	void infoPanel_addWallChangesToHistory()
+	{
+		// Add to history.
+		const s32 count = (s32)s_wallInfo.size();
+		if (count < 0) { return; }
+
+		const s32 countPrev = (s32)s_prevPairs.size();
+		bool pairsChanged = countPrev != count;
+
+		s_pairs.resize(count);
+		IndexPair* pair = s_pairs.data();
+		const WallInfo* info = s_wallInfo.data();
+		const IndexPair* prev = s_prevPairs.data();
+		for (s32 i = 0; i < count; i++, info++)
+		{
+			pair[i] = { info->sector->id, info->wallIndex };
+			if (!pairsChanged && (pair[i].i0 != prev[i].i0 || pair[i].i1 != prev[i].i1))
+			{
+				pairsChanged = true;
+			}
+		}
+
+		// Collapse all attribute changes when possible.
+		cmd_sectorWallSnapshot(LName_ChangeWallAttrib, s_pairs, pairsChanged);
+		if (pairsChanged)
+		{
+			s_prevPairs.resize(count);
+			memcpy(s_prevPairs.data(), s_pairs.data(), s_pairs.size() * sizeof(IndexPair));
+		}
+	}
+
+	void infoPanel_addSectorChangesToHistory()
+	{
+		// Add to history.
+		const s32 count = (s32)s_sectorInfo.size();
+		if (count < 0) { return; }
+
+		const s32 countPrev = (s32)s_prevPairs.size();
+		bool pairsChanged = countPrev != count;
+
+		s_pairs.resize(count);
+		IndexPair* pair = s_pairs.data();
+		EditorSector** info = s_sectorInfo.data();
+		const IndexPair* prev = s_prevPairs.data();
+		for (s32 i = 0; i < count; i++)
+		{
+			pair[i] = { info[i]->id, -1 };
+			if (!pairsChanged && (pair[i].i0 != prev[i].i0 || pair[i].i1 != prev[i].i1))
+			{
+				pairsChanged = true;
+			}
+		}
+
+		// Collapse all attribute changes when possible.
+		cmd_sectorAttributeSnapshot(LName_ChangeSectorAttrib, s_pairs, pairsChanged);
+		if (pairsChanged)
+		{
+			s_prevPairs.resize(count);
+			memcpy(s_prevPairs.data(), s_pairs.data(), s_pairs.size() * sizeof(IndexPair));
+		}
+	}
+
+	void applyWallChanges()
+	{
+		if (!s_wallChanges.applyChanges) { return; }
+		s_wallChanges.applyChanges = false;
+		if (s_wallInfo.empty()) { return; }
+
+		s32 count = (s32)s_wallInfo.size();
+		WallInfo* info = s_wallInfo.data();
+		for (s32 i = 0; i < count; i++, info++)
+		{
+			EditorWall* wall = &info->sector->walls[info->wallIndex];
+			if (s_wallChanges.changes & WCF_LIGHT)
+			{
+				wall->wallLight = s_wallChanges.light;
+			}
+			if (s_wallChanges.changes & WCF_FLAG1_SET)
+			{
+				wall->flags[0] = s_wallChanges.flags1_set;
+			}
+			else
+			{
+				wall->flags[0] = s_wallFlags[i * 3 + 0];
+			}
+			if (s_wallChanges.changes & WCF_FLAG3_SET)
+			{
+				wall->flags[2] = s_wallChanges.flags3_set;
+			}
+			else
+			{
+				wall->flags[2] = s_wallFlags[i * 3 + 2];
+			}
+			// flags.
+			for (s32 f = 0; f < 31; f++)
+			{
+				s32 flagBit = 1 << f;
+				if (s_wallChanges.flags1Changed & flagBit)
+				{
+					if (s_wallChanges.flags1Value & flagBit)
+					{
+						wall->flags[0] |= flagBit;
+					}
+					else
+					{
+						wall->flags[0] &= ~flagBit;
+					}
+				}
+
+				if (s_wallChanges.flags3Changed & flagBit)
+				{
+					if (s_wallChanges.flags3Value & flagBit)
+					{
+						wall->flags[2] |= flagBit;
+					}
+					else
+					{
+						wall->flags[2] &= ~flagBit;
+					}
+				}
+			}
+		}
+		infoPanel_addWallChangesToHistory();
+	}
+
+	void applySectorChanges()
+	{
+		if (!s_sectorChanges.applyChanges) { return; }
+		s_sectorChanges.applyChanges = false;
+		if (s_sectorInfo.empty()) { return; }
+
+		s32 count = (s32)s_sectorInfo.size();
+		EditorSector** info = s_sectorInfo.data();
+		for (s32 i = 0; i < count; i++)
+		{
+			EditorSector* sector = info[i];
+			if (s_sectorChanges.changes & SCF_LAYER)
+			{
+				sector->layer = s_sectorChanges.layer;
+				// Adjust layer range.
+				s_level.layerRange[0] = std::min(s_level.layerRange[0], sector->layer);
+				s_level.layerRange[1] = std::max(s_level.layerRange[1], sector->layer);
+				// Change the current layer so we can still see the sector.
+				s_curLayer = sector->layer;
+			}
+			if (s_sectorChanges.changes & SCF_AMBIENT)
+			{
+				sector->ambient = (u32)s_sectorChanges.ambient;
+			}
+			if (s_sectorChanges.changes & SCF_FLOOR_HEIGHT)
+			{
+				sector->floorHeight = s_sectorChanges.floorHeight;
+			}
+			if (s_sectorChanges.changes & SCF_SEC_HEIGHT)
+			{
+				sector->secHeight = s_sectorChanges.secHeight;
+			}
+			if (s_sectorChanges.changes & SCF_CEIL_HEIGHT)
+			{
+				sector->ceilHeight = s_sectorChanges.ceilHeight;
+			}
+			if (s_sectorChanges.changes & SCF_FLAG1_SET)
+			{
+				sector->flags[0] = s_sectorChanges.flags1_set;
+			}
+			else
+			{
+				sector->flags[0] = s_sectorFlags[i * 3 + 0];
+			}
+			if (s_sectorChanges.changes & SCF_FLAG2_SET)
+			{
+				sector->flags[1] = s_sectorChanges.flags2_set;
+			}
+			else
+			{
+				sector->flags[1] = s_sectorFlags[i * 3 + 1];
+			}
+			if (s_sectorChanges.changes & SCF_FLAG3_SET)
+			{
+				sector->flags[2] = s_sectorChanges.flags3_set;
+			}
+			else
+			{
+				sector->flags[2] = s_sectorFlags[i * 3 + 2];
+			}
+			// flags.
+			for (s32 f = 0; f < 31; f++)
+			{
+				const s32 flagBit = 1 << f;
+				if (s_sectorChanges.flags1Changed & flagBit)
+				{
+					if (s_sectorChanges.flags1Value & flagBit)
+					{
+						sector->flags[0] |= flagBit;
+					}
+					else
+					{
+						sector->flags[0] &= ~flagBit;
+					}
+				}
+			}
+		}
+		infoPanel_addSectorChangesToHistory();
+	}
+		
+	void infoPanel_clearSelection()
+	{
+		// Clear out the wall change structure.
+		s_wallChanges = {};
+		s_sectorChanges = {};
+		s_prevPairs.clear();
+		s_wallInfo.clear();
+		s_sectorInfo.clear();
+	}
+
+	enum InfoPanelId
+	{
+		IPANEL_VERTEX = 0,
+		IPANEL_WALL,
+		IPANEL_SECTOR,
+	};
+
+	void checkBoxMulti(const char* id, s32* flagsValue, s32* flagsChanged, s32 flagBit, InfoPanelId panelId)
+	{
+		const bool showGrayedOut = !((*flagsChanged) & flagBit);
+
+		if (showGrayedOut) { ImGui::PushStyleVar(ImGuiStyleVar_Alpha, ImGui::GetStyle().Alpha * 0.5f); }
+		{
+			bool enable = true;
+			if (!showGrayedOut && !((*flagsValue & flagBit)))
+			{
+				enable = false;
+			}
+
+			if (ImGui::CheckboxFlags(id, flagsValue, flagBit))
+			{
+				if (enable) { *flagsChanged |= flagBit; }
+				else { *flagsChanged &= ~flagBit; *flagsValue &= ~flagBit; }
+				if (panelId == IPANEL_WALL) { s_wallChanges.applyChanges = true; }
+				else if (panelId == IPANEL_SECTOR) { s_sectorChanges.applyChanges = true; }
+			}
+		}
+		if (showGrayedOut) { ImGui::PopStyleVar(); }
+	}
+
 	void infoPanelWall()
 	{
 		s32 wallId = -1;
 		EditorSector* sector = nullptr;
-		// TODO: Handle multi-select.
-		selection_getSurface(selection_getCount() ? 0 : SEL_INDEX_HOVERED, sector, wallId);
-		if (!sector || wallId < 0) { return; }
+		u32 selWallCount = getWallInfoList();
 
-		EditorSector* prevSector;
-		s32 prevWallId;
-		getPrevWallFeature(prevSector, prevWallId);
-		if (prevSector != sector || prevWallId != wallId)
+		const bool insertTexture = s_selectedTexture >= 0 && isShortcutPressed(SHORTCUT_SET_TEXTURE);
+		const bool removeTexture = TFE_Input::mousePressed(MBUTTON_RIGHT);
+		const s32 texIndex = insertTexture ? s_selectedTexture  : -1;
+
+		if (selWallCount <= 1)
 		{
-			ImGui::SetWindowFocus(NULL);
-		}
-		s_wallShownLast = true;
+			bool changed = false;
+			if (selWallCount)
+			{
+				sector = s_wallInfo[0].sector;
+				wallId = s_wallInfo[0].wallIndex;
+			}
+			else
+			{
+				if (selection_hasHovered())
+				{
+					HitPart part;
+					selection_getSurface(SEL_INDEX_HOVERED, sector, wallId, &part);
+					if (part == HP_FLOOR || part == HP_CEIL)
+					{
+						getPrevWallFeature(sector, wallId);
+					}
+				}
+			}
+			if (!sector || wallId < 0) { return; }
 
-		bool insertTexture = s_selectedTexture >= 0 && TFE_Input::keyPressed(KEY_T);
-		bool removeTexture = TFE_Input::mousePressed(MBUTTON_RIGHT);
-		s32 texIndex = -1;
-		if (insertTexture)
-		{
-			texIndex = s_selectedTexture;
-		}
+			s_prevWallFeature.prevSector = sector;
+			s_prevWallFeature.featureIndex = wallId;
+			s_wallShownLast = true;
 
-		EditorWall* wall = sector->walls.data() + wallId;
-		Vec2f* vertices = sector->vtx.data();
-		f32 len = TFE_Math::distance(&vertices[wall->idx[0]], &vertices[wall->idx[1]]);
+			EditorWall* wall = sector->walls.data() + wallId;
+			Vec2f* vertices = sector->vtx.data();
+			f32 len = TFE_Math::distance(&vertices[wall->idx[0]], &vertices[wall->idx[1]]);
 
-		ImGui::Text("Wall ID: %d  Sector ID: %d  Length: %2.2f", wallId, sector->id, len);
-		ImGui::Text("Vertices: [%d](%2.2f, %2.2f), [%d](%2.2f, %2.2f)", wall->idx[0], vertices[wall->idx[0]].x, vertices[wall->idx[0]].z, wall->idx[1], vertices[wall->idx[1]].x, vertices[wall->idx[1]].z);
-		ImGui::Separator();
+			ImGui::Text("Wall ID: %d  Sector ID: %d  Length: %2.2f", wallId, sector->id, len);
+			ImGui::Text("Vertices: [%d](%2.2f, %2.2f), [%d](%2.2f, %2.2f)", wall->idx[0], vertices[wall->idx[0]].x, vertices[wall->idx[0]].z, wall->idx[1], vertices[wall->idx[1]].x, vertices[wall->idx[1]].z);
+			ImGui::Separator();
 
-		// Adjoin data (should be carefully and rarely edited directly).
-		ImGui::LabelText("##SectorAdjoin", "Adjoin"); ImGui::SameLine(64.0f);
-		infoIntInput("##SectorAdjoinInput", 96, &wall->adjoinId); ImGui::SameLine(180.0f);
+			// Adjoin data (should be carefully and rarely edited directly).
+			ImGui::LabelText("##SectorAdjoin", "Adjoin"); ImGui::SameLine(68.0f);
+			changed |= infoIntInput("##SectorAdjoinInput", 96, &wall->adjoinId); ImGui::SameLine(180.0f);
 
-		ImGui::LabelText("##SectorMirror", "Mirror"); ImGui::SameLine(240);
-		infoIntInput("##SectorMirrorInput", 96, &wall->mirrorId);
+			ImGui::LabelText("##SectorMirror", "Mirror"); ImGui::SameLine(240);
+			changed |= infoIntInput("##SectorMirrorInput", 96, &wall->mirrorId);
 
-		ImGui::SameLine(0.0f, 20.0f);
-		if (ImGui::Button("Edit INF"))
-		{
-			TFE_Editor::openEditorPopup(POPUP_EDIT_INF, wallId, sector->name.empty() ? nullptr : (void*)sector->name.c_str());
-		}
+			ImGui::SameLine(0.0f, 20.0f);
+			if (ImGui::Button("Edit INF"))
+			{
+				TFE_Editor::openEditorPopup(POPUP_EDIT_INF, wallId, sector->name.empty() ? nullptr : (void*)sector->name.c_str());
+			}
 
-		s32 light = wall->wallLight;
-		ImGui::LabelText("##SectorLight", "Light Adjustment"); ImGui::SameLine(148.0f);
-		infoIntInput("##SectorLightInput", 96, &light);
-		wall->wallLight = light;
+			s32 light = wall->wallLight;
+			ImGui::LabelText("##SectorLight", "Light Adjustment"); ImGui::SameLine(148.0f);
+			changed |= infoIntInput("##SectorLightInput", 96, &light);
+			wall->wallLight = light;
 
-		ImGui::Separator();
+			ImGui::Separator();
 
-		// Flags
-		infoLabel("##Flags1Label", "Flags1", 48);
-		infoUIntInput("##Flags1", 128, &wall->flags[0]);
-		ImGui::SameLine();
+			// Flags
+			infoLabel("##Flags1Label", "Flags1", 56);
+			changed |= infoUIntInput("##Flags1", 128, &wall->flags[0]);
+			ImGui::SameLine();
 
-		infoLabel("##Flags3Label", "Flags3", 48);
-		infoUIntInput("##Flags3", 128, &wall->flags[2]);
+			infoLabel("##Flags3Label", "Flags3", 56);
+			changed |= infoUIntInput("##Flags3", 128, &wall->flags[2]);
 
-		const f32 column[] = { 0.0f, 174.0f, 324.0f };
+			const f32 column[] = { 0.0f, 174.0f, 324.0f };
 
-		ImGui::CheckboxFlags("Mask Wall##WallFlag", &wall->flags[0], WF1_ADJ_MID_TEX); ImGui::SameLine(column[1]);
-		ImGui::CheckboxFlags("Illum Sign##WallFlag", &wall->flags[0], WF1_ILLUM_SIGN); ImGui::SameLine(column[2]);
-		ImGui::CheckboxFlags("Horz Flip Tex##SectorFlag", &wall->flags[0], WF1_FLIP_HORIZ);
+			changed |= ImGui::CheckboxFlags("Mask Wall##WallFlag", &wall->flags[0], WF1_ADJ_MID_TEX); ImGui::SameLine(column[1]);
+			changed |= ImGui::CheckboxFlags("Illum Sign##WallFlag", &wall->flags[0], WF1_ILLUM_SIGN); ImGui::SameLine(column[2]);
+			changed |= ImGui::CheckboxFlags("Horz Flip Tex##SectorFlag", &wall->flags[0], WF1_FLIP_HORIZ);
 
-		ImGui::CheckboxFlags("Change WallLight##WallFlag", &wall->flags[0], WF1_CHANGE_WALL_LIGHT); ImGui::SameLine(column[1]);
-		ImGui::CheckboxFlags("Tex Anchored##WallFlag", &wall->flags[0], WF1_TEX_ANCHORED); ImGui::SameLine(column[2]);
-		ImGui::CheckboxFlags("Wall Morphs##SectorFlag", &wall->flags[0], WF1_WALL_MORPHS);
+			changed |= ImGui::CheckboxFlags("Change WallLight##WallFlag", &wall->flags[0], WF1_CHANGE_WALL_LIGHT); ImGui::SameLine(column[1]);
+			changed |= ImGui::CheckboxFlags("Tex Anchored##WallFlag", &wall->flags[0], WF1_TEX_ANCHORED); ImGui::SameLine(column[2]);
+			changed |= ImGui::CheckboxFlags("Wall Morphs##SectorFlag", &wall->flags[0], WF1_WALL_MORPHS);
 
-		ImGui::CheckboxFlags("Scroll Top Tex##WallFlag", &wall->flags[0], WF1_SCROLL_TOP_TEX); ImGui::SameLine(column[1]);
-		ImGui::CheckboxFlags("Scroll Mid Tex##WallFlag", &wall->flags[0], WF1_SCROLL_MID_TEX); ImGui::SameLine(column[2]);
-		ImGui::CheckboxFlags("Scroll Bottom##SectorFlag", &wall->flags[0], WF1_SCROLL_BOT_TEX);
+			changed |= ImGui::CheckboxFlags("Scroll Top Tex##WallFlag", &wall->flags[0], WF1_SCROLL_TOP_TEX); ImGui::SameLine(column[1]);
+			changed |= ImGui::CheckboxFlags("Scroll Mid Tex##WallFlag", &wall->flags[0], WF1_SCROLL_MID_TEX); ImGui::SameLine(column[2]);
+			changed |= ImGui::CheckboxFlags("Scroll Bottom##SectorFlag", &wall->flags[0], WF1_SCROLL_BOT_TEX);
 
-		ImGui::CheckboxFlags("Scroll Sign##WallFlag", &wall->flags[0], WF1_SCROLL_SIGN_TEX); ImGui::SameLine(column[1]);
-		ImGui::CheckboxFlags("Hide On Map##WallFlag", &wall->flags[0], WF1_HIDE_ON_MAP); ImGui::SameLine(column[2]);
-		ImGui::CheckboxFlags("Show On Map##SectorFlag", &wall->flags[0], WF1_SHOW_NORMAL_ON_MAP);
+			changed |= ImGui::CheckboxFlags("Scroll Sign##WallFlag", &wall->flags[0], WF1_SCROLL_SIGN_TEX); ImGui::SameLine(column[1]);
+			changed |= ImGui::CheckboxFlags("Hide On Map##WallFlag", &wall->flags[0], WF1_HIDE_ON_MAP); ImGui::SameLine(column[2]);
+			changed |= ImGui::CheckboxFlags("Show On Map##SectorFlag", &wall->flags[0], WF1_SHOW_NORMAL_ON_MAP);
 
-		ImGui::CheckboxFlags("Sign Anchored##WallFlag", &wall->flags[0], WF1_SIGN_ANCHORED); ImGui::SameLine(column[1]);
-		ImGui::CheckboxFlags("Damage Wall##WallFlag", &wall->flags[0], WF1_DAMAGE_WALL); ImGui::SameLine(column[2]);
-		ImGui::CheckboxFlags("Show As Ledge##SectorFlag", &wall->flags[0], WF1_SHOW_AS_LEDGE_ON_MAP);
+			changed |= ImGui::CheckboxFlags("Sign Anchored##WallFlag", &wall->flags[0], WF1_SIGN_ANCHORED); ImGui::SameLine(column[1]);
+			changed |= ImGui::CheckboxFlags("Damage Wall##WallFlag", &wall->flags[0], WF1_DAMAGE_WALL); ImGui::SameLine(column[2]);
+			changed |= ImGui::CheckboxFlags("Show As Ledge##SectorFlag", &wall->flags[0], WF1_SHOW_AS_LEDGE_ON_MAP);
 
-		ImGui::CheckboxFlags("Show As Door##WallFlag", &wall->flags[0], WF1_SHOW_AS_DOOR_ON_MAP); ImGui::SameLine(column[1]);
-		ImGui::CheckboxFlags("Always Walk##WallFlag", &wall->flags[2], WF3_ALWAYS_WALK); ImGui::SameLine(column[2]);
-		ImGui::CheckboxFlags("Solid Wall##SectorFlag", &wall->flags[2], WF3_SOLID_WALL);
+			changed |= ImGui::CheckboxFlags("Show As Door##WallFlag", &wall->flags[0], WF1_SHOW_AS_DOOR_ON_MAP); ImGui::SameLine(column[1]);
+			changed |= ImGui::CheckboxFlags("Always Walk##WallFlag", &wall->flags[2], WF3_ALWAYS_WALK); ImGui::SameLine(column[2]);
+			changed |= ImGui::CheckboxFlags("Solid Wall##SectorFlag", &wall->flags[2], WF3_SOLID_WALL);
 
-		ImGui::CheckboxFlags("Player Walk Only##WallFlag", &wall->flags[2], WF3_PLAYER_WALK_ONLY); ImGui::SameLine(column[1]);
-		ImGui::CheckboxFlags("Cannot Shoot Thru##WallFlag", &wall->flags[2], WF3_CANNOT_FIRE_THROUGH);
+			changed |= ImGui::CheckboxFlags("Player Walk Only##WallFlag", &wall->flags[2], WF3_PLAYER_WALK_ONLY); ImGui::SameLine(column[1]);
+			changed |= ImGui::CheckboxFlags("Cannot Shoot Thru##WallFlag", &wall->flags[2], WF3_CANNOT_FIRE_THROUGH);
 
-		ImGui::Separator();
+			ImGui::Separator();
 
-		EditorTexture* midTex = getTexture(wall->tex[WP_MID].texIndex);
-		EditorTexture* topTex = getTexture(wall->tex[WP_TOP].texIndex);
-		EditorTexture* botTex = getTexture(wall->tex[WP_BOT].texIndex);
-		EditorTexture* sgnTex = getTexture(wall->tex[WP_SIGN].texIndex);
+			EditorTexture* midTex = getTexture(wall->tex[WP_MID].texIndex);
+			EditorTexture* topTex = getTexture(wall->tex[WP_TOP].texIndex);
+			EditorTexture* botTex = getTexture(wall->tex[WP_BOT].texIndex);
+			EditorTexture* sgnTex = getTexture(wall->tex[WP_SIGN].texIndex);
 
-		const f32 texCol = 150.0f;
-		// Labels
-		ImGui::Text("Mid Texture"); ImGui::SameLine(texCol);
-		ImGui::Text("Sign Texture");
-
-		// Textures - Mid / Sign
-		const f32 midScale = midTex ? 1.0f / (f32)std::max(midTex->width, midTex->height) : 0.0f;
-		const f32 sgnScale = sgnTex ? 1.0f / (f32)std::max(sgnTex->width, sgnTex->height) : 0.0f;
-		const f32 aspectMid[] = { midTex ? f32(midTex->width) * midScale : 1.0f, midTex ? f32(midTex->height) * midScale : 1.0f };
-		const f32 aspectSgn[] = { sgnTex ? f32(sgnTex->width) * sgnScale : 1.0f, sgnTex ? f32(sgnTex->height) * sgnScale : 1.0f };
-
-		ImGui::ImageButton(midTex ? TFE_RenderBackend::getGpuPtr(midTex->frames[0]) : nullptr, { 128.0f * aspectMid[0], 128.0f * aspectMid[1] }, { 0.0f, 1.0f }, { 1.0f, 0.0f });
-		if (texIndex >= 0 && ImGui::IsItemHovered())
-		{
-			FeatureId id = createFeatureId(sector, wallId, HP_MID);
-			edit_setTexture(1, &id, texIndex);
-			// cmd_addSetTexture(1, &id, texIndex, nullptr);
-		}
-
-		ImGui::SameLine(texCol);
-		ImGui::ImageButton(sgnTex ? TFE_RenderBackend::getGpuPtr(sgnTex->frames[0]) : nullptr, { 128.0f * aspectSgn[0], 128.0f * aspectSgn[1] }, { 0.0f, 1.0f }, { 1.0f, 0.0f });
-		if (texIndex >= 0 && ImGui::IsItemHovered())
-		{
-			FeatureId id = createFeatureId(sector, wallId, HP_SIGN);
-			edit_setTexture(1, &id, texIndex);
-			// cmd_addSetTexture(1, &id, texIndex, nullptr);
-		}
-		else if (removeTexture && ImGui::IsItemHovered())
-		{
-			FeatureId id = createFeatureId(sector, wallId, HP_SIGN);
-			edit_clearTexture(1, &id);
-			// cmd_addClearTexture(1, &id);
-		}
-
-		const ImVec2 imageLeft0 = ImGui::GetItemRectMin();
-		const ImVec2 imageRight0 = ImGui::GetItemRectMax();
-
-		// Names
-		ImGui::Text("%s", midTex ? midTex->name : "NONE"); ImGui::SameLine(texCol);
-		ImGui::Text("%s", sgnTex ? sgnTex->name : "NONE");
-
-		ImVec2 imageLeft1, imageRight1;
-		if (wall->adjoinId >= 0)
-		{
-			ImGui::NewLine();
-
-			// Textures - Top / Bottom
+			const f32 texCol = 150.0f;
 			// Labels
-			ImGui::Text("Top Texture"); ImGui::SameLine(texCol); ImGui::Text("Bottom Texture");
+			ImGui::Text("Mid Texture"); ImGui::SameLine(texCol);
+			ImGui::Text("Sign Texture");
 
-			const f32 topScale = topTex ? 1.0f / (f32)std::max(topTex->width, topTex->height) : 0.0f;
-			const f32 botScale = botTex ? 1.0f / (f32)std::max(botTex->width, botTex->height) : 0.0f;
-			const f32 aspectTop[] = { topTex ? f32(topTex->width) * topScale : 1.0f, topTex ? f32(topTex->height) * topScale : 1.0f };
-			const f32 aspectBot[] = { botTex ? f32(botTex->width) * botScale : 1.0f, botTex ? f32(botTex->height) * botScale : 1.0f };
+			// Textures - Mid / Sign
+			const f32 midScale = midTex ? 1.0f / (f32)std::max(midTex->width, midTex->height) : 0.0f;
+			const f32 sgnScale = sgnTex ? 1.0f / (f32)std::max(sgnTex->width, sgnTex->height) : 0.0f;
+			const f32 aspectMid[] = { midTex ? f32(midTex->width) * midScale : 1.0f, midTex ? f32(midTex->height) * midScale : 1.0f };
+			const f32 aspectSgn[] = { sgnTex ? f32(sgnTex->width) * sgnScale : 1.0f, sgnTex ? f32(sgnTex->height) * sgnScale : 1.0f };
 
-			ImGui::ImageButton(topTex ? TFE_RenderBackend::getGpuPtr(topTex->frames[0]) : nullptr, { 128.0f * aspectTop[0], 128.0f * aspectTop[1] }, { 0.0f, 1.0f }, { 1.0f, 0.0f });
+			ImGui::ImageButton(midTex ? TFE_RenderBackend::getGpuPtr(midTex->frames[0]) : nullptr, { 128.0f * aspectMid[0], 128.0f * aspectMid[1] }, { 0.0f, 1.0f }, { 1.0f, 0.0f });
 			if (texIndex >= 0 && ImGui::IsItemHovered())
 			{
-				FeatureId id = createFeatureId(sector, wallId, HP_TOP);
+				FeatureId id = createFeatureId(sector, wallId, HP_MID);
 				edit_setTexture(1, &id, texIndex);
-				// cmd_addSetTexture(1, &id, texIndex, nullptr);
+				changed = true;
 			}
 
 			ImGui::SameLine(texCol);
-			ImGui::ImageButton(botTex ? TFE_RenderBackend::getGpuPtr(botTex->frames[0]) : nullptr, { 128.0f * aspectBot[0], 128.0f * aspectBot[1] }, { 0.0f, 1.0f }, { 1.0f, 0.0f });
+			ImGui::ImageButton(sgnTex ? TFE_RenderBackend::getGpuPtr(sgnTex->frames[0]) : nullptr, { 128.0f * aspectSgn[0], 128.0f * aspectSgn[1] }, { 0.0f, 1.0f }, { 1.0f, 0.0f });
 			if (texIndex >= 0 && ImGui::IsItemHovered())
 			{
-				FeatureId id = createFeatureId(sector, wallId, HP_BOT);
+				FeatureId id = createFeatureId(sector, wallId, HP_SIGN);
 				edit_setTexture(1, &id, texIndex);
-				// cmd_addSetTexture(1, &id, texIndex, nullptr);
+				changed = true;
 			}
-
-			imageLeft1 = ImGui::GetItemRectMin();
-			imageRight1 = ImGui::GetItemRectMax();
-
-			// Names
-			ImGui::Text("%s", topTex ? topTex->name : "NONE"); ImGui::SameLine(texCol);
-			ImGui::Text("%s", botTex ? botTex->name : "NONE");
-		}
-
-		// Sign buttons.
-		ImVec2 signLeft = { imageLeft0.x + texCol - 8.0f, imageLeft0.y + 2.0f };
-		ImGui::SetNextWindowPos(signLeft);
-		ImGui::BeginChild("##SignOptions", { 32, 48 });
-		{
-			if (ImGui::Button("X") && wall->tex[HP_SIGN].texIndex >= 0)
+			else if (removeTexture && ImGui::IsItemHovered())
 			{
 				FeatureId id = createFeatureId(sector, wallId, HP_SIGN);
 				edit_clearTexture(1, &id);
-				// cmd_addClearTexture(1, &id);
+				changed = true;
 			}
-			if (ImGui::Button("C") && wall->tex[HP_SIGN].texIndex >= 0)
-			{
-				Vec2f prevOffset = wall->tex[HP_SIGN].offset;
-				centerSignOnSurface(sector, wall);
-				Vec2f delta = { wall->tex[HP_SIGN].offset.x - prevOffset.x, wall->tex[HP_SIGN].offset.z - prevOffset.z };
 
-				if (delta.x || delta.z)
+			const ImVec2 imageLeft0 = ImGui::GetItemRectMin();
+			const ImVec2 imageRight0 = ImGui::GetItemRectMax();
+
+			// Names
+			ImGui::Text("%s", midTex ? midTex->name : "NONE"); ImGui::SameLine(texCol);
+			ImGui::Text("%s", sgnTex ? sgnTex->name : "NONE");
+
+			ImVec2 imageLeft1, imageRight1;
+			if (wall->adjoinId >= 0)
+			{
+				ImGui::NewLine();
+
+				// Textures - Top / Bottom
+				// Labels
+				ImGui::Text("Top Texture"); ImGui::SameLine(texCol); ImGui::Text("Bottom Texture");
+
+				const f32 topScale = topTex ? 1.0f / (f32)std::max(topTex->width, topTex->height) : 0.0f;
+				const f32 botScale = botTex ? 1.0f / (f32)std::max(botTex->width, botTex->height) : 0.0f;
+				const f32 aspectTop[] = { topTex ? f32(topTex->width) * topScale : 1.0f, topTex ? f32(topTex->height) * topScale : 1.0f };
+				const f32 aspectBot[] = { botTex ? f32(botTex->width) * botScale : 1.0f, botTex ? f32(botTex->height) * botScale : 1.0f };
+
+				ImGui::ImageButton(topTex ? TFE_RenderBackend::getGpuPtr(topTex->frames[0]) : nullptr, { 128.0f * aspectTop[0], 128.0f * aspectTop[1] }, { 0.0f, 1.0f }, { 1.0f, 0.0f });
+				if (texIndex >= 0 && ImGui::IsItemHovered())
+				{
+					FeatureId id = createFeatureId(sector, wallId, HP_TOP);
+					edit_setTexture(1, &id, texIndex);
+					changed = true;
+				}
+
+				ImGui::SameLine(texCol);
+				ImGui::ImageButton(botTex ? TFE_RenderBackend::getGpuPtr(botTex->frames[0]) : nullptr, { 128.0f * aspectBot[0], 128.0f * aspectBot[1] }, { 0.0f, 1.0f }, { 1.0f, 0.0f });
+				if (texIndex >= 0 && ImGui::IsItemHovered())
+				{
+					FeatureId id = createFeatureId(sector, wallId, HP_BOT);
+					edit_setTexture(1, &id, texIndex);
+					changed = true;
+				}
+
+				imageLeft1 = ImGui::GetItemRectMin();
+				imageRight1 = ImGui::GetItemRectMax();
+
+				// Names
+				ImGui::Text("%s", topTex ? topTex->name : "NONE"); ImGui::SameLine(texCol);
+				ImGui::Text("%s", botTex ? botTex->name : "NONE");
+			}
+
+			// Sign buttons.
+			ImVec2 signLeft = { imageLeft0.x + texCol - 8.0f, imageLeft0.y + 2.0f };
+			ImGui::SetNextWindowPos(signLeft);
+			ImGui::BeginChild("##SignOptions", { 32, 48 });
+			{
+				if (ImGui::Button("X") && wall->tex[HP_SIGN].texIndex >= 0)
 				{
 					FeatureId id = createFeatureId(sector, wallId, HP_SIGN);
-					// cmd_addMoveTexture(1, &id, delta);
+					edit_clearTexture(1, &id);
+					changed = true;
+				}
+				if (ImGui::Button("C") && wall->tex[HP_SIGN].texIndex >= 0)
+				{
+					Vec2f prevOffset = wall->tex[HP_SIGN].offset;
+					centerSignOnSurface(sector, wall);
+					Vec2f delta = { wall->tex[HP_SIGN].offset.x - prevOffset.x, wall->tex[HP_SIGN].offset.z - prevOffset.z };
+
+					if (delta.x || delta.z)
+					{
+						changed = true;
+					}
 				}
 			}
-		}
-		ImGui::EndChild();
+			ImGui::EndChild();
 
-		// Texture Offsets
-		DisplayInfo displayInfo;
-		TFE_RenderBackend::getDisplayInfo(&displayInfo);
+			// Texture Offsets
+			DisplayInfo displayInfo;
+			TFE_RenderBackend::getDisplayInfo(&displayInfo);
 
-		// Set 0
-		ImVec2 offsetLeft = { imageLeft0.x + texCol + 8.0f + 16.0f, imageLeft0.y + 8.0f };
-		ImVec2 offsetSize = { displayInfo.width - (imageLeft0.x + texCol + 16.0f - 32.0f), 128.0f };
-		ImGui::SetNextWindowPos(offsetLeft);
-		// A child window is used here in order to place the controls in the desired position - to the right of the image buttons.
-		ImGui::BeginChild("##TextureOffsets0Wall", offsetSize);
-		{
-			ImGui::Text("Mid Offset");
-			ImGui::PushItemWidth(136.0f);
-			ImGui::InputFloat2("##MidOffsetInput", &wall->tex[WP_MID].offset.x, "%.3f");
-			ImGui::PopItemWidth();
-
-			ImGui::NewLine();
-
-			ImGui::Text("Sign Offset");
-			ImGui::PushItemWidth(136.0f);
-			ImGui::InputFloat2("##SignOffsetInput", &wall->tex[WP_SIGN].offset.x, "%.3f");
-			ImGui::PopItemWidth();
-		}
-		ImGui::EndChild();
-
-		// Set 1
-		if (wall->adjoinId >= 0)
-		{
-			offsetLeft = { imageLeft1.x + texCol + 8.0f, imageLeft1.y + 8.0f };
-			offsetSize = { displayInfo.width - (imageLeft1.x + texCol + 16.0f), 128.0f };
+			// Set 0
+			ImVec2 offsetLeft = { imageLeft0.x + texCol + 8.0f + 16.0f, imageLeft0.y + 8.0f };
+			ImVec2 offsetSize = { displayInfo.width - (imageLeft0.x + texCol + 16.0f - 32.0f), 128.0f };
 			ImGui::SetNextWindowPos(offsetLeft);
 			// A child window is used here in order to place the controls in the desired position - to the right of the image buttons.
-			ImGui::BeginChild("##TextureOffsets1Wall", offsetSize);
+			ImGui::BeginChild("##TextureOffsets0Wall", offsetSize);
 			{
-				ImGui::Text("Top Offset");
+				ImGui::Text("Mid Offset");
 				ImGui::PushItemWidth(136.0f);
-				ImGui::InputFloat2("##TopOffsetInput", &wall->tex[WP_TOP].offset.x, "%.3f");
+				changed |= ImGui::InputFloat2("##MidOffsetInput", &wall->tex[WP_MID].offset.x, "%.3f");
 				ImGui::PopItemWidth();
 
 				ImGui::NewLine();
 
-				ImGui::Text("Bottom Offset");
+				ImGui::Text("Sign Offset");
 				ImGui::PushItemWidth(136.0f);
-				ImGui::InputFloat2("##BotOffsetInput", &wall->tex[WP_BOT].offset.x, "%.3f");
+				changed |= ImGui::InputFloat2("##SignOffsetInput", &wall->tex[WP_SIGN].offset.x, "%.3f");
 				ImGui::PopItemWidth();
 			}
 			ImGui::EndChild();
+
+			// Set 1
+			if (wall->adjoinId >= 0)
+			{
+				offsetLeft = { imageLeft1.x + texCol + 8.0f, imageLeft1.y + 8.0f };
+				offsetSize = { displayInfo.width - (imageLeft1.x + texCol + 16.0f), 128.0f };
+				ImGui::SetNextWindowPos(offsetLeft);
+				// A child window is used here in order to place the controls in the desired position - to the right of the image buttons.
+				ImGui::BeginChild("##TextureOffsets1Wall", offsetSize);
+				{
+					ImGui::Text("Top Offset");
+					ImGui::PushItemWidth(136.0f);
+					changed |= ImGui::InputFloat2("##TopOffsetInput", &wall->tex[WP_TOP].offset.x, "%.3f");
+					ImGui::PopItemWidth();
+
+					ImGui::NewLine();
+
+					ImGui::Text("Bottom Offset");
+					ImGui::PushItemWidth(136.0f);
+					changed |= ImGui::InputFloat2("##BotOffsetInput", &wall->tex[WP_BOT].offset.x, "%.3f");
+					ImGui::PopItemWidth();
+				}
+				ImGui::EndChild();
+			}
+
+			if (changed)
+			{
+				infoPanel_addWallChangesToHistory();
+			}
+		}
+		else
+		{
+			ImGui::Text("Multiple Walls Selected");
+			ImGui::Separator();
+
+			s32 light = s_wallChanges.light;
+			ImGui::LabelText("##SectorLight", "Light Adjustment"); ImGui::SameLine(148.0f);
+			if (infoIntInput("##SectorLightInput", 96, &light, !(s_wallChanges.changes & WCF_LIGHT)))
+			{
+				s_wallChanges.light = light;
+				s_wallChanges.changes |= WCF_LIGHT;
+				s_wallChanges.applyChanges = true;
+			}
+			ImGui::Separator();
+
+			// Flags
+			infoLabel("##Flags1Label", "Flags1", 56);
+			if (infoIntInput("##Flags1", 128, &s_wallChanges.flags1_set, !(s_wallChanges.changes & WCF_FLAG1_SET)))
+			{
+				s_wallChanges.changes |= WCF_FLAG1_SET;
+				s_wallChanges.applyChanges = true;
+			}
+			ImGui::SameLine();
+
+			infoLabel("##Flags3Label", "Flags3", 56);
+			if (infoIntInput("##Flags3", 128, &s_wallChanges.flags3_set, !(s_wallChanges.changes & WCF_FLAG3_SET)))
+			{
+				s_wallChanges.changes |= WCF_FLAG3_SET;
+				s_wallChanges.applyChanges = true;
+			}
+
+			const f32 column[] = { 0.0f, 174.0f, 324.0f };
+
+			checkBoxMulti("Mask Wall##WallFlag", &s_wallChanges.flags1Value, &s_wallChanges.flags1Changed, WF1_ADJ_MID_TEX, IPANEL_WALL); ImGui::SameLine(column[1]);
+			checkBoxMulti("Illum Sign##WallFlag", &s_wallChanges.flags1Value, &s_wallChanges.flags1Changed, WF1_ILLUM_SIGN, IPANEL_WALL); ImGui::SameLine(column[2]);
+			checkBoxMulti("Horz Flip Tex##SectorFlag", &s_wallChanges.flags1Value, &s_wallChanges.flags1Changed, WF1_FLIP_HORIZ, IPANEL_WALL);
+
+			checkBoxMulti("Change WallLight##WallFlag", &s_wallChanges.flags1Value, &s_wallChanges.flags1Changed, WF1_CHANGE_WALL_LIGHT, IPANEL_WALL); ImGui::SameLine(column[1]);
+			checkBoxMulti("Tex Anchored##WallFlag", &s_wallChanges.flags1Value, &s_wallChanges.flags1Changed, WF1_TEX_ANCHORED, IPANEL_WALL); ImGui::SameLine(column[2]);
+			checkBoxMulti("Wall Morphs##SectorFlag", &s_wallChanges.flags1Value, &s_wallChanges.flags1Changed, WF1_WALL_MORPHS, IPANEL_WALL);
+
+			checkBoxMulti("Scroll Top Tex##WallFlag", &s_wallChanges.flags1Value, &s_wallChanges.flags1Changed, WF1_SCROLL_TOP_TEX, IPANEL_WALL); ImGui::SameLine(column[1]);
+			checkBoxMulti("Scroll Mid Tex##WallFlag", &s_wallChanges.flags1Value, &s_wallChanges.flags1Changed, WF1_SCROLL_MID_TEX, IPANEL_WALL); ImGui::SameLine(column[2]);
+			checkBoxMulti("Scroll Bottom##SectorFlag", &s_wallChanges.flags1Value, &s_wallChanges.flags1Changed, WF1_SCROLL_BOT_TEX, IPANEL_WALL);
+
+			checkBoxMulti("Scroll Sign##WallFlag", &s_wallChanges.flags1Value, &s_wallChanges.flags1Changed, WF1_SCROLL_SIGN_TEX, IPANEL_WALL); ImGui::SameLine(column[1]);
+			checkBoxMulti("Hide On Map##WallFlag", &s_wallChanges.flags1Value, &s_wallChanges.flags1Changed, WF1_HIDE_ON_MAP, IPANEL_WALL); ImGui::SameLine(column[2]);
+			checkBoxMulti("Show On Map##SectorFlag", &s_wallChanges.flags1Value, &s_wallChanges.flags1Changed, WF1_SHOW_NORMAL_ON_MAP, IPANEL_WALL);
+
+			checkBoxMulti("Sign Anchored##WallFlag", &s_wallChanges.flags1Value, &s_wallChanges.flags1Changed, WF1_SIGN_ANCHORED, IPANEL_WALL); ImGui::SameLine(column[1]);
+			checkBoxMulti("Damage Wall##WallFlag", &s_wallChanges.flags1Value, &s_wallChanges.flags1Changed, WF1_DAMAGE_WALL, IPANEL_WALL); ImGui::SameLine(column[2]);
+			checkBoxMulti("Show As Ledge##SectorFlag", &s_wallChanges.flags1Value, &s_wallChanges.flags1Changed, WF1_SHOW_AS_LEDGE_ON_MAP, IPANEL_WALL);
+
+			checkBoxMulti("Show As Door##WallFlag", &s_wallChanges.flags1Value, &s_wallChanges.flags1Changed, WF1_SHOW_AS_DOOR_ON_MAP, IPANEL_WALL); ImGui::SameLine(column[1]);
+			checkBoxMulti("Always Walk##WallFlag", &s_wallChanges.flags3Value, &s_wallChanges.flags3Changed, WF3_ALWAYS_WALK, IPANEL_WALL); ImGui::SameLine(column[2]);
+			checkBoxMulti("Solid Wall##SectorFlag", &s_wallChanges.flags3Value, &s_wallChanges.flags3Changed, WF3_SOLID_WALL, IPANEL_WALL);
+
+			checkBoxMulti("Player Walk Only##WallFlag", &s_wallChanges.flags3Value, &s_wallChanges.flags3Changed, WF3_PLAYER_WALK_ONLY, IPANEL_WALL); ImGui::SameLine(column[1]);
+			checkBoxMulti("Cannot Shoot Thru##WallFlag", &s_wallChanges.flags3Value, &s_wallChanges.flags3Changed, WF3_CANNOT_FIRE_THROUGH, IPANEL_WALL);
+
+			ImGui::Separator();
+			applyWallChanges();
+		}
+	}
+
+	void fixupSectorName(char* sectorName)
+	{
+		const size_t len = strlen(sectorName);
+		for (size_t i = 0; i < len; i++)
+		{
+			// Spaces are not allowed in sector names, allowing them is a big source of issues.
+			if (sectorName[i] == ' ')
+			{
+				sectorName[i] = '-';
+			}
 		}
 	}
 
@@ -1024,183 +1639,303 @@ namespace LevelEditor
 
 		s32 wallId = -1;
 		EditorSector* sector = nullptr;
-		// TODO: Handle multi-select.
-		selection_getSector(selection_getCount() ? 0 : SEL_INDEX_HOVERED, sector);
-		if (!sector) { return; }
-		s_wallShownLast = false;
-
-		ImGui::Text("Sector ID: %d      Wall Count: %u", sector->id, (u32)sector->walls.size());
-		ImGui::Separator();
-
-		// Sector Name (optional, used by INF)
-		char sectorName[64];
-		char inputName[256];
-		strcpy(sectorName, sector->name.c_str());
-		sprintf(inputName, "##NameSector%d", sector->id);
-
-		infoLabel("##NameLabel", "Name", 32);
-		ImGui::PushItemWidth(240.0f);
-
-		// Turn the name red if it matches another sector.
-		s32 otherNameId = findSectorByName(sectorName, sector->id);
-		if (otherNameId >= 0) { ImGui::PushStyleColor(ImGuiCol_Text, {1.0f, 0.2f, 0.2f, 1.0f}); }
-		if (ImGui::InputText(inputName, sectorName, getSectorNameLimit()))
+		u32 selSectorCount = getSectorInfoList();
+		if (selSectorCount <= 1)
 		{
-			sector->name = sectorName;
-		}
-		ImGui::PopItemWidth();
-		if (otherNameId >= 0) { ImGui::PopStyleColor(); }
+			bool changed = false;
+			if (selSectorCount < 1) { selection_getSector(SEL_INDEX_HOVERED, sector); }
+			else { sector = s_sectorInfo[0]; }
+			if (!sector) { return; }
+			s_wallShownLast = false;
 
-		ImGui::SameLine(0.0f, 20.0f);
-		if (ImGui::Button("Edit INF"))
-		{
-			TFE_Editor::openEditorPopup(POPUP_EDIT_INF, 0xffffffff, sector->name.empty() ? nullptr : (void*)sector->name.c_str());
-		}
+			ImGui::Text("Sector ID: %d      Wall Count: %u", sector->id, (u32)sector->walls.size());
+			ImGui::Separator();
 
-		// Layer and Ambient
-		s32 layer = sector->layer;
-		infoLabel("##LayerLabel", "Layer", 42);
-		infoIntInput("##LayerSector", 96, &layer);
-		if (layer != sector->layer)
-		{
-			sector->layer = layer;
-			// Adjust layer range.
-			s_level.layerRange[0] = std::min(s_level.layerRange[0], (s32)layer);
-			s_level.layerRange[1] = std::max(s_level.layerRange[1], (s32)layer);
-			// Change the current layer so we can still see the sector.
-			s_curLayer = layer;
-		}
+			// Sector Name (optional, used by INF)
+			char sectorName[64];
+			char inputName[256];
+			strcpy(sectorName, sector->name.c_str());
+			sprintf(inputName, "##NameSector%d", sector->id);
 
-		ImGui::SameLine(0.0f, 16.0f);
+			infoLabel("##NameLabel", "Name", 42);
+			ImGui::PushItemWidth(240.0f);
 
-		s32 ambient = (s32)sector->ambient;
-		infoLabel("##AmbientLabel", "Ambient", 56);
-		infoIntInput("##AmbientSector", 96, &ambient);
-		sector->ambient = std::max(0, std::min(31, ambient));
-
-		// Heights
-		infoLabel("##FloorHeightLabel", "Floor Ht", 66);
-		infoFloatInput("##FloorHeight", 64, &sector->floorHeight);
-		ImGui::SameLine();
-
-		infoLabel("##SecondHeightLabel", "Second Ht", 72);
-		infoFloatInput("##SecondHeight", 64, &sector->secHeight);
-		ImGui::SameLine();
-
-		infoLabel("##CeilHeightLabel", "Ceiling Ht", 80);
-		infoFloatInput("##CeilHeight", 64, &sector->ceilHeight);
-
-		ImGui::Separator();
-
-		// Flags
-		infoLabel("##Flags1Label", "Flags1", 48);
-		infoUIntInput("##Flags1", 128, &sector->flags[0]);
-		ImGui::SameLine();
-
-		infoLabel("##Flags2Label", "Flags2", 48);
-		infoUIntInput("##Flags2", 128, &sector->flags[1]);
-
-		infoLabel("##Flags3Label", "Flags3", 48);
-		infoUIntInput("##Flags3", 128, &sector->flags[2]);
-
-		const f32 column[] = { 0.0f, 160.0f, 320.0f };
-
-		ImGui::CheckboxFlags("Exterior##SectorFlag", &sector->flags[0], SEC_FLAGS1_EXTERIOR); ImGui::SameLine(column[1]);
-		ImGui::CheckboxFlags("Pit##SectorFlag", &sector->flags[0], SEC_FLAGS1_PIT); ImGui::SameLine(column[2]);
-		ImGui::CheckboxFlags("No Walls##SectorFlag", &sector->flags[0], SEC_FLAGS1_NOWALL_DRAW);
-
-		ImGui::CheckboxFlags("Ext Ceil Adj##SectorFlag", &sector->flags[0], SEC_FLAGS1_EXT_ADJ); ImGui::SameLine(column[1]);
-		ImGui::CheckboxFlags("Ext Floor Adj##SectorFlag", &sector->flags[0], SEC_FLAGS1_EXT_FLOOR_ADJ);  ImGui::SameLine(column[2]);
-		ImGui::CheckboxFlags("Secret##SectorFlag", &sector->flags[0], SEC_FLAGS1_SECRET);
-
-		ImGui::CheckboxFlags("Door##SectorFlag", &sector->flags[0], SEC_FLAGS1_DOOR); ImGui::SameLine(column[1]);
-		ImGui::CheckboxFlags("Ice Floor##SectorFlag", &sector->flags[0], SEC_FLAGS1_ICE_FLOOR); ImGui::SameLine(column[2]);
-		ImGui::CheckboxFlags("Snow Floor##SectorFlag", &sector->flags[0], SEC_FLAGS1_SNOW_FLOOR);
-
-		ImGui::CheckboxFlags("Crushing##SectorFlag", &sector->flags[0], SEC_FLAGS1_CRUSHING); ImGui::SameLine(column[1]);
-		ImGui::CheckboxFlags("Low Damage##SectorFlag", &sector->flags[0], SEC_FLAGS1_LOW_DAMAGE); ImGui::SameLine(column[2]);
-		ImGui::CheckboxFlags("High Damage##SectorFlag", &sector->flags[0], SEC_FLAGS1_HIGH_DAMAGE);
-
-		ImGui::CheckboxFlags("No Smart Obj##SectorFlag", &sector->flags[0], SEC_FLAGS1_NO_SMART_OBJ); ImGui::SameLine(column[1]);
-		ImGui::CheckboxFlags("Smart Obj##SectorFlag", &sector->flags[0], SEC_FLAGS1_SMART_OBJ); ImGui::SameLine(column[2]);
-		ImGui::CheckboxFlags("Safe Sector##SectorFlag", &sector->flags[0], SEC_FLAGS1_SAFESECTOR);
-
-		ImGui::CheckboxFlags("Mag Seal##SectorFlag", &sector->flags[0], SEC_FLAGS1_MAG_SEAL); ImGui::SameLine(column[1]);
-		ImGui::CheckboxFlags("Exploding Wall##SectorFlag", &sector->flags[0], SEC_FLAGS1_EXP_WALL);
-
-		ImGui::Separator();
-
-		// Textures
-		EditorTexture* floorTex = getTexture(sector->floorTex.texIndex);
-		EditorTexture* ceilTex = getTexture(sector->ceilTex.texIndex);
-
-		void* floorPtr = floorTex ? TFE_RenderBackend::getGpuPtr(floorTex->frames[0]) : nullptr;
-		void* ceilPtr = ceilTex ? TFE_RenderBackend::getGpuPtr(ceilTex->frames[0]) : nullptr;
-
-		const f32 texCol = 150.0f;
-		// Labels
-		ImGui::Text("Floor Texture"); ImGui::SameLine(texCol);
-		ImGui::Text("Ceiling Texture");
-
-		// Textures
-		const f32 floorScale = floorTex ? 1.0f / (f32)std::max(floorTex->width, floorTex->height) : 1.0f;
-		const f32 ceilScale = ceilTex ? 1.0f / (f32)std::max(ceilTex->width, ceilTex->height) : 1.0f;
-		const f32 aspectFloor[] = { floorTex ? f32(floorTex->width) * floorScale : 1.0f, floorTex ? f32(floorTex->height) * floorScale : 1.0f };
-		const f32 aspectCeil[] = { ceilTex ? f32(ceilTex->width) * ceilScale : 1.0f, ceilTex ? f32(ceilTex->height) * ceilScale : 1.0f };
-
-		ImGui::ImageButton(floorPtr, { 128.0f * aspectFloor[0], 128.0f * aspectFloor[1] }, { 0.0f, 1.0f }, { 1.0f, 0.0f });
-		if (texIndex >= 0 && ImGui::IsItemHovered())
-		{
-			FeatureId id = createFeatureId(sector, 0, HP_FLOOR);
-			edit_setTexture(1, &id, texIndex);
-			// cmd_addSetTexture(1, &id, texIndex, nullptr);
-		}
-
-		ImGui::SameLine(texCol);
-		ImGui::ImageButton(ceilPtr, { 128.0f * aspectCeil[0], 128.0f * aspectCeil[1] }, { 0.0f, 1.0f }, { 1.0f, 0.0f });
-		if (texIndex >= 0 && ImGui::IsItemHovered())
-		{
-			FeatureId id = createFeatureId(sector, 0, HP_CEIL);
-			edit_setTexture(1, &id, texIndex);
-			// cmd_addSetTexture(1, &id, texIndex, nullptr);
-		}
-
-		const ImVec2 imageLeft = ImGui::GetItemRectMin();
-		const ImVec2 imageRight = ImGui::GetItemRectMax();
-
-		// Names
-		if (floorTex)
-		{
-			ImGui::Text("%s", floorTex->name); ImGui::SameLine(texCol);
-		}
-		if (ceilTex)
-		{
-			ImGui::Text("%s", ceilTex->name); ImGui::SameLine();
-		}
-
-		// Texture Offsets
-		DisplayInfo displayInfo;
-		TFE_RenderBackend::getDisplayInfo(&displayInfo);
-
-		ImVec2 offsetLeft = { imageLeft.x + texCol + 8.0f, imageLeft.y + 8.0f };
-		ImVec2 offsetSize = { displayInfo.width - (imageLeft.x + texCol + 16.0f), 128.0f };
-		ImGui::SetNextWindowPos(offsetLeft);
-		// A child window is used here in order to place the controls in the desired position - to the right of the image buttons.
-		ImGui::BeginChild("##TextureOffsetsSector", offsetSize);
-		{
-			ImGui::Text("Floor Offset");
-			ImGui::PushItemWidth(136.0f);
-			ImGui::InputFloat2("##FloorOffsetInput", &sector->floorTex.offset.x, "%.3f");
+			// Turn the name red if it matches another sector.
+			s32 otherNameId = findSectorByName(sectorName, sector->id);
+			if (otherNameId >= 0) { ImGui::PushStyleColor(ImGuiCol_Text, { 1.0f, 0.2f, 0.2f, 1.0f }); }
+			if (ImGui::InputText(inputName, sectorName, getSectorNameLimit()))
+			{
+				fixupSectorName(sectorName);
+				sector->name = sectorName;
+				changed = true;
+			}
 			ImGui::PopItemWidth();
+			if (otherNameId >= 0) { ImGui::PopStyleColor(); }
 
-			ImGui::NewLine();
+			ImGui::SameLine(0.0f, 28.0f);
+			if (ImGui::Button("Edit INF"))
+			{
+				TFE_Editor::openEditorPopup(POPUP_EDIT_INF, 0xffffffff, sector->name.empty() ? nullptr : (void*)sector->name.c_str());
+			}
 
-			ImGui::Text("Ceil Offset");
-			ImGui::PushItemWidth(136.0f);
-			ImGui::InputFloat2("##CeilOffsetInput", &sector->ceilTex.offset.x, "%.3f");
-			ImGui::PopItemWidth();
+			// Layer and Ambient
+			s32 layer = sector->layer;
+			infoLabel("##LayerLabel", "Layer", 42);
+			changed |= infoIntInput("##LayerSector", 96, &layer);
+			if (layer != sector->layer)
+			{
+				sector->layer = layer;
+				// Adjust layer range.
+				s_level.layerRange[0] = std::min(s_level.layerRange[0], (s32)layer);
+				s_level.layerRange[1] = std::max(s_level.layerRange[1], (s32)layer);
+				// Change the current layer so we can still see the sector.
+				s_curLayer = layer;
+			}
+
+			ImGui::SameLine(0.0f, 8.0f);
+
+			s32 ambient = (s32)sector->ambient;
+			infoLabel("##AmbientLabel", "Ambient", 64);
+			changed |= infoIntInput("##AmbientSector", 96, &ambient);
+			sector->ambient = std::max(0, std::min(31, ambient));
+
+			// Heights
+			infoLabel("##FloorHeightLabel", "Floor", 42);
+			changed |= infoFloatInput("##FloorHeight", 64 + 8, &sector->floorHeight);
+			ImGui::SameLine();
+
+			infoLabel("##SecondHeightLabel", "Second", 52);
+			changed |= infoFloatInput("##SecondHeight", 64, &sector->secHeight);
+			ImGui::SameLine();
+
+			infoLabel("##CeilHeightLabel", "Ceiling", 60);
+			changed |= infoFloatInput("##CeilHeight", 64, &sector->ceilHeight);
+
+			ImGui::Separator();
+
+			// Flags
+			infoLabel("##Flags1Label", "Flags1", 56);
+			changed |= infoUIntInput("##Flags1", 128, &sector->flags[0]);
+			ImGui::SameLine();
+
+			infoLabel("##Flags2Label", "Flags2", 56);
+			changed |= infoUIntInput("##Flags2", 128, &sector->flags[1]);
+
+			infoLabel("##Flags3Label", "Flags3", 56);
+			changed |= infoUIntInput("##Flags3", 128, &sector->flags[2]);
+
+			const f32 column[] = { 0.0f, 160.0f, 320.0f };
+
+			changed |= ImGui::CheckboxFlags("Exterior##SectorFlag", &sector->flags[0], SEC_FLAGS1_EXTERIOR); ImGui::SameLine(column[1]);
+			changed |= ImGui::CheckboxFlags("Pit##SectorFlag", &sector->flags[0], SEC_FLAGS1_PIT); ImGui::SameLine(column[2]);
+			changed |= ImGui::CheckboxFlags("No Walls##SectorFlag", &sector->flags[0], SEC_FLAGS1_NOWALL_DRAW);
+
+			changed |= ImGui::CheckboxFlags("Ext Ceil Adj##SectorFlag", &sector->flags[0], SEC_FLAGS1_EXT_ADJ); ImGui::SameLine(column[1]);
+			changed |= ImGui::CheckboxFlags("Ext Floor Adj##SectorFlag", &sector->flags[0], SEC_FLAGS1_EXT_FLOOR_ADJ);  ImGui::SameLine(column[2]);
+			changed |= ImGui::CheckboxFlags("Secret##SectorFlag", &sector->flags[0], SEC_FLAGS1_SECRET);
+
+			changed |= ImGui::CheckboxFlags("Door##SectorFlag", &sector->flags[0], SEC_FLAGS1_DOOR); ImGui::SameLine(column[1]);
+			changed |= ImGui::CheckboxFlags("Ice Floor##SectorFlag", &sector->flags[0], SEC_FLAGS1_ICE_FLOOR); ImGui::SameLine(column[2]);
+			changed |= ImGui::CheckboxFlags("Snow Floor##SectorFlag", &sector->flags[0], SEC_FLAGS1_SNOW_FLOOR);
+
+			changed |= ImGui::CheckboxFlags("Crushing##SectorFlag", &sector->flags[0], SEC_FLAGS1_CRUSHING); ImGui::SameLine(column[1]);
+			changed |= ImGui::CheckboxFlags("Low Damage##SectorFlag", &sector->flags[0], SEC_FLAGS1_LOW_DAMAGE); ImGui::SameLine(column[2]);
+			changed |= ImGui::CheckboxFlags("High Damage##SectorFlag", &sector->flags[0], SEC_FLAGS1_HIGH_DAMAGE);
+
+			changed |= ImGui::CheckboxFlags("No Smart Obj##SectorFlag", &sector->flags[0], SEC_FLAGS1_NO_SMART_OBJ); ImGui::SameLine(column[1]);
+			changed |= ImGui::CheckboxFlags("Smart Obj##SectorFlag", &sector->flags[0], SEC_FLAGS1_SMART_OBJ); ImGui::SameLine(column[2]);
+			changed |= ImGui::CheckboxFlags("Safe Sector##SectorFlag", &sector->flags[0], SEC_FLAGS1_SAFESECTOR);
+
+			changed |= ImGui::CheckboxFlags("Mag Seal##SectorFlag", &sector->flags[0], SEC_FLAGS1_MAG_SEAL); ImGui::SameLine(column[1]);
+			changed |= ImGui::CheckboxFlags("Exploding Wall##SectorFlag", &sector->flags[0], SEC_FLAGS1_EXP_WALL);
+
+			ImGui::Separator();
+
+			// Textures
+			EditorTexture* floorTex = getTexture(sector->floorTex.texIndex);
+			EditorTexture* ceilTex = getTexture(sector->ceilTex.texIndex);
+
+			void* floorPtr = floorTex ? TFE_RenderBackend::getGpuPtr(floorTex->frames[0]) : nullptr;
+			void* ceilPtr = ceilTex ? TFE_RenderBackend::getGpuPtr(ceilTex->frames[0]) : nullptr;
+
+			const f32 texCol = 150.0f;
+			// Labels
+			ImGui::Text("Floor Texture"); ImGui::SameLine(texCol);
+			ImGui::Text("Ceiling Texture");
+
+			// Textures
+			const f32 floorScale = floorTex ? 1.0f / (f32)std::max(floorTex->width, floorTex->height) : 1.0f;
+			const f32 ceilScale = ceilTex ? 1.0f / (f32)std::max(ceilTex->width, ceilTex->height) : 1.0f;
+			const f32 aspectFloor[] = { floorTex ? f32(floorTex->width) * floorScale : 1.0f, floorTex ? f32(floorTex->height) * floorScale : 1.0f };
+			const f32 aspectCeil[] = { ceilTex ? f32(ceilTex->width) * ceilScale : 1.0f, ceilTex ? f32(ceilTex->height) * ceilScale : 1.0f };
+
+			ImGui::ImageButton(floorPtr, { 128.0f * aspectFloor[0], 128.0f * aspectFloor[1] }, { 0.0f, 1.0f }, { 1.0f, 0.0f });
+			if (texIndex >= 0 && ImGui::IsItemHovered())
+			{
+				FeatureId id = createFeatureId(sector, 0, HP_FLOOR);
+				edit_setTexture(1, &id, texIndex);
+				changed = true;
+			}
+
+			ImGui::SameLine(texCol);
+			ImGui::ImageButton(ceilPtr, { 128.0f * aspectCeil[0], 128.0f * aspectCeil[1] }, { 0.0f, 1.0f }, { 1.0f, 0.0f });
+			if (texIndex >= 0 && ImGui::IsItemHovered())
+			{
+				FeatureId id = createFeatureId(sector, 0, HP_CEIL);
+				edit_setTexture(1, &id, texIndex);
+				changed = true;
+			}
+
+			const ImVec2 imageLeft = ImGui::GetItemRectMin();
+			const ImVec2 imageRight = ImGui::GetItemRectMax();
+
+			// Names
+			if (floorTex)
+			{
+				ImGui::Text("%s", floorTex->name); ImGui::SameLine(texCol);
+			}
+			if (ceilTex)
+			{
+				ImGui::Text("%s", ceilTex->name); ImGui::SameLine();
+			}
+
+			// Texture Offsets
+			DisplayInfo displayInfo;
+			TFE_RenderBackend::getDisplayInfo(&displayInfo);
+
+			ImVec2 offsetLeft = { imageLeft.x + texCol + 8.0f, imageLeft.y + 8.0f };
+			ImVec2 offsetSize = { displayInfo.width - (imageLeft.x + texCol + 16.0f), 128.0f };
+			ImGui::SetNextWindowPos(offsetLeft);
+			// A child window is used here in order to place the controls in the desired position - to the right of the image buttons.
+			ImGui::BeginChild("##TextureOffsetsSector", offsetSize);
+			{
+				ImGui::Text("Floor Offset");
+				ImGui::PushItemWidth(136.0f);
+				changed |= ImGui::InputFloat2("##FloorOffsetInput", &sector->floorTex.offset.x, "%.3f");
+				ImGui::PopItemWidth();
+
+				ImGui::NewLine();
+
+				ImGui::Text("Ceil Offset");
+				ImGui::PushItemWidth(136.0f);
+				changed |= ImGui::InputFloat2("##CeilOffsetInput", &sector->ceilTex.offset.x, "%.3f");
+				ImGui::PopItemWidth();
+			}
+			ImGui::EndChild();
+
+			if (changed)
+			{
+				infoPanel_addSectorChangesToHistory();
+			}
 		}
-		ImGui::EndChild();
+		else  // selSectorCount > 1
+		{
+			ImGui::Text("Multiple Sectors Selected");
+			ImGui::Separator();
+
+			// Layer and Ambient
+			s32 layer = s_sectorChanges.layer;
+			infoLabel("##LayerLabel", "Layer", 42);
+			if (infoIntInput("##LayerSector", 96, &layer, !(s_sectorChanges.changes & SCF_LAYER)))
+			{
+				s_sectorChanges.layer = layer;
+				s_sectorChanges.changes |= SCF_LAYER;
+				s_sectorChanges.applyChanges = true;
+			}
+
+			ImGui::SameLine(0.0f, 8.0f);
+
+			s32 ambient = (s32)s_sectorChanges.ambient;
+			infoLabel("##AmbientLabel", "Ambient", 64);
+			if (infoIntInput("##AmbientSector", 96, &ambient, !(s_sectorChanges.changes & SCF_AMBIENT)))
+			{
+				s_sectorChanges.ambient = std::max(0, std::min(31, ambient));
+				s_sectorChanges.changes |= SCF_AMBIENT;
+				s_sectorChanges.applyChanges = true;
+			}
+
+			// Heights
+			infoLabel("##FloorHeightLabel", "Floor", 42);
+			if (infoFloatInput("##FloorHeight", 64 + 8, &s_sectorChanges.floorHeight, !(s_sectorChanges.changes & SCF_FLOOR_HEIGHT)))
+			{
+				s_sectorChanges.changes |= SCF_FLOOR_HEIGHT;
+				s_sectorChanges.applyChanges = true;
+			}
+			ImGui::SameLine();
+
+			infoLabel("##SecondHeightLabel", "Second", 52);
+			if (infoFloatInput("##SecondHeight", 64, &s_sectorChanges.secHeight, !(s_sectorChanges.changes & SCF_SEC_HEIGHT)))
+			{
+				s_sectorChanges.changes |= SCF_SEC_HEIGHT;
+				s_sectorChanges.applyChanges = true;
+			}
+			ImGui::SameLine();
+
+			infoLabel("##CeilHeightLabel", "Ceiling", 60);
+			if (infoFloatInput("##CeilHeight", 64, &s_sectorChanges.ceilHeight, !(s_sectorChanges.changes & SCF_CEIL_HEIGHT)))
+			{
+				s_sectorChanges.changes |= SCF_CEIL_HEIGHT;
+				s_sectorChanges.applyChanges = true;
+			}
+			ImGui::Separator();
+
+			// Flags
+			infoLabel("##Flags1Label", "Flags1", 56);
+			u32 flags1 = s_sectorChanges.flags1_set;
+			if (infoUIntInput("##Flags1", 128, &flags1, !(s_sectorChanges.changes & SCF_FLAG1_SET)))
+			{
+				s_sectorChanges.flags1_set = flags1;
+				s_sectorChanges.changes |= SCF_FLAG1_SET;
+				s_sectorChanges.applyChanges = true;
+			}
+			ImGui::SameLine();
+
+			infoLabel("##Flags2Label", "Flags2", 56);
+			u32 flags2 = s_sectorChanges.flags2_set;
+			if (infoUIntInput("##Flags2", 128, &flags2, !(s_sectorChanges.changes & SCF_FLAG1_SET)))
+			{
+				s_sectorChanges.flags1_set = flags2;
+				s_sectorChanges.changes |= SCF_FLAG2_SET;
+				s_sectorChanges.applyChanges = true;
+			}
+
+			infoLabel("##Flags3Label", "Flags3", 56);
+			u32 flags3 = s_sectorChanges.flags3_set;
+			if (infoUIntInput("##Flags3", 128, &flags3, !(s_sectorChanges.changes & SCF_FLAG1_SET)))
+			{
+				s_sectorChanges.flags1_set = flags3;
+				s_sectorChanges.changes |= SCF_FLAG3_SET;
+				s_sectorChanges.applyChanges = true;
+			}
+
+			const f32 column[] = { 0.0f, 160.0f, 320.0f };
+
+			checkBoxMulti("Exterior##SectorFlag", &s_sectorChanges.flags1Value, &s_sectorChanges.flags1Changed, SEC_FLAGS1_EXTERIOR, IPANEL_SECTOR); ImGui::SameLine(column[1]);
+			checkBoxMulti("Pit##SectorFlag", &s_sectorChanges.flags1Value, &s_sectorChanges.flags1Changed, SEC_FLAGS1_PIT, IPANEL_SECTOR); ImGui::SameLine(column[2]);
+			checkBoxMulti("No Walls##SectorFlag", &s_sectorChanges.flags1Value, &s_sectorChanges.flags1Changed, SEC_FLAGS1_NOWALL_DRAW, IPANEL_SECTOR);
+
+			checkBoxMulti("Ext Ceil Adj##SectorFlag", &s_sectorChanges.flags1Value, &s_sectorChanges.flags1Changed, SEC_FLAGS1_EXT_ADJ, IPANEL_SECTOR); ImGui::SameLine(column[1]);
+			checkBoxMulti("Ext Floor Adj##SectorFlag", &s_sectorChanges.flags1Value, &s_sectorChanges.flags1Changed, SEC_FLAGS1_EXT_FLOOR_ADJ, IPANEL_SECTOR);  ImGui::SameLine(column[2]);
+			checkBoxMulti("Secret##SectorFlag", &s_sectorChanges.flags1Value, &s_sectorChanges.flags1Changed, SEC_FLAGS1_SECRET, IPANEL_SECTOR);
+
+			checkBoxMulti("Door##SectorFlag", &s_sectorChanges.flags1Value, &s_sectorChanges.flags1Changed, SEC_FLAGS1_DOOR, IPANEL_SECTOR); ImGui::SameLine(column[1]);
+			checkBoxMulti("Ice Floor##SectorFlag", &s_sectorChanges.flags1Value, &s_sectorChanges.flags1Changed, SEC_FLAGS1_ICE_FLOOR, IPANEL_SECTOR); ImGui::SameLine(column[2]);
+			checkBoxMulti("Snow Floor##SectorFlag", &s_sectorChanges.flags1Value, &s_sectorChanges.flags1Changed, SEC_FLAGS1_SNOW_FLOOR, IPANEL_SECTOR);
+
+			checkBoxMulti("Crushing##SectorFlag", &s_sectorChanges.flags1Value, &s_sectorChanges.flags1Changed, SEC_FLAGS1_CRUSHING, IPANEL_SECTOR); ImGui::SameLine(column[1]);
+			checkBoxMulti("Low Damage##SectorFlag", &s_sectorChanges.flags1Value, &s_sectorChanges.flags1Changed, SEC_FLAGS1_LOW_DAMAGE, IPANEL_SECTOR); ImGui::SameLine(column[2]);
+			checkBoxMulti("High Damage##SectorFlag", &s_sectorChanges.flags1Value, &s_sectorChanges.flags1Changed, SEC_FLAGS1_HIGH_DAMAGE, IPANEL_SECTOR);
+
+			checkBoxMulti("No Smart Obj##SectorFlag", &s_sectorChanges.flags1Value, &s_sectorChanges.flags1Changed, SEC_FLAGS1_NO_SMART_OBJ, IPANEL_SECTOR); ImGui::SameLine(column[1]);
+			checkBoxMulti("Smart Obj##SectorFlag", &s_sectorChanges.flags1Value, &s_sectorChanges.flags1Changed, SEC_FLAGS1_SMART_OBJ, IPANEL_SECTOR); ImGui::SameLine(column[2]);
+			checkBoxMulti("Safe Sector##SectorFlag", &s_sectorChanges.flags1Value, &s_sectorChanges.flags1Changed, SEC_FLAGS1_SAFESECTOR, IPANEL_SECTOR);
+
+			checkBoxMulti("Mag Seal##SectorFlag", &s_sectorChanges.flags1Value, &s_sectorChanges.flags1Changed, SEC_FLAGS1_MAG_SEAL, IPANEL_SECTOR); ImGui::SameLine(column[1]);
+			checkBoxMulti("Exploding Wall##SectorFlag", &s_sectorChanges.flags1Value, &s_sectorChanges.flags1Changed, SEC_FLAGS1_EXP_WALL, IPANEL_SECTOR);
+
+			ImGui::Separator();
+			applySectorChanges();
+		}
 	}
 
 	Entity s_objEntity = {};
@@ -1431,273 +2166,274 @@ namespace LevelEditor
 	{
 		s32 objIndex = -1;
 		EditorSector* sector = nullptr;
-		// TODO: Handle multi-select.
 		selection_getEntity(selection_getCount() ? 0 : SEL_INDEX_HOVERED, sector, objIndex);
-		
+				
 		if (hasObjectSelectionChanged(sector, objIndex))
 		{
-			ImGui::SetWindowFocus(NULL);
 			commitCurEntityChanges();
 		}
 		setPrevObjectFeature(sector, objIndex);
 
-		if (!sector || objIndex < 0) { return; }
-		EditorObject* obj = &sector->obj[objIndex];
-		if (s_objEntity.id < 0)
-		{
-			s_objEntity = s_level.entities[obj->entityId];
-		}
+		if (!sector || objIndex < 0 || objIndex >= (s32)sector->obj.size()) { return; }
 
-		if (s_browsing && !isPopupOpen())
+		if (selection_getCount() <= 1)
 		{
-			s_browsing = false;
-			const char* newAssetName = AssetBrowser::getSelectedAssetName();
-			if (newAssetName)
+			EditorObject* obj = &sector->obj[objIndex];
+			if (s_objEntity.id < 0)
 			{
-				s_objEntity.assetName = newAssetName;
+				s_objEntity = s_level.entities[obj->entityId];
 			}
-		}
 
-		ImGui::Text("Sector ID: %d, Object Index: %d", sector->id, objIndex);
-		ImGui::Separator();
-		// Entity Name
-		ImGui::Text("%s", "Name"); ImGui::SameLine(0.0f, 17.0f);
-		char name[256];
-		strcpy(name, s_objEntity.name.c_str());
-		ImGui::SetNextItemWidth(196.0f);
-
-		char inputName[256];
-		sprintf(inputName, "##NameInput_%d_%d", sector->id, objIndex);
-		if (ImGui::InputText(inputName, name, 256))
-		{
-			s_objEntity.name = name;
-		}
-		ImGui::SameLine(0.0f, 16.0f);
-		// Entity Class/Type
-		s32 classId = s_objEntity.type;
-		ImGui::Text("%s", "Class"); ImGui::SameLine(0.0f, 8.0f);
-		ImGui::SetNextItemWidth(96.0f);
-
-		EntityType prev = s_objEntity.type;
-		if (ImGui::Combo("##Class", (s32*)&classId, c_entityClassName, ETYPE_COUNT))
-		{
-			s_objEntity.type = EntityType(classId);
-			// We need a default asset if the class type has changed, since the current asset will not work.
-			if (prev != s_objEntity.type)
+			if (s_browsing && !isPopupOpen())
 			{
-				// So just search for the first entity in the template list of that type and use that asset.
-				const Entity* defEntity = getFirstEntityOfType(s_objEntity.type);
-				assert(defEntity);
-				if (defEntity)
+				s_browsing = false;
+				const char* newAssetName = AssetBrowser::getSelectedAssetName();
+				if (newAssetName)
 				{
-					s_objEntity.assetName = defEntity->assetName;
+					s_objEntity.assetName = newAssetName;
 				}
 			}
-		}
-		// Entity Asset
-		ImGui::Text("%s", "Asset"); ImGui::SameLine(0.0f, 8.0f);
-		char assetName[256];
-		strcpy(assetName, s_objEntity.assetName.c_str());
-		if (ImGui::InputText("##AssetName", assetName, 256))
-		{
-			s_objEntity.assetName = assetName;
-		}
-		ImGui::SameLine(0.0f, 8.0f);
-		if (ImGui::Button("Browse"))
-		{
-			AssetType assetType = TYPE_NOT_SET;
-			if (s_objEntity.type == ETYPE_SPRITE)
-			{
-				assetType = TYPE_SPRITE;
-			}
-			else if (s_objEntity.type == ETYPE_FRAME)
-			{
-				assetType = TYPE_FRAME;
-			}
-			else if (s_objEntity.type == ETYPE_3D)
-			{
-				assetType = TYPE_3DOBJ;
-			}
-			if (assetType != TYPE_NOT_SET)
-			{
-				openEditorPopup(TFE_Editor::POPUP_BROWSE, u32(assetType), (void*)s_objEntity.assetName.c_str());
-				s_browsing = true;
-			}
-		}
-		ImGui::Separator();
 
-		ImGui::Text("%s", "Position"); ImGui::SameLine(0.0f, 8.0f);
-		ImGui::InputFloat3("##Position", &obj->pos.x);
+			ImGui::Text("Sector ID: %d, Object Index: %d", sector->id, objIndex);
+			ImGui::Separator();
+			// Entity Name
+			ImGui::Text("%s", "Name"); ImGui::SameLine(0.0f, 17.0f);
+			char name[256];
+			strcpy(name, s_objEntity.name.c_str());
+			ImGui::SetNextItemWidth(196.0f);
 
-		bool orientAdjusted = false;
-		ImGui::Text("%s", "Angle"); ImGui::SameLine(0.0f, 32.0f);
-		ImGui::SetNextItemWidth(206.0f);
-		if (ImGui::SliderAngle("##Angle", &obj->angle, 0.0f))
-		{
-			orientAdjusted = true;
-		}
-		ImGui::SameLine(0.0f, 4.0f);
-		ImGui::SetNextItemWidth(96.0f);
-
-		f32 angle = obj->angle * 180.0f / PI;
-		if (ImGui::InputFloat("##AngleEdit", &angle))
-		{
-			obj->angle = angle * PI / 180.0f;
-			orientAdjusted = true;
-		}
-		
-		// Show pitch and roll.
-		if (s_objEntity.type == ETYPE_3D)
-		{
-			f32 pitch = obj->pitch * 180.0f / PI;
-			f32 roll  = obj->roll  * 180.0f / PI;
-
-			ImGui::Text("%s", "Pitch"); ImGui::SameLine(0.0f, 32.0f);
-			ImGui::SetNextItemWidth(128.0f);
-			if (ImGui::InputFloat("##PitchEdit", &pitch))
+			char inputName[256];
+			sprintf(inputName, "##NameInput_%d_%d", sector->id, objIndex);
+			if (ImGui::InputText(inputName, name, 256))
 			{
-				obj->pitch = pitch * PI / 180.0f;
+				s_objEntity.name = name;
+			}
+			ImGui::SameLine(0.0f, 16.0f);
+			// Entity Class/Type
+			s32 classId = s_objEntity.type;
+			ImGui::Text("%s", "Class"); ImGui::SameLine(0.0f, 8.0f);
+			ImGui::SetNextItemWidth(96.0f);
+
+			EntityType prev = s_objEntity.type;
+			if (ImGui::Combo("##Class", (s32*)&classId, c_entityClassName, ETYPE_COUNT))
+			{
+				s_objEntity.type = EntityType(classId);
+				// We need a default asset if the class type has changed, since the current asset will not work.
+				if (prev != s_objEntity.type)
+				{
+					// So just search for the first entity in the template list of that type and use that asset.
+					const Entity* defEntity = getFirstEntityOfType(s_objEntity.type);
+					assert(defEntity);
+					if (defEntity)
+					{
+						s_objEntity.assetName = defEntity->assetName;
+					}
+				}
+			}
+			// Entity Asset
+			ImGui::Text("%s", "Asset"); ImGui::SameLine(0.0f, 8.0f);
+			char assetName[256];
+			strcpy(assetName, s_objEntity.assetName.c_str());
+			if (ImGui::InputText("##AssetName", assetName, 256))
+			{
+				s_objEntity.assetName = assetName;
+			}
+			ImGui::SameLine(0.0f, 8.0f);
+			if (ImGui::Button("Browse"))
+			{
+				AssetType assetType = TYPE_NOT_SET;
+				if (s_objEntity.type == ETYPE_SPRITE)
+				{
+					assetType = TYPE_SPRITE;
+				}
+				else if (s_objEntity.type == ETYPE_FRAME)
+				{
+					assetType = TYPE_FRAME;
+				}
+				else if (s_objEntity.type == ETYPE_3D)
+				{
+					assetType = TYPE_3DOBJ;
+				}
+				if (assetType != TYPE_NOT_SET)
+				{
+					openEditorPopup(TFE_Editor::POPUP_BROWSE, u32(assetType), (void*)s_objEntity.assetName.c_str());
+					s_browsing = true;
+				}
+			}
+			ImGui::Separator();
+
+			ImGui::Text("%s", "Position"); ImGui::SameLine(0.0f, 8.0f);
+			ImGui::InputFloat3("##Position", &obj->pos.x);
+
+			bool orientAdjusted = false;
+			ImGui::Text("%s", "Angle"); ImGui::SameLine(0.0f, 32.0f);
+			ImGui::SetNextItemWidth(206.0f);
+			if (ImGui::SliderAngle("##Angle", &obj->angle, 0.0f))
+			{
 				orientAdjusted = true;
 			}
-			ImGui::SameLine(0.0f, 32.0f);
-			ImGui::Text("%s", "Roll"); ImGui::SameLine(0.0f, 8.0f);
-			ImGui::SetNextItemWidth(128.0f);
-			if (ImGui::InputFloat("##RollEdit", &roll))
+			ImGui::SameLine(0.0f, 4.0f);
+			ImGui::SetNextItemWidth(96.0f);
+
+			f32 angle = obj->angle * 180.0f / PI;
+			if (ImGui::InputFloat("##AngleEdit", &angle))
 			{
-				obj->roll = roll * PI / 180.0f;
+				obj->angle = angle * PI / 180.0f;
 				orientAdjusted = true;
 			}
 
-			if (orientAdjusted)
+			// Show pitch and roll.
+			if (s_objEntity.type == ETYPE_3D)
 			{
-				compute3x3Rotation(&obj->transform, obj->angle, obj->pitch, obj->roll);
-			}
-		}
+				f32 pitch = obj->pitch * 180.0f / PI;
+				f32 roll = obj->roll  * 180.0f / PI;
 
-		// Difficulty.
-		ImGui::Text("%s", "Difficulty"); ImGui::SameLine(0.0f, 8.0f);
-		s32 index = c_objDiffToIndex[obj->diff - c_objDiffStart];
-		ImGui::SetNextItemWidth(256.0f);
-		if (ImGui::Combo("##DiffCombo", (s32*)&index, c_objDifficulty, TFE_ARRAYSIZE(c_objDifficulty)))
-		{
-			obj->diff = c_objDiffValue[index];
-		}
-		ImGui::Separator();
-
-		const s32 listWidth = (s32)s_infoWith - 32;
-
-		// Logics
-		if (s_logicSelect >= (s32)s_objEntity.logic.size())
-		{
-			s_logicSelect = -1;
-		}
-		// Always select one of the them, if there are any to select.
-		if (s_logicSelect < 0 && !s_objEntity.logic.empty())
-		{
-			s_logicSelect = 0;
-		}
-
-		ImGui::Text("%s", "Logics");
-		ImGui::BeginChild("##LogicList", { (f32)min(listWidth, 400), 64 }, ImGuiChildFlags_Border);
-		{
-			s32 count = (s32)s_objEntity.logic.size();
-			EntityLogic* list = s_objEntity.logic.data();
-			for (s32 i = 0; i < count; i++)
-			{
-				char name[256];
-				sprintf(name, "%s##%d", list[i].name.c_str(), i);
-				bool sel = s_logicSelect == i;
-				ImGui::Selectable(name, &sel);
-				if (sel) { s_logicSelect = i; }
-				else if (s_logicSelect == i) { s_logicSelect = -1; }
-			}
-		}
-		ImGui::EndChild();
-		if (ImGui::Button("Add"))
-		{
-			LogicDef* def = &s_logicDefList[s_logicIndex];
-			EntityLogic newLogic = {};
-			newLogic.name = def->name;
-			s_objEntity.logic.push_back(newLogic);
-
-			EntityLogic* logic = &s_objEntity.logic.back();
-
-			// Add Variables automatically.
-			const s32 varCount = (s32)def->var.size();
-			const LogicVar* var = def->var.data();
-			for (s32 v = 0; v < varCount; v++, var++)
-			{
-				const EntityVarDef* varDef = &s_varDefList[var->varId];
-				if (var->type == VAR_TYPE_DEFAULT || var->type == VAR_TYPE_REQUIRED)
+				ImGui::Text("%s", "Pitch"); ImGui::SameLine(0.0f, 32.0f);
+				ImGui::SetNextItemWidth(128.0f);
+				if (ImGui::InputFloat("##PitchEdit", &pitch))
 				{
-					EntityVar newVar;
-					newVar.defId = var->varId;
-					newVar.value = varDef->defValue;
-					logic->var.push_back(newVar);
+					obj->pitch = pitch * PI / 180.0f;
+					orientAdjusted = true;
+				}
+				ImGui::SameLine(0.0f, 32.0f);
+				ImGui::Text("%s", "Roll"); ImGui::SameLine(0.0f, 8.0f);
+				ImGui::SetNextItemWidth(128.0f);
+				if (ImGui::InputFloat("##RollEdit", &roll))
+				{
+					obj->roll = roll * PI / 180.0f;
+					orientAdjusted = true;
+				}
+
+				if (orientAdjusted)
+				{
+					compute3x3Rotation(&obj->transform, obj->angle, obj->pitch, obj->roll);
 				}
 			}
-		}
 
-		ImGui::SameLine(0.0f, 8.0f);
-		ImGui::SetNextItemWidth(128.0f);
-		if (ImGui::BeginCombo("##LogicCombo", s_logicDefList[s_logicIndex].name.c_str()))
-		{
-			s32 count = (s32)s_logicDefList.size() - 1;
-			for (s32 i = 0; i < count; i++)
+			// Difficulty.
+			ImGui::Text("%s", "Difficulty"); ImGui::SameLine(0.0f, 8.0f);
+			s32 index = c_objDiffToIndex[obj->diff - c_objDiffStart];
+			ImGui::SetNextItemWidth(256.0f);
+			if (ImGui::Combo("##DiffCombo", (s32*)&index, c_objDifficulty, TFE_ARRAYSIZE(c_objDifficulty)))
 			{
-				if (ImGui::Selectable(s_logicDefList[i].name.c_str(), i == s_logicIndex))
+				obj->diff = c_objDiffValue[index];
+			}
+			ImGui::Separator();
+
+			const s32 listWidth = (s32)s_infoWith - 32;
+
+			// Logics
+			if (s_logicSelect >= (s32)s_objEntity.logic.size())
+			{
+				s_logicSelect = -1;
+			}
+			// Always select one of the them, if there are any to select.
+			if (s_logicSelect < 0 && !s_objEntity.logic.empty())
+			{
+				s_logicSelect = 0;
+			}
+
+			ImGui::Text("%s", "Logics");
+			ImGui::BeginChild("##LogicList", { (f32)min(listWidth, 400), 64 }, ImGuiChildFlags_Border);
+			{
+				s32 count = (s32)s_objEntity.logic.size();
+				EntityLogic* list = s_objEntity.logic.data();
+				for (s32 i = 0; i < count; i++)
 				{
-					s_logicIndex = i;
+					char name[256];
+					sprintf(name, "%s##%d", list[i].name.c_str(), i);
+					bool sel = s_logicSelect == i;
+					ImGui::Selectable(name, &sel);
+					if (sel) { s_logicSelect = i; }
+					else if (s_logicSelect == i) { s_logicSelect = -1; }
 				}
-				setTooltip(s_logicDefList[i].tooltip.c_str());
 			}
-			ImGui::EndCombo();
-		}
-
-		ImGui::SameLine(0.0f, 16.0f);
-		if (ImGui::Button("Remove") && s_logicSelect >= 0)
-		{
-			s32 count = (s32)s_objEntity.logic.size();
-			for (s32 i = s_logicSelect; i < count - 1; i++)
+			ImGui::EndChild();
+			if (ImGui::Button("Add"))
 			{
-				s_objEntity.logic[i] = s_objEntity.logic[i + 1];
-			}
-			s_objEntity.logic.pop_back();
-			s_logicSelect = -1;
-		}
+				LogicDef* def = &s_logicDefList[s_logicIndex];
+				EntityLogic newLogic = {};
+				newLogic.name = def->name;
+				s_objEntity.logic.push_back(newLogic);
 
-		ImGui::Separator();
-		
-		// Variables
-		static s32 varSel = -1;
+				EntityLogic* logic = &s_objEntity.logic.back();
 
-		// Select the variable list.
-		std::vector<EntityVar>* varList = &s_objEntity.var;
-		if (s_logicSelect >= 0 && s_logicSelect < (s32)s_objEntity.logic.size())
-		{
-			varList = &s_objEntity.logic[s_logicSelect].var;
-		}
-
-		const f32 varListHeight = s_objEntity.type == ETYPE_3D ? 114.0f : 140.0f;
-		ImGui::Text("%s", "Variables");
-		ImGui::BeginChild("##VariableList", { (f32)min(listWidth, 400), varListHeight }, ImGuiChildFlags_Border);
-		{
-			s32 count = (s32)varList->size();
-			EntityVar* list = varList->data();
-			for (s32 i = 0; i < count; i++)
-			{
-				EntityVarDef* def = getEntityVar(list[i].defId);
-
-				char name[256];
-				sprintf(name, "%s##%d", def->name.c_str(), i);
-				bool sel = varSel == i;
-				ImGui::Selectable(name, &sel, 0, { 100.0f,0.0f });
-				if (sel) { varSel = i; }
-				else if (varSel == i) { varSel = -1; }
-
-				if (def->type != EVARTYPE_FLAGS) { ImGui::SameLine(0.0f, 8.0f); }
-				switch (def->type)
+				// Add Variables automatically.
+				const s32 varCount = (s32)def->var.size();
+				const LogicVar* var = def->var.data();
+				for (s32 v = 0; v < varCount; v++, var++)
 				{
+					const EntityVarDef* varDef = &s_varDefList[var->varId];
+					if (var->type == VAR_TYPE_DEFAULT || var->type == VAR_TYPE_REQUIRED)
+					{
+						EntityVar newVar;
+						newVar.defId = var->varId;
+						newVar.value = varDef->defValue;
+						logic->var.push_back(newVar);
+					}
+				}
+			}
+
+			ImGui::SameLine(0.0f, 8.0f);
+			ImGui::SetNextItemWidth(128.0f);
+			if (ImGui::BeginCombo("##LogicCombo", s_logicDefList[s_logicIndex].name.c_str()))
+			{
+				s32 count = (s32)s_logicDefList.size() - 1;
+				for (s32 i = 0; i < count; i++)
+				{
+					if (ImGui::Selectable(s_logicDefList[i].name.c_str(), i == s_logicIndex))
+					{
+						s_logicIndex = i;
+					}
+					setTooltip(s_logicDefList[i].tooltip.c_str());
+				}
+				ImGui::EndCombo();
+			}
+
+			ImGui::SameLine(0.0f, 16.0f);
+			if (ImGui::Button("Remove") && s_logicSelect >= 0)
+			{
+				s32 count = (s32)s_objEntity.logic.size();
+				for (s32 i = s_logicSelect; i < count - 1; i++)
+				{
+					s_objEntity.logic[i] = s_objEntity.logic[i + 1];
+				}
+				s_objEntity.logic.pop_back();
+				s_logicSelect = -1;
+			}
+
+			ImGui::Separator();
+
+			// Variables
+			static s32 varSel = -1;
+
+			// Select the variable list.
+			std::vector<EntityVar>* varList = &s_objEntity.var;
+			if (s_logicSelect >= 0 && s_logicSelect < (s32)s_objEntity.logic.size())
+			{
+				varList = &s_objEntity.logic[s_logicSelect].var;
+			}
+
+			const f32 varListHeight = s_objEntity.type == ETYPE_3D ? 114.0f : 140.0f;
+			ImGui::Text("%s", "Variables");
+			ImGui::BeginChild("##VariableList", { (f32)min(listWidth, 400), varListHeight }, ImGuiChildFlags_Border);
+			{
+				s32 count = (s32)varList->size();
+				EntityVar* list = varList->data();
+				for (s32 i = 0; i < count; i++)
+				{
+					EntityVarDef* def = getEntityVar(list[i].defId);
+
+					char name[256];
+					sprintf(name, "%s##%d", def->name.c_str(), i);
+					bool sel = varSel == i;
+					ImGui::Selectable(name, &sel, 0, { 100.0f,0.0f });
+					if (sel) { varSel = i; }
+					else if (varSel == i) { varSel = -1; }
+
+					if (def->type != EVARTYPE_FLAGS) { ImGui::SameLine(0.0f, 8.0f); }
+					switch (def->type)
+					{
 					case EVARTYPE_BOOL:
 					{
 						sprintf(name, "##VarBool%d", i);
@@ -1757,86 +2493,94 @@ namespace LevelEditor
 							list[i].value.sValue1 = pair2;
 						}
 					} break;
+					}
 				}
 			}
-		}
-		ImGui::EndChild();
+			ImGui::EndChild();
 
-		s32 varComboList[256];
-		s32 varComboCount = 0;
-		if (s_logicSelect >= 0 && s_logicSelect < (s32)s_objEntity.logic.size())
-		{
-			addLogicVariables(s_objEntity.logic[s_logicSelect].name, varComboList, varComboCount);
-		}
-		else
-		{
-			addLogicVariables("", varComboList, varComboCount);
-		}
-
-		if (ImGui::Button("Add##Variable") && s_varIndex >= 0 && s_varIndex < varComboCount)
-		{
-			EntityVar var;
-			var.defId = varComboList[s_varIndex];
-			var.value = s_varDefList[var.defId].defValue;
-			varList->push_back(var);
-		}
-		ImGui::SameLine(0.0f, 8.0f);
-		ImGui::SetNextItemWidth(128.0f);
-
-		if (s_varIndex < 0 || s_varIndex >= varComboCount) { s_varIndex = 0; }
-
-		if (ImGui::BeginCombo("##VarCombo", varComboCount ? s_varDefList[varComboList[s_varIndex]].name.c_str() : ""))
-		{
-			for (s32 i = 0; i < varComboCount; i++)
+			s32 varComboList[256];
+			s32 varComboCount = 0;
+			if (s_logicSelect >= 0 && s_logicSelect < (s32)s_objEntity.logic.size())
 			{
-				if (ImGui::Selectable(s_varDefList[varComboList[i]].name.c_str(), i == s_varIndex))
+				addLogicVariables(s_objEntity.logic[s_logicSelect].name, varComboList, varComboCount);
+			}
+			else
+			{
+				addLogicVariables("", varComboList, varComboCount);
+			}
+
+			if (ImGui::Button("Add##Variable") && s_varIndex >= 0 && s_varIndex < varComboCount)
+			{
+				EntityVar var;
+				var.defId = varComboList[s_varIndex];
+				var.value = s_varDefList[var.defId].defValue;
+				varList->push_back(var);
+			}
+			ImGui::SameLine(0.0f, 8.0f);
+			ImGui::SetNextItemWidth(128.0f);
+
+			if (s_varIndex < 0 || s_varIndex >= varComboCount) { s_varIndex = 0; }
+
+			if (ImGui::BeginCombo("##VarCombo", varComboCount ? s_varDefList[varComboList[s_varIndex]].name.c_str() : ""))
+			{
+				for (s32 i = 0; i < varComboCount; i++)
 				{
-					s_varIndex = i;
+					if (ImGui::Selectable(s_varDefList[varComboList[i]].name.c_str(), i == s_varIndex))
+					{
+						s_varIndex = i;
+					}
+					// setTooltip(s_varDefList[varList[s_varIndex]].tooltip.c_str());
 				}
-				// setTooltip(s_varDefList[varList[s_varIndex]].tooltip.c_str());
+				ImGui::EndCombo();
 			}
-			ImGui::EndCombo();
-		}
 
-		ImGui::SameLine(0.0f, 16.0f);
-		if (ImGui::Button("Remove##Variable") && varSel >= 0 && varSel < (s32)varList->size())
-		{
-			s32 count = (s32)varList->size();
-			for (s32 i = varSel; i < count - 1; i++)
+			ImGui::SameLine(0.0f, 16.0f);
+			if (ImGui::Button("Remove##Variable") && varSel >= 0 && varSel < (s32)varList->size())
 			{
-				(*varList)[i] = (*varList)[i + 1];
+				s32 count = (s32)varList->size();
+				for (s32 i = varSel; i < count - 1; i++)
+				{
+					(*varList)[i] = (*varList)[i + 1];
+				}
+				varList->pop_back();
+				varSel = -1;
 			}
-			varList->pop_back();
-			varSel = -1;
-		}
-		ImGui::Separator();
+			ImGui::Separator();
 
-		// Buttons.
-		if (ImGui::Button("Category"))
-		{
-			openEditorPopup(TFE_Editor::POPUP_CATEGORY);
-			s_prevCategoryFlags = s_objEntity.categories;
-		}
-		ImGui::SameLine(0.0f, 8.0f);
-		if (ImGui::Button("Add to Entity Def"))
-		{
-			s_objEntity.categories |= 1;	// custom.
-			if (!doesEntityExistInProject(&s_objEntity))
+			// Buttons.
+			if (ImGui::Button("Category"))
 			{
-				s_projEntityDefList.push_back(s_objEntity);
-				s_entityDefList.push_back(s_objEntity);
-				saveProjectEntityList();
+				openEditorPopup(TFE_Editor::POPUP_CATEGORY);
+				s_prevCategoryFlags = s_objEntity.categories;
+			}
+			ImGui::SameLine(0.0f, 8.0f);
+			if (ImGui::Button("Add to Entity Def"))
+			{
+				s_objEntity.categories |= 1;	// custom.
+				if (!doesEntityExistInProject(&s_objEntity))
+				{
+					s_projEntityDefList.push_back(s_objEntity);
+					s_entityDefList.push_back(s_objEntity);
+					saveProjectEntityList();
+				}
+			}
+			ImGui::SameLine(0.0f, 8.0f);
+			if (ImGui::Button("Commit"))
+			{
+				commitCurEntityChanges();
+			}
+			ImGui::SameLine(0.0f, 8.0f);
+			if (ImGui::Button("Reset"))
+			{
+				s_objEntity = {};
 			}
 		}
-		ImGui::SameLine(0.0f, 8.0f);
-		if (ImGui::Button("Commit"))
+		else  // select count > 1
 		{
-			commitCurEntityChanges();
-		}
-		ImGui::SameLine(0.0f, 8.0f);
-		if (ImGui::Button("Reset"))
-		{
-			s_objEntity = {};
+			ImGui::Text("Multiple objects selected.");
+			ImGui::Separator();
+			ImGui::Text("Support for limited multi-select editing");
+			ImGui::Text("  coming in version Alpha-2 or later.");
 		}
 	}
 
@@ -1874,6 +2618,7 @@ namespace LevelEditor
 	}
 
 	static s32 s_selectedOffset = -1;
+	static s32 s_prevGuidelineId = -1;
 	
 	void infoPanelGuideline()
 	{
@@ -1881,11 +2626,14 @@ namespace LevelEditor
 		if (id < 0) { return; }
 
 		Guideline* guideline = &s_level.guidelines[id];
+		bool guidelineEdited = false;
 
 		sectionHeader("Settings");
 		const s32 checkWidth = (s32)ImGui::CalcTextSize("Limit Height Shown").x + 8;
+		const u32 prevFlags = guideline->flags;
 		optionCheckbox("Limit Height Shown", &guideline->flags, GLFLAG_LIMIT_HEIGHT, checkWidth);
 		optionCheckbox("Disable Snapping", &guideline->flags, GLFLAG_DISABLE_SNAPPING, checkWidth);
+		if (guideline->flags != prevFlags) { guidelineEdited = true; }
 		ImGui::Separator();
 
 		if ((guideline->flags & GLFLAG_LIMIT_HEIGHT) || !(guideline->flags & GLFLAG_DISABLE_SNAPPING))
@@ -1894,12 +2642,12 @@ namespace LevelEditor
 			s32 colWidth = s32(ImGui::CalcTextSize("Min Height Shown").x + 8.0f);
 			if (guideline->flags & GLFLAG_LIMIT_HEIGHT)
 			{
-				optionFloatInput("Min Height Shown", &guideline->minHeight, 0.1f, colWidth, 128, "%.2f");
-				optionFloatInput("Max Height Shown", &guideline->maxHeight, 0.1f, colWidth, 128, "%.2f");
+				guidelineEdited |= optionFloatInput("Min Height Shown", &guideline->minHeight, 0.1f, colWidth, 128, "%.2f");
+				guidelineEdited |= optionFloatInput("Max Height Shown", &guideline->maxHeight, 0.1f, colWidth, 128, "%.2f");
 			}
 			if (!(guideline->flags & GLFLAG_DISABLE_SNAPPING))
 			{
-				optionFloatInput("Max Snap Range", &guideline->maxSnapRange, 0.1f, colWidth, 128, "%.2f");
+				guidelineEdited |= optionFloatInput("Max Snap Range", &guideline->maxSnapRange, 0.1f, colWidth, 128, "%.2f");
 			}
 			ImGui::Separator();
 		}
@@ -1913,7 +2661,7 @@ namespace LevelEditor
 		{
 			char label[256];
 			sprintf(label, "Offset %d", i + 1);
-			optionFloatInput(label, &offsetValue[i], 0.1f, 0, 128, "%.2f");
+			guidelineEdited |= optionFloatInput(label, &offsetValue[i], 0.1f, 0, 128, "%.2f");
 			guideline->maxOffset = std::max(guideline->maxOffset, fabsf(offsetValue[i]));
 
 			ImGui::SameLine();
@@ -1929,6 +2677,7 @@ namespace LevelEditor
 		if (ImGui::Button("Add"))
 		{
 			guideline->offsets.push_back({ 0.0f });
+			guidelineEdited = true;
 		}
 		if (count >= 4) { enableNextItem(); }
 
@@ -1939,7 +2688,24 @@ namespace LevelEditor
 				guideline->offsets[i] = guideline->offsets[i + 1];
 			}
 			guideline->offsets.pop_back();
+			guidelineEdited = true;
 		}
+
+		ImGui::Separator();
+		sectionHeader("Subdivision");
+		ImGui::TextColored(ImVec4(0.5f, 1.0f, 0.75f, 0.5f), "Subdivide into equal length segments,\ndefault (0) = no subdivision.");
+		s32 colWidth = s32(ImGui::CalcTextSize("Segment Length").x + 8.0f);
+		if (optionFloatInput("Segment Length", &guideline->subDivLen, 0.1f, colWidth, 128, "%.2f"))
+		{
+			guidelineEdited = true;
+			guideline_computeSubdivision(guideline);
+		}
+		
+		if (guidelineEdited)
+		{
+			cmd_guidelineSingleSnapshot(LName_Guideline_Edit, id, s_prevGuidelineId != id);
+		}
+		s_prevGuidelineId = id;
 	}
 
 	void infoPanelNote()

@@ -1,11 +1,10 @@
 #include "touchInput.h"
 #include <TFE_System/math.h>
 #include <TFE_System/system.h>
+#include <TFE_Settings/settings.h>
 #include <TFE_Ui/imGUI/imgui.h>
 #include <vector>
 #include <chrono>
-
-extern bool s_inMenu;
 
 namespace TFE_Input
 {
@@ -477,7 +476,7 @@ namespace TFE_Input
 
 	void handleTouchEvents(const SDL_Event& event)
 	{
-		if (!s_inMenu && s_TouchContext && s_TouchContext->IsEnabled())
+		if (!TFE_Settings::getTempSettings()->inMenu && s_TouchContext && s_TouchContext->IsEnabled())
 		{
 			s_TouchContext->HandleEvents(event);
 		}
@@ -485,7 +484,7 @@ namespace TFE_Input
 
 	void drawTouchControls()
 	{
-		if (s_inMenu || !s_TouchContext || !s_TouchContext->IsEnabled())
+		if (TFE_Settings::getTempSettings()->inMenu || !s_TouchContext || !s_TouchContext->IsEnabled())
 		{
 			return;
 		}
