@@ -623,11 +623,6 @@ namespace TFE_Input
 			{
 				s32 posX, posY;
 
-				//DisplayInfo displayInfo;
-				//TFE_RenderBackend::getDisplayInfo(&displayInfo);
-				//SDL_Window* wnd = (SDL_Window*)TFE_RenderBackend::getWindow();
-				s32 w, h;
-				SDL_GetWindowSize(wnd, &w, &h);
 #if defined(ENABLE_VR)
 				if (TFE_Settings::getTempSettings()->vr)
 				{
@@ -635,8 +630,10 @@ namespace TFE_Input
 					SDL_GetWindowSize(wnd, &w, &h);
 
 					const Vec2ui& targetSize = vr::GetRenderTargetSize();
-					posX = s32((mouseAbsX + moveX) * ((float)w / (float)targetSize.x/*displayInfo.width*/));
-					posY = s32((mouseAbsY + moveY) * ((float)h / (float)targetSize.y/*displayInfo.height*/));
+					posX = s32((mouseAbsX + moveX) * ((float)w / (float)targetSize.x));
+					posY = s32((mouseAbsY + moveY) * ((float)h / (float)targetSize.y));
+					posX = std::clamp(posX, 0, (s32)targetSize.x);
+					posY = std::clamp(posY, 0, (s32)targetSize.y);
 				}
 				else
 #endif
@@ -644,8 +641,6 @@ namespace TFE_Input
 					posX = s32(mouseAbsX + moveX);
 					posY = s32(mouseAbsY + moveY);
 				}
-				posX = std::clamp(posX, 0, w/*(s32)displayInfo.width*/);
-				posY = std::clamp(posY, 0, h/*(s32)displayInfo.height*/);
 				SDL_WarpMouseInWindow(wnd, posX, posY);
 				TFE_Input::setMousePos(posX, posY);
 			}
@@ -680,8 +675,9 @@ namespace TFE_Input
 
 	bool inputMapping_handleInputs(SDL_Window* wnd, SDLEventHandler* eventHandler, IGame::State gameState)
 	{
-		//  Allow escape during playback except when in PDA mode 
-		if (keyPressed(KEY_ESCAPE) && !TFE_DarkForces::pda_isOpen())
+		//  Allow escape during playback except when in PDA mode
+		const bool replayVr = TFE_Settings::getTempSettings()->vr && (vr::GetControllerState(vr::Side::Left).mButtons & vr::ControllerButton::Menu) > 0;
+		if ((keyPressed(KEY_ESCAPE) || buttonDown(Button::CONTROLLER_BUTTON_GUIDE) || replayVr) && !TFE_DarkForces::pda_isOpen())
 		{
 			if (isDemoPlayback())
 			{
@@ -724,8 +720,8 @@ namespace TFE_Input
 				const Vec2ui& targetSize = vr::GetRenderTargetSize();
 				s32 w, h;
 				SDL_GetWindowSize(wnd, &w, &h);
-				mouseAbsX = (s32)((f32)mouseAbsX * (f32)targetSize.x / (f32)w/*s_displayWidth*/);
-				mouseAbsY = (s32)((f32)mouseAbsY * (f32)targetSize.y / (f32)h/*s_displayHeight*/);
+				mouseAbsX = (s32)((f32)mouseAbsX * (f32)targetSize.x / (f32)w);
+				mouseAbsY = (s32)((f32)mouseAbsY * (f32)targetSize.y / (f32)h);
 			}
 #endif
 		}
@@ -792,7 +788,6 @@ namespace TFE_Input
 		// Handle Recording
 		else if (isRecording())
 		{
-
 			sendHudStartMessage();
 
 			if (TFE_Settings::getGameSettings()->df_showReplayCounter)

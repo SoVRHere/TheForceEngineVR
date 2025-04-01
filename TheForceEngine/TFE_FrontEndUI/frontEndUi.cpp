@@ -3790,17 +3790,54 @@ namespace TFE_FrontEndUI
 	{
 		TFE_Settings_Vr* vrSettings = TFE_Settings::getVrSettings();
 
-		ImGui::Text("Visit our");
-		ImGui::SameLine();
-		if (ImGui::Button("Discord"))
 		{
-			TFE_System::openURL("https://discord.gg/8XuXVFzyNu");
-		}
+			ImGui::Text("Visit our");
+			ImGui::SameLine();
+			if (ImGui::Button("Discord"))
+			{
+				TFE_System::openURL("https://discord.gg/8XuXVFzyNu");
+			}
 #if !defined(ANDROID)
-		Tooltip("This will open browser/Discord on your Desktop.");
+			Tooltip("This will open a browser/Discord on your desktop, which may cause you to lose focus on the game window.");
 #endif
-		ImGui::SameLine();
-		ImGui::Text("for more info.");
+			ImGui::SameLine();
+			ImGui::Text("/");
+
+			const char* toolTip = "This will open a browser on your desktop, which may cause you to lose focus on the game window.";
+			ImGui::SameLine();
+			if (ImGui::Button("YouTube"))
+			{
+				TFE_System::openURL("https://www.youtube.com/channel/UCI20xAhQjT6r4fjBRZ6SgbQ");
+			}
+#if !defined(ANDROID)
+			Tooltip(toolTip);
+#endif
+			ImGui::SameLine();
+			ImGui::Text("/");
+
+			ImGui::SameLine();
+			if (ImGui::Button("Patreon"))
+			{
+				TFE_System::openURL("https://www.patreon.com/SoVRHere");
+			}
+#if !defined(ANDROID)
+			Tooltip(toolTip);
+#endif
+			ImGui::SameLine();
+			ImGui::Text("/");
+
+			ImGui::SameLine();
+			if (ImGui::Button("GitHub"))
+			{
+				TFE_System::openURL("https://github.com/SoVRHere/TheForceEngineVR");
+			}
+#if !defined(ANDROID)
+			Tooltip(toolTip);
+#endif
+			ImGui::SameLine();
+			ImGui::Text(".");
+		}
+
 		ImGui::Separator();
 		ImGui::NewLine();
 
@@ -3967,6 +4004,8 @@ namespace TFE_FrontEndUI
 
 		// Controllers
 		{
+			ImGui::Separator();
+			ImGui::NewLine();
 			ImGui::PushFont(s_dialogFont);
 			ImGui::LabelText("##ConfigLabel", "Controllers");
 			ImGui::PopFont();
