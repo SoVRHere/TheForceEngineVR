@@ -95,6 +95,7 @@ namespace TFE_RenderBackend
 	void* getWindow();
 	bool getVsyncEnabled();
 	void enableVsync(bool enable);
+	bool isWindowMinimized();
 
 	void pushGroup(const char* label);
 	void popGroup();

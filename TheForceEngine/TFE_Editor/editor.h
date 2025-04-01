@@ -68,6 +68,8 @@ namespace TFE_Editor
 		POPUP_FIND_SECTOR,
 		POPUP_SNAPSHOTS,
 		POPUP_TEX_SOURCES,
+		POPUP_RELOAD_CONFIRM,
+		POPUP_EXIT_SAVE_CONFIRM,
 		POPUP_COUNT
 	};
 
@@ -110,12 +112,13 @@ namespace TFE_Editor
 		ICON_TRASHCAN,
 		ICON_COUNT
 	};
+	typedef void(*PopupEndCallback)(EditorPopup);
 
 	#define LIST_SELECT(label, arr, index) listSelection(label, arr, IM_ARRAYSIZE(arr), (s32*)&index)
 		
 	void enable();
-	void disable();
-	bool update(bool consoleOpen = false);
+	bool disable();
+	bool update(bool consoleOpen = false, bool minimized = false, bool exiting = false);
 	bool render();
 	TextureGpu* getIconAtlas();
 
@@ -126,6 +129,7 @@ namespace TFE_Editor
 	void openEditorPopup(EditorPopup popup, u32 userData = 0, void* userPtr = nullptr);
 	void hidePopup();
 	void showPopup();
+	void setPopupEndCallback(PopupEndCallback callback = nullptr);
 	EditorPopup getCurrentPopup();
 	void listSelection(const char* labelText, const char** listValues, size_t listLen, s32* index, s32 comboOffset=96, s32 comboWidth=0);
 	void setTooltip(const char* msg, ...);
@@ -165,7 +169,7 @@ namespace TFE_Editor
 	bool editorStringFilter(const char* str, const char* filter, size_t filterLength);
 
 	void clearRecents();
-	void addToRecents(const char* path);
+	void addToRecents(const char* path, bool saveConfig = true);
 	void removeFromRecents(const char* path);
 	std::vector<RecentProject>* getRecentProjects();
 	
@@ -175,4 +179,7 @@ namespace TFE_Editor
 
 	Vec2i getEditorVersion();
 	bool mouseInsideItem();
+
+	bool isInAssetEditor();
+	bool isProgramExiting();
 }

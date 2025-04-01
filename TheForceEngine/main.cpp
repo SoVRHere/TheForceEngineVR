@@ -817,9 +817,12 @@ int main(int argc, char* argv[])
 	u32 frame = 0u;
 	bool showPerf = false;
 	bool relativeMode = false;
+	bool minimized = false;
 	TFE_System::logWrite(LOG_MSG, "Program Flow", "The Force Engine Game Loop Started");
 	while (s_loop && !TFE_System::quitMessagePosted())
 	{
+		minimized = TFE_RenderBackend::isWindowMinimized();
+
 		TFE_FRAME_BEGIN();
 		TFE_System::frameLimiter_begin();
 		bool enableRelative = TFE_Input::relativeModeEnabled();
@@ -911,7 +914,7 @@ int main(int argc, char* argv[])
 					}
 				}
 				newArgs[newArgc] = selectedMod;
-				setAppState(appState, newArgc + 1, newArgs);
+				setAppState(appState, (s32)newArgc + 1, newArgs);
 			}
 			else
 			{
@@ -1039,7 +1042,7 @@ int main(int argc, char* argv[])
 		if (s_curState == APP_STATE_EDITOR)
 		{
 #ifdef ENABLE_EDITOR
-			if (TFE_Editor::update(isConsoleOpen))
+			if (TFE_Editor::update(isConsoleOpen, minimized))
 			{
 				TFE_FrontEndUI::setAppState(APP_STATE_MENU);
 			}
@@ -1123,6 +1126,40 @@ int main(int argc, char* argv[])
 			TFE_FRAME_END();
 		}
 	}	
+
+#if ENABLE_EDITOR == 1
+	if (s_curState == APP_STATE_EDITOR)
+	{
+		bool canExit = TFE_Editor::disable();
+		while (!canExit)
+		{
+			//////////////////////////////////////////////////////
+			TFE_FRAME_BEGIN();
+
+			// System events
+			SDL_Event event;
+			while (SDL_PollEvent(&event)) { handleEvent(event); }
+
+			TFE_Ui::begin();
+			TFE_System::update();
+
+			TFE_Editor::update(false, false, /*exiting*/true);
+			bool swap = TFE_Editor::render();
+
+			// Blit the frame to the window and draw UI.
+			TFE_RenderBackend::swap(swap);
+
+			// Clear transitory input state.
+			TFE_Input::endFrame();
+			inputMapping_endFrame();
+			frame++;
+			TFE_FRAME_END();
+
+			//////////////////////////////////////////////////////
+			canExit = TFE_Editor::disable();
+		}
+	}
+#endif
 
 	if (s_curGame)
 	{

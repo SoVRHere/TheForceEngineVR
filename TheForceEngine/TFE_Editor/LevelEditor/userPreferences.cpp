@@ -111,12 +111,19 @@ namespace LevelEditor
 		u32 flags = s_editorConfig.waitForPlayCompletion ? 1 : 0;
 		optionCheckbox("On Play, wait for process completion", &flags, 1, 300);
 		s_editorConfig.waitForPlayCompletion = (flags & 1) != 0;
+		ImGui::Separator();
+
+		optionCheckbox("New Sectors use DEFAULT texture", &s_editorConfig.levelEditorFlags, LEVEDITOR_FLAG_ALWAYS_USE_DEFTEX, 300);
 		
+		ImGui::Separator();
 		optionSliderEditFloat("Curve Segment Size", "%.2f", &s_editorConfig.curve_segmentSize, 0.1f, 100.0f, 0.1f);
 	}
 		
 	void inputPref()
 	{
+		optionCheckbox("Camera Rotation - Invert Y Axis", (u32*)&s_editorConfig.levelEditorFlags, LEVEDITOR_FLAG_INVERT_Y, 260);
+		ImGui::Separator();
+
 		const u8* repeatKeys = hotkeys_checkForKeyRepeats();
 		if (ImGui::Button("Reset To Defaults"))
 		{
