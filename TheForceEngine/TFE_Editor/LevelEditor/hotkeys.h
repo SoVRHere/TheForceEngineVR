@@ -48,12 +48,17 @@ namespace LevelEditor
 		SHORTCUT_TEXOFFSET_LEFT,
 		SHORTCUT_TEXOFFSET_RIGHT,
 		SHORTCUT_TEXOFFSET_PAN,
+		SHORTCUT_TEXOFFSET_RESET,
+		// Lighting
+		SHORTCUT_ADJUST_LIGHTING,
 		// Drawing
 		SHORTCUT_REDUCE_CURVE_SEGS,
 		SHORTCUT_INCREASE_CURVE_SEGS,
 		SHORTCUT_RESET_CURVE_SEGS,
 		SHORTCUT_SET_GRID_HEIGHT,
 		SHORTCUT_MOVE_GRID,
+		SHORTCUT_RESET_GRID,
+		SHORTCUT_ALIGN_GRID,
 		// Camera
 		SHORTCUT_TOGGLE_GRAVITY,
 		SHORTCUT_CAMERA_FWD,
@@ -75,6 +80,7 @@ namespace LevelEditor
 		SHORTCUT_SAVE,
 		SHORTCUT_RELOAD,
 		SHORTCUT_FIND_SECTOR,
+		SHORTCUT_JOIN_SECTORS,
 		SHORTCUT_VIEW_2D,
 		SHORTCUT_VIEW_3D,
 		SHORTCUT_VIEW_WIREFRAME,
@@ -83,6 +89,12 @@ namespace LevelEditor
 		SHORTCUT_VIEW_TEXTURED_FLOOR,
 		SHORTCUT_VIEW_TEXTURED_CEIL,
 		SHORTCUT_VIEW_FULLBRIGHT,
+		// Edit Modes
+		SHORTCUT_MODE_DRAW,
+		SHORTCUT_MODE_VERTEX,
+		SHORTCUT_MODE_WALL,
+		SHORTCUT_MODE_SECTOR,
+		SHORTCUT_MODE_ENTITY,
 
 		SHORTCUT_COUNT,
 		SHORTCUT_NONE = SHORTCUT_COUNT,
@@ -115,6 +127,7 @@ namespace LevelEditor
 	MouseButton getShortcutMouseButton(ShortcutId id);
 	KeyModifier getShortcutKeyMod(ShortcutId id);
 	const char* getShortcutKeyComboText(ShortcutId id);
+	bool isMouseInvertEnabled();
 	bool isShortcutPressed(ShortcutId shortcutId, u32 allowedKeyMods = (1 << KEYMOD_SHIFT) | (1 << KEYMOD_ALT));
 	bool isShortcutRepeat(ShortcutId shortcutId, u32 allowedKeyMods = (1 << KEYMOD_SHIFT) | (1 << KEYMOD_ALT));
 	bool isShortcutHeld(ShortcutId shortcutId, u32 allowedKeyMods = (1 << KEYMOD_SHIFT) | (1 << KEYMOD_ALT));

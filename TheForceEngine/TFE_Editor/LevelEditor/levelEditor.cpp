@@ -130,6 +130,7 @@ namespace LevelEditor
 	static bool s_showAllLabels = false;
 	static bool s_modalUiActive = false;
 	static bool s_textureAssignDirty = false;
+	static bool s_isUiFocused = false;
 	static s32 s_lastSavedHistoryPos = 0;
 	static f64 s_timeSinceLastAutosave = 0.0;
 	
@@ -195,11 +196,12 @@ namespace LevelEditor
 	Vec2i worldPos2dToMap(const Vec2f& worldPos);
 	bool worldPosToViewportCoord(Vec3f worldPos, Vec2f* screenPos);
 	EditorSector* findHoverSector2d(Vec2f pos);
+	void alignGridToSelectedEdge();
 	
 	void handleTextureAlignment();
 
 	void drawViewportInfo(s32 index, Vec2i mapPos, const char* info, f32 xOffset, f32 yOffset, f32 alpha=1.0f, u32 overrideColor=0u);
-	void getWallLengthText(const Vec2f* v0, const Vec2f* v1, char* text, Vec2i& mapPos, s32 index = -1, Vec2f* mapOffset = nullptr);
+	void getWallLengthText(const Vec2f* v0, const Vec2f* v1, char* text, Vec2i& mapPos, s32 index = -1, Vec2f* mapOffset = nullptr, f32 height = FLT_MAX);
 
 	void copyToClipboard(const std::string& str);
 	bool copyFromClipboard(std::string& str);
@@ -266,6 +268,7 @@ namespace LevelEditor
 		s_viewDepth[1] = c_defaultViewDepth[1];
 		s_texMoveFeatures.clear();
 		s_timeSinceLastUpdate = 0.0;
+		s_isUiFocused = false;
 
 		Project* project = project_get();
 		if (project && project->active)
@@ -493,6 +496,7 @@ namespace LevelEditor
 	void edit_deleteSector(s32 sectorId, bool addToHistory)
 	{
 		std::vector<EditorSector> sectorSnapshot;
+		size_t prevSectorCount = s_level.sectors.size();
 		if (addToHistory)
 		{
 			level_createLevelSectorSnapshotSameAssets(sectorSnapshot);
@@ -552,7 +556,7 @@ namespace LevelEditor
 		{
 			std::vector<s32> deltaSectors;
 			level_getLevelSnapshotDelta(deltaSectors, sectorSnapshot);
-			if (!deltaSectors.empty())
+			if (!deltaSectors.empty() || prevSectorCount != s_level.sectors.size())
 			{
 				cmd_sectorSnapshot(LName_DeleteSector, deltaSectors);
 			}
@@ -1327,6 +1331,38 @@ namespace LevelEditor
 		}
 	}
 
+	void clearTextureOffset(EditorSector* sector, HitPart part, s32 index)
+	{
+		if (part == HP_FLOOR)
+		{
+			sector->floorTex.offset = { 0 };
+		}
+		else if (part == HP_CEIL)
+		{
+			sector->ceilTex.offset = { 0 };
+		}
+		else if (part == HP_MID)
+		{
+			EditorWall* wall = &sector->walls[index];
+			wall->tex[WP_MID].offset = { 0 };
+		}
+		else if (part == HP_BOT)
+		{
+			EditorWall* wall = &sector->walls[index];
+			wall->tex[WP_BOT].offset = { 0 };
+		}
+		else if (part == HP_TOP)
+		{
+			EditorWall* wall = &sector->walls[index];
+			wall->tex[WP_TOP].offset = { 0 };
+		}
+		else if (part == HP_SIGN)
+		{
+			EditorWall* wall = &sector->walls[index];
+			wall->tex[WP_SIGN].offset = { 0 };
+		}
+	}
+
 	bool edit_viewportHovered(s32 mx, s32 my)
 	{
 		return mx >= s_editWinPos.x && mx < s_editWinPos.x + s_editWinSize.x && my >= s_editWinPos.z && my < s_editWinPos.z + s_editWinSize.z;
@@ -1621,6 +1657,21 @@ namespace LevelEditor
 		else { s_editFlags &= ~LEF_FULLBRIGHT; }
 	}
 
+	bool edit_closeLevelCheckSave()
+	{
+		bool popupOpen = false;
+		if (levelIsDirty())
+		{
+			popupOpen = true;
+			openEditorPopup(POPUP_EXIT_SAVE_CONFIRM);
+		}
+		else
+		{
+			editor_closeLevel(false);
+		}
+		return popupOpen;
+	}
+
 	bool menu()
 	{
 		bool menuActive = false;
@@ -1644,8 +1695,7 @@ namespace LevelEditor
 				}
 				if (ImGui::MenuItem("Reload", getShortcutKeyComboText(SHORTCUT_RELOAD), (bool*)NULL))
 				{
-					loadLevelFromAsset(s_levelAsset);
-					s_timeSinceLastAutosave = 0.0;
+					openEditorPopup(POPUP_RELOAD_CONFIRM);
 				}
 				if (ImGui::MenuItem("Snapshots", nullptr, (bool*)NULL))
 				{
@@ -1656,9 +1706,14 @@ namespace LevelEditor
 
 			if (ImGui::MenuItem("Close", NULL, (bool*)NULL))
 			{
-				// TODO: If the level has changed, pop up a warning and allow the level to be saved.
-				disableAssetEditor();
-				levHistory_clear();
+				if (levelIsDirty())
+				{
+					openEditorPopup(POPUP_EXIT_SAVE_CONFIRM);
+				}
+				else
+				{
+					editor_closeLevel(false);
+				}
 			}
 			ImGui::Separator();
 			if (ImGui::MenuItem("User Preferences", NULL, (bool*)NULL))
@@ -1707,7 +1762,7 @@ namespace LevelEditor
 				openEditorPopup(POPUP_LIGHTING);
 			}
 			ImGui::Separator();
-			if (ImGui::MenuItem("Join Sectors", NULL, (bool*)NULL))
+			if (ImGui::MenuItem("Join Sectors", getShortcutKeyComboText(SHORTCUT_JOIN_SECTORS), (bool*)NULL))
 			{
 				edit_joinSectors();
 			}
@@ -1736,7 +1791,7 @@ namespace LevelEditor
 		if (ImGui::BeginMenu("Grid"))
 		{
 			menuActive = true;
-			if (ImGui::MenuItem("Reset", ""))
+			if (ImGui::MenuItem("Reset", getShortcutKeyComboText(SHORTCUT_RESET_GRID)))
 			{
 				s_gridFlags = GFLAG_NONE;
 				resetGrid();
@@ -1748,23 +1803,9 @@ namespace LevelEditor
 				else { s_gridFlags |= GFLAG_OVER; }
 			}
 			ImGui::Separator();
-			if (ImGui::MenuItem("Align To Edge", ""))
+			if (ImGui::MenuItem("Align To Edge", getShortcutKeyComboText(SHORTCUT_ALIGN_GRID)))
 			{
-				if (s_editMode == LEDIT_WALL && selection_getCount())
-				{
-					EditorSector* sector = nullptr;
-					s32 featureIndex = -1;
-					HitPart part = HP_NONE;
-					bool selected = selection_getSurface(0, sector, featureIndex, &part);
-
-					// If an edge is selected.
-					if (selected && part != HP_CEIL && part != HP_FLOOR)
-					{
-						const Vec2f* vtx = sector->vtx.data();
-						const EditorWall* wall = &sector->walls[featureIndex];
-						alignGridToEdge(vtx[wall->idx[0]], vtx[wall->idx[1]]);
-					}
-				}
+				alignGridToSelectedEdge();
 			}
 
 			ImGui::EndMenu();
@@ -1842,9 +1883,15 @@ namespace LevelEditor
 		return menuActive;
 	}
 
+	bool canSaveLevel()
+	{
+		const Project* project = project_get();
+		return project && project->active;
+	}
+
 	bool levelIsDirty()
 	{
-		return s_lastSavedHistoryPos != history_getPos();
+		return s_lastSavedHistoryPos != history_getPos() && canSaveLevel();
 	}
 
 	void levelSetClean()
@@ -2113,7 +2160,7 @@ namespace LevelEditor
 		}
 	}
 
-	void getWallLengthText(const Vec2f* v0, const Vec2f* v1, char* text, Vec2i& mapPos, s32 index, Vec2f* mapOffset_)
+	void getWallLengthText(const Vec2f* v0, const Vec2f* v1, char* text, Vec2i& mapPos, s32 index, Vec2f* mapOffset_, f32 height)
 	{
 		Vec2f c = { (v0->x + v1->x) * 0.5f, (v0->z + v1->z)*0.5f };
 		Vec2f n = { -(v1->z - v0->z), v1->x - v0->x };
@@ -2122,11 +2169,18 @@ namespace LevelEditor
 		Vec2f offset = { v1->x - v0->x, v1->z - v0->z };
 		f32 len = sqrtf(offset.x*offset.x + offset.z*offset.z);
 
-		char num[256];
-		floatToString(len, num);
-
-		if (index >= 0) { sprintf(text, "%d: %s", index, num); }
-		else { strcpy(text, num); }
+		char lnum[256], hnum[256];
+		floatToString(len, lnum);
+		if (height < FLT_MAX && index >= 0)
+		{
+			floatToString(height, hnum);
+			sprintf(text, "%d: %s(l) x %s(h)", index, lnum, hnum);
+		}
+		else if (index >= 0)
+		{
+			sprintf(text, "%d: %s", index, lnum);
+		}
+		else { strcpy(text, lnum); }
 
 		mapPos = worldPos2dToMap(c);
 		Vec2f mapOffset = { ImGui::CalcTextSize(text).x + 16.0f, -20 };
@@ -2143,6 +2197,60 @@ namespace LevelEditor
 		mapPos.x += s32(mapOffset.x);
 		mapPos.z += s32(mapOffset.z);
 		if (mapOffset_) { *mapOffset_ = mapOffset; }
+	}
+
+	bool getWallInfoText3D(const Vec2f* v0, const Vec2f* v1, EditorSector* hoveredSector, s32 hoveredFeatureIndex, HitPart hoveredPart, Vec2i& mapPos, char* text)
+	{
+		const f32 yPos = std::min(hoveredSector->ceilHeight - 1.0f, std::max(hoveredSector->floorHeight +  1.0f, s_cursor3d.y));
+		const Vec3f worldPos = { (v0->x + v1->x) * 0.5f, yPos, (v0->z + v1->z) * 0.5f };
+		Vec2f screenPos;
+		bool validCoord = false;
+		if (worldPosToViewportCoord(worldPos, &screenPos))
+		{
+			validCoord = true;
+
+			mapPos = { s32(screenPos.x), s32(screenPos.z) - 20 };
+			Vec2f offset = { v1->x - v0->x, v1->z - v0->z };
+			f32 len = sqrtf(offset.x*offset.x + offset.z*offset.z);
+
+			f32 height = 0.0f;
+			s32 adjoinId = hoveredSector->walls[hoveredFeatureIndex].adjoinId;
+			EditorSector* next = (adjoinId >= 0 && adjoinId < (s32)s_level.sectors.size()) ? &s_level.sectors[adjoinId] : nullptr;
+			s32 signTexIndex = hoveredSector->walls[hoveredFeatureIndex].tex[WP_SIGN].texIndex;
+			if (hoveredPart == HP_TOP && next)
+			{
+				height = hoveredSector->ceilHeight - next->ceilHeight;
+			}
+			else if (hoveredPart == HP_BOT && next)
+			{
+				height = next->floorHeight - hoveredSector->floorHeight;
+			}
+			else if (hoveredPart == HP_SIGN && signTexIndex >= 0)
+			{
+				const EditorTexture* tex = getTexture(signTexIndex);
+				if (tex)
+				{
+					height = f32(tex->height) / 8.0f;
+				}
+			}
+			else // MID
+			{
+				height = hoveredSector->ceilHeight - hoveredSector->floorHeight;
+			}
+
+			char lnum[256], hnum[256];
+			floatToString(len, lnum);
+			if (height < FLT_MAX)
+			{
+				floatToString(height, hnum);
+				sprintf(text, "%d: %s(l) x %s(h)", hoveredFeatureIndex, lnum, hnum);
+			}
+			else
+			{
+				sprintf(text, "%d: %s", hoveredFeatureIndex, lnum);
+			}
+		}
+		return validCoord;
 	}
 
 	f32 getEntityLabelPos(const Vec3f pos, const Entity* entity, const EditorSector* sector)
@@ -2167,6 +2275,137 @@ namespace LevelEditor
 		return y;
 	}
 
+	void alignGridToSelectedEdge()
+	{
+		if (s_editMode == LEDIT_WALL && selection_getCount())
+		{
+			EditorSector* sector = nullptr;
+			s32 featureIndex = -1;
+			HitPart part = HP_NONE;
+			bool selected = selection_getSurface(0, sector, featureIndex, &part);
+
+			// If an edge is selected.
+			if (selected && part != HP_CEIL && part != HP_FLOOR)
+			{
+				const Vec2f* vtx = sector->vtx.data();
+				const EditorWall* wall = &sector->walls[featureIndex];
+				alignGridToEdge(vtx[wall->idx[0]], vtx[wall->idx[1]]);
+			}
+		}
+	}
+
+	void editor_reloadLevel()
+	{
+		loadLevelFromAsset(s_levelAsset);
+		s_timeSinceLastAutosave = 0.0;
+	}
+
+	void editor_closeLevel(bool saveBeforeClosing)
+	{
+		if (saveBeforeClosing)
+		{
+			saveLevel();
+		}
+		disableAssetEditor();
+		levHistory_clear();
+	}
+
+	void edit_adjustSelectionLighting(s32 dL)
+	{
+		bool hovered = selection_hasHovered();
+		s32 count = selection_getCount();
+		if (s_editMode != LEDIT_WALL && s_editMode != LEDIT_SECTOR) { return; }
+		if (!hovered && count < 1) { return; }
+
+		EditorSector* hoveredSector = nullptr;
+		if (s_editMode == LEDIT_SECTOR)
+		{
+			if (count < 1)
+			{
+				// Hovered.
+				selection_getSector(SEL_INDEX_HOVERED, hoveredSector);
+				if (hoveredSector)
+				{
+					const s32 curAmbient = (s32)hoveredSector->ambient;
+					hoveredSector->ambient = (u32)std::max(0, std::min(31, curAmbient + dL));
+				}
+			}
+			else
+			{
+				// Selection.
+				EditorSector* sector = nullptr;
+				for (s32 i = 0; i < count; i++)
+				{
+					selection_getSector(i, sector);
+					if (!sector) { continue; }
+
+					const s32 curAmbient = (s32)sector->ambient;
+					sector->ambient = (u32)std::max(0, std::min(31, curAmbient + dL));
+				}
+			}
+		}
+		else
+		{
+			s32 wallIndex;
+			HitPart part;
+			if (count < 1)
+			{
+				// Hovered.
+				selection_getSurface(SEL_INDEX_HOVERED, hoveredSector, wallIndex, &part);
+				if (hoveredSector)
+				{
+					if (part == HP_FLOOR || part == HP_CEIL)
+					{
+						const s32 curAmbient = (s32)hoveredSector->ambient;
+						hoveredSector->ambient = (u32)std::max(0, std::min(31, curAmbient + dL));
+					}
+					else
+					{
+						EditorWall* wall = nullptr;
+						if (wallIndex >= 0 && wallIndex < (s32)hoveredSector->walls.size())
+						{
+							wall = &hoveredSector->walls[wallIndex];
+							wall->wallLight = std::max(-31, std::min(31, wall->wallLight + dL));
+						}
+					}
+				}
+			}
+			else
+			{
+				s_searchKey++;
+
+				// Selection.
+				EditorSector* sector = nullptr;
+				for (s32 i = 0; i < count; i++)
+				{
+					selection_getSurface(i, sector, wallIndex, &part);
+					if (!sector) { continue; }
+
+					if (part == HP_FLOOR || part == HP_CEIL)
+					{
+						// Avoid double-lighting a sector if *both* floor and ceiling are selected.
+						if (sector->searchKey != s_searchKey)
+						{
+							sector->searchKey = s_searchKey;
+
+							const s32 curAmbient = (s32)sector->ambient;
+							sector->ambient = (u32)std::max(0, std::min(31, curAmbient + dL));
+						}
+					}
+					else
+					{
+						EditorWall* wall = nullptr;
+						if (wallIndex >= 0 && wallIndex < (s32)sector->walls.size())
+						{
+							wall = &sector->walls[wallIndex];
+							wall->wallLight = std::max(-31, std::min(31, wall->wallLight + dL));
+						}
+					}
+				}
+			}
+		}
+	}
+
 	void handleEditorActions()
 	{
 		if (isShortcutPressed(SHORTCUT_UNDO))
@@ -2188,12 +2427,15 @@ namespace LevelEditor
 		}
 		if (isShortcutPressed(SHORTCUT_RELOAD))
 		{
-			loadLevelFromAsset(s_levelAsset);
-			s_timeSinceLastAutosave = 0.0;
+			openEditorPopup(POPUP_RELOAD_CONFIRM);
 		}
 		if (isShortcutPressed(SHORTCUT_FIND_SECTOR))
 		{
 			openEditorPopup(POPUP_FIND_SECTOR);
+		}
+		if (isShortcutPressed(SHORTCUT_JOIN_SECTORS, 0))
+		{
+			edit_joinSectors();
 		}
 		if (isShortcutPressed(SHORTCUT_VIEW_2D))
 		{
@@ -2226,6 +2468,47 @@ namespace LevelEditor
 		if (isShortcutPressed(SHORTCUT_VIEW_FULLBRIGHT))
 		{
 			setFullbright();
+		}
+
+		// Lighting
+		if (isShortcutHeld(SHORTCUT_ADJUST_LIGHTING, 0))
+		{
+			s32 dx, dy;
+			TFE_Input::getMouseWheel(&dx, &dy);
+			edit_adjustSelectionLighting(dy);
+		}
+
+		// Modes
+		if (isShortcutPressed(SHORTCUT_MODE_DRAW, 0))
+		{
+			edit_setEditMode(LEDIT_DRAW);
+		}
+		else if (isShortcutPressed(SHORTCUT_MODE_VERTEX, 0))
+		{
+			edit_setEditMode(LEDIT_VERTEX);
+		}
+		else if (isShortcutPressed(SHORTCUT_MODE_WALL, 0))
+		{
+			edit_setEditMode(LEDIT_WALL);
+		}
+		else if (isShortcutPressed(SHORTCUT_MODE_SECTOR, 0))
+		{
+			edit_setEditMode(LEDIT_SECTOR);
+		}
+		else if (isShortcutPressed(SHORTCUT_MODE_ENTITY, 0))
+		{
+			edit_setEditMode(LEDIT_ENTITY);
+		}
+
+		// Grid
+		if (isShortcutPressed(SHORTCUT_RESET_GRID, 0))
+		{
+			s_gridFlags = GFLAG_NONE;
+			resetGrid();
+		}
+		else if (isShortcutPressed(SHORTCUT_ALIGN_GRID, 0))
+		{
+			alignGridToSelectedEdge();
 		}
 	}
 		
@@ -2824,23 +3107,30 @@ namespace LevelEditor
 	void update()
 	{
 		s_timeSinceLastAutosave += TFE_System::getDeltaTimeRaw();
-		if (s_timeSinceLastAutosave > c_autosaveInterval && levelIsDirty())
+		// Do not autosave when a popup is open - this means the user is in the middle of editing something like INF or settings.
+		if (s_timeSinceLastAutosave > c_autosaveInterval && levelIsDirty() && !isPopupOpen())
 		{
 			s_timeSinceLastAutosave = 0.0;
 			autosave();
 		}
 
 		// levelScript_update();
-		TFE_ScriptInterface::update();
-		updateViewportScroll();
-		handleHotkeys();
+		if (!s_isUiFocused)
+		{
+			TFE_ScriptInterface::update();
+			updateViewportScroll();
+			handleHotkeys();
+		}
 		
 		pushFont(TFE_Editor::FONT_SMALL);
-		updateContextWindow();
-		updateWindowControls();
-		handleEditorActions();
+		if (!s_isUiFocused)
+		{
+			updateContextWindow();
+			updateWindowControls();
+			handleEditorActions();
+		}
 		updateOutput();
-
+		
 		u32 viewportRenderFlags = 0u;
 		if (s_drawActions & DRAW_ACTION_CURVE)
 		{
@@ -2987,10 +3277,10 @@ namespace LevelEditor
 		const bool modalRelease = !s_modalUiActive && prevModal;
 				
 		// Info Panel
-		drawInfoPanel(s_view);
+		s_isUiFocused = drawInfoPanel(s_view);
 
 		// Browser
-		drawBrowser(s_editMode == LEDIT_ENTITY ? BROWSE_ENTITY : BROWSE_TEXTURE);
+		s_isUiFocused |= drawBrowser(s_editMode == LEDIT_ENTITY ? BROWSE_ENTITY : BROWSE_TEXTURE);
 
 		// Main viewport view.
 		levelEditWinBegin();
@@ -3007,7 +3297,7 @@ namespace LevelEditor
 			const bool editWinHovered = edit_viewportHovered(mx, my);
 			const bool hasHovered = selection_hasHovered();
 
-			if (!isUiModal() && !modalRelease)
+			if (!isUiModal() && !modalRelease && !s_isUiFocused)
 			{
 				const ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize
 					| ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoNav | ImGuiWindowFlags_AlwaysAutoResize;
@@ -3343,26 +3633,26 @@ namespace LevelEditor
 	{
 		// WASD controls.
 		const f32 moveSpd = s_zoom2d * f32(960.0 * TFE_System::getDeltaTime());
-		if (isShortcutHeld(SHORTCUT_CAMERA_FWD))
+		if (isShortcutHeld(SHORTCUT_CAMERA_FWD, 1 << KEYMOD_SHIFT))
 		{
 			s_viewportPos.z -= moveSpd;
 		}
-		else if (isShortcutHeld(SHORTCUT_CAMERA_BACK))
+		else if (isShortcutHeld(SHORTCUT_CAMERA_BACK, 1 << KEYMOD_SHIFT))
 		{
 			s_viewportPos.z += moveSpd;
 		}
 
-		if (isShortcutHeld(SHORTCUT_CAMERA_LEFT))
+		if (isShortcutHeld(SHORTCUT_CAMERA_LEFT, 1 << KEYMOD_SHIFT))
 		{
 			s_viewportPos.x -= moveSpd;
 		}
-		else if (isShortcutHeld(SHORTCUT_CAMERA_RIGHT))
+		else if (isShortcutHeld(SHORTCUT_CAMERA_RIGHT, 1 << KEYMOD_SHIFT))
 		{
 			s_viewportPos.x += moveSpd;
 		}
 				
 		// Mouse scrolling.
-		if (isShortcutHeld(SHORTCUT_CAMERA_PAN2D, 0))
+		if (isShortcutHeld(SHORTCUT_CAMERA_PAN2D, 1 << KEYMOD_SHIFT))
 		{
 			s32 dx, dy;
 			TFE_Input::getMouseMove(&dx, &dy);
@@ -3373,7 +3663,7 @@ namespace LevelEditor
 
 		s32 dx, dy;
 		TFE_Input::getMouseWheel(&dx, &dy);
-		if (dy != 0 && !TFE_Input::keyModDown(KEYMOD_CTRL))
+		if (dy != 0 && !TFE_Input::keyModDown(KEYMOD_CTRL) && !isShortcutHeld(SHORTCUT_ADJUST_LIGHTING, 0))
 		{
 			// We want to zoom into the mouse position.
 			s32 relX = s32(mx - s_editWinMapCorner.x);
@@ -3408,26 +3698,26 @@ namespace LevelEditor
 			moveSpd *= 10.0f;
 		}
 
-		if (isShortcutHeld(SHORTCUT_CAMERA_FWD))
+		if (isShortcutHeld(SHORTCUT_CAMERA_FWD, 1 << KEYMOD_SHIFT))
 		{
 			s_camera.pos.x -= s_camera.viewMtx.m2.x * moveSpd;
 			s_camera.pos.y -= s_camera.viewMtx.m2.y * moveSpd;
 			s_camera.pos.z -= s_camera.viewMtx.m2.z * moveSpd;
 		}
-		else if (isShortcutHeld(SHORTCUT_CAMERA_BACK))
+		else if (isShortcutHeld(SHORTCUT_CAMERA_BACK, 1 << KEYMOD_SHIFT))
 		{
 			s_camera.pos.x += s_camera.viewMtx.m2.x * moveSpd;
 			s_camera.pos.y += s_camera.viewMtx.m2.y * moveSpd;
 			s_camera.pos.z += s_camera.viewMtx.m2.z * moveSpd;
 		}
 
-		if (isShortcutHeld(SHORTCUT_CAMERA_LEFT))
+		if (isShortcutHeld(SHORTCUT_CAMERA_LEFT, 1 << KEYMOD_SHIFT))
 		{
 			s_camera.pos.x -= s_camera.viewMtx.m0.x * moveSpd;
 			s_camera.pos.y -= s_camera.viewMtx.m0.y * moveSpd;
 			s_camera.pos.z -= s_camera.viewMtx.m0.z * moveSpd;
 		}
-		else if (isShortcutHeld(SHORTCUT_CAMERA_RIGHT))
+		else if (isShortcutHeld(SHORTCUT_CAMERA_RIGHT, 1 << KEYMOD_SHIFT))
 		{
 			s_camera.pos.x += s_camera.viewMtx.m0.x * moveSpd;
 			s_camera.pos.y += s_camera.viewMtx.m0.y * moveSpd;
@@ -3444,10 +3734,11 @@ namespace LevelEditor
 		}
 
 		// Turning.
-		if (isShortcutHeld(SHORTCUT_CAMERA_ROTATE3D, 0))
+		if (isShortcutHeld(SHORTCUT_CAMERA_ROTATE3D, 1 << KEYMOD_SHIFT))
 		{
 			s32 dx, dy;
 			TFE_Input::getAccumulatedMouseMove(&dx, &dy);
+			if (isMouseInvertEnabled()) { dy = -dy; }
 
 			const f32 turnSpeed = 0.01f;
 			s_camera.yaw   += f32(dx) * turnSpeed;
@@ -3731,6 +4022,54 @@ namespace LevelEditor
 			}
 		}
 	}
+
+	void edit_resetSelectedTextureOffsets(std::vector<FeatureId>& selected)
+	{
+		EditorSector* sector = nullptr;
+		s32 featureIndex = -1;
+		HitPart part = HP_NONE;
+
+		const s32 count = (s32)selection_getCount();
+		if (s_editMode == LEDIT_SECTOR)
+		{
+			if (!count && selection_hasHovered())
+			{
+				selection_getSector(SEL_INDEX_HOVERED, sector);
+				clearTextureOffset(sector, s_featureTex.part, 0);
+				selected.push_back(createFeatureId(sector, 0, s_featureTex.part));
+			}
+
+			// move the floor or ceiling based on hovered.
+			for (s32 i = 0; i < count; i++)
+			{
+				selection_getSector(i, sector);
+				clearTextureOffset(sector, s_featureTex.part, 0);
+				selected.push_back(createFeatureId(sector, 0, s_featureTex.part));
+			}
+		}
+		else if (s_editMode == LEDIT_WALL)
+		{
+			if (!count && selection_hasHovered())
+			{
+				selection_getSurface(SEL_INDEX_HOVERED, sector, featureIndex, &part);
+				if (canMoveTexture(part))
+				{
+					clearTextureOffset(sector, s_featureTex.part, featureIndex);
+					selected.push_back(createFeatureId(sector, featureIndex, s_featureTex.part));
+				}
+			}
+
+			for (s32 i = 0; i < count; i++)
+			{
+				selection_getSurface(i, sector, featureIndex, &part);
+				if (canMoveTexture(part))
+				{
+					clearTextureOffset(sector, part, featureIndex);
+					selected.push_back(createFeatureId(sector, featureIndex, s_featureTex.part));
+				}
+			}
+		}
+	}
 		
 	void mergeFeatureLists(std::vector<FeatureId>& outList, const std::vector<FeatureId>& inList)
 	{
@@ -3757,7 +4096,7 @@ namespace LevelEditor
 		}
 	}
 		
-	void updateTextureMoveFeatures(std::vector<FeatureId>& list, bool clearOnUpdate)
+	void updateTextureMoveFeatures(std::vector<FeatureId>& list, bool clearOnUpdate, u16 cmdName)
 	{
 		s_timeSinceLastUpdate += TFE_System::getDeltaTimeRaw();
 		if (list.empty())
@@ -3773,7 +4112,7 @@ namespace LevelEditor
 		{
 			u16 prevCmd, prevName;
 			history_getPrevCmdAndName(prevCmd, prevName);
-			if (prevName == LName_MoveTexture)
+			if (prevName == cmdName)
 			{
 				history_removeLast();
 				mergeFeatureLists(s_texMoveFeatures, list);
@@ -3791,7 +4130,7 @@ namespace LevelEditor
 		if (!s_texMoveFeatures.empty())
 		{
 			s_timeSinceLastUpdate = 0.0;
-			cmd_setTextures(LName_MoveTexture, (s32)s_texMoveFeatures.size(), s_texMoveFeatures.data());
+			cmd_setTextures(cmdName, (s32)s_texMoveFeatures.size(), s_texMoveFeatures.data());
 		}
 		if (clearOnUpdate)
 		{
@@ -3808,6 +4147,58 @@ namespace LevelEditor
 
 		std::vector<FeatureId> updatedList;
 		bool clearOnUpdate = false;
+
+		if (isShortcutPressed(SHORTCUT_TEXOFFSET_RESET))
+		{
+			if (s_view == EDIT_VIEW_2D && s_editMode == LEDIT_SECTOR && canMoveTex && (s_sectorDrawMode == SDM_TEXTURED_CEIL || s_sectorDrawMode == SDM_TEXTURED_FLOOR))
+			{
+				HitPart part = s_sectorDrawMode == SDM_TEXTURED_CEIL ? HP_CEIL : HP_FLOOR;
+				EditorSector* hovered = nullptr;
+				if (s_featureTex.sector)
+				{
+					hovered = s_featureTex.sector;
+					s_featureTex.part = part;
+				}
+				else
+				{
+					selection_getSector(SEL_INDEX_HOVERED, hovered);
+					s_featureTex.sector = hovered;
+					s_featureTex.part = part;
+				}
+
+				bool doesItemExist = selection_sector(SA_CHECK_INCLUSION, hovered);
+				if (selection_getCount() < 1 || doesItemExist)
+				{
+					edit_resetSelectedTextureOffsets(updatedList);
+				}
+			}
+			else if (s_view == EDIT_VIEW_3D && s_editMode == LEDIT_WALL && canMoveTex)
+			{
+				EditorSector* hovered = nullptr;
+				HitPart part = HP_NONE;
+				s32 featureIndex = -1;
+				if (s_featureTex.sector)
+				{
+					hovered = s_featureTex.sector;
+					part = s_featureTex.part;
+					featureIndex = s_featureTex.featureIndex;
+				}
+				else if (selection_getSurface(SEL_INDEX_HOVERED, hovered, featureIndex, &part))
+				{
+					s_featureTex.sector = hovered;
+					s_featureTex.part = part;
+					s_featureTex.featureIndex = featureIndex;
+				}
+
+				bool doesItemExist = selection_surface(SA_CHECK_INCLUSION, hovered, featureIndex, part);
+				if (selection_getCount() < 1 || doesItemExist)
+				{
+					edit_resetSelectedTextureOffsets(updatedList);
+				}
+			}
+			updateTextureMoveFeatures(updatedList, true, LName_ClearTextureOffset);
+			return;
+		}
 
 		// TODO: Remove code duplication between the 2D and 3D versions.
 		if (s_view == EDIT_VIEW_2D && s_editMode == LEDIT_SECTOR && canMoveTex && (s_sectorDrawMode == SDM_TEXTURED_CEIL || s_sectorDrawMode == SDM_TEXTURED_FLOOR))
@@ -4122,7 +4513,7 @@ namespace LevelEditor
 			s_featureTex = {};
 		}
 
-		updateTextureMoveFeatures(updatedList, clearOnUpdate);
+		updateTextureMoveFeatures(updatedList, clearOnUpdate, LName_MoveTexture);
 	}
 
 	void applyTextureToItem(EditorSector* sector, HitPart part, s32 index, s32 texIndex, Vec2f* offset)
@@ -4194,6 +4585,24 @@ namespace LevelEditor
 						
 	void play()
 	{
+		// For now assume Dark Forces - TODO: Fix for Outlaws support.
+		size_t len = strlen(s_editorConfig.darkForcesPort);
+		bool invalidPort = false;
+		if (len == 0) { invalidPort = true; }
+	#ifdef _WIN32
+		char ext[32];
+		FileUtil::getFileExtension(s_editorConfig.darkForcesPort, ext);
+		if (strcasecmp(ext, "exe"))
+		{
+			invalidPort = true;
+		}
+	#endif
+		if (invalidPort)
+		{
+			showMessageBox("Error", "You need to set a source port before you can test.\nOpen the Level menu and choose Test Options to set.");
+			return;
+		}
+
 		StartPoint start = {};
 		start.pos = s_camera.pos;
 		start.yaw = s_camera.yaw;
@@ -4301,6 +4710,11 @@ namespace LevelEditor
 	s32 getDefaultTextureIndex(WallPart part)
 	{
 		s32 index = getTextureIndex("DEFAULT.BM");
+		if (s_editorConfig.levelEditorFlags & LEVEDITOR_FLAG_ALWAYS_USE_DEFTEX)
+		{
+			return index;
+		}
+
 		const s32 count = (s32)s_level.sectors.size();
 		const EditorSector* sector = s_level.sectors.data();
 		for (s32 i = 0; i < count; i++, sector++)
@@ -4552,7 +4966,7 @@ namespace LevelEditor
 		char lenStr[256];
 		if (s_view == EDIT_VIEW_2D)
 		{
-			getWallLengthText(v0, v1, lenStr, mapPos, hoveredFeatureIndex);
+			getWallLengthText(v0, v1, lenStr, mapPos, hoveredFeatureIndex, nullptr, hoveredSector->ceilHeight - hoveredSector->floorHeight);
 		}
 		else if (s_view == EDIT_VIEW_3D)
 		{
@@ -4574,22 +4988,7 @@ namespace LevelEditor
 			}
 			else
 			{
-				Vec3f worldPos = { (v0->x + v1->x) * 0.5f, hoveredSector->floorHeight + 1.0f, (v0->z + v1->z) * 0.5f };
-				Vec2f screenPos;
-				if (worldPosToViewportCoord(worldPos, &screenPos))
-				{
-					mapPos = { s32(screenPos.x), s32(screenPos.z) - 20 };
-					Vec2f offset = { v1->x - v0->x, v1->z - v0->z };
-					f32 len = sqrtf(offset.x*offset.x + offset.z*offset.z);
-
-					char num[256];
-					floatToString(len, num);
-					sprintf(lenStr, "%d: %s", hoveredFeatureIndex, num);
-				}
-				else
-				{
-					showInfo = false;
-				}
+				showInfo = getWallInfoText3D(v0, v1, hoveredSector, hoveredFeatureIndex, hoveredPart, mapPos, lenStr);
 			}
 		}
 
@@ -4947,7 +5346,40 @@ namespace LevelEditor
 				bool result = worldPosToViewportCoord(p0, &v0) && worldPosToViewportCoord(p1, &v1) && worldPosToViewportCoord(p2, &v2);
 				if (result)
 				{
-					displayViewportMoveTransformData(p0, p1, v0, v1, v2, dist, xDist, yDist, zDist);
+					// Add the total height to the yDist string.
+					char yDistAndHeight[256];
+					EditorSector* hovered = nullptr;
+					f32 height = FLT_MAX;
+					if (s_editMode == LEDIT_WALL && (selection_hasHovered() || selection_getCount() > 0))
+					{
+						s32 wallIndex;
+						HitPart part;
+						if (selection_hasHovered())
+						{
+							selection_get(SEL_INDEX_HOVERED, hovered, wallIndex, &part);
+						}
+						else
+						{
+							selection_get(0, hovered, wallIndex, &part);
+						}
+						if (hovered && wallIndex >= 0 && wallIndex < (s32)hovered->walls.size() && (part == HP_FLOOR || part == HP_CEIL))
+						{
+							height = hovered->ceilHeight - hovered->floorHeight;
+						}
+					}
+
+					if (height < FLT_MAX)
+					{
+						char heightStr[256];
+						floatToString(height, heightStr);
+						sprintf(yDistAndHeight, "Delta: %s, SecHeight: %s", yDist, heightStr);
+					}
+					else
+					{
+						strcpy(yDistAndHeight, yDist);
+					}
+
+					displayViewportMoveTransformData(p0, p1, v0, v1, v2, dist, xDist, yDistAndHeight, zDist);
 				}
 			}
 		}

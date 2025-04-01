@@ -4,11 +4,24 @@
 #include <TFE_DarkForces/mission.h>
 #include <TFE_DarkForces/pickup.h>
 #include <TFE_DarkForces/weapon.h>
+#include <TFE_Jedi/Collision/collision.h>
+#include <TFE_FrontEndUI/frontEndUi.h>
 #include <TFE_System/system.h>
 #include <angelscript.h>
 
 namespace TFE_DarkForces
 {
+	enum AmmoType
+	{
+		AMMO_ENERGY,
+		AMMO_POWER,
+		AMMO_DETONATOR,
+		AMMO_SHELL,
+		AMMO_PLASMA,
+		AMMO_MINE,
+		AMMO_MISSILE,
+	};
+
 	void killPlayer()
 	{
 		sound_play(s_playerDeathSoundSource);
@@ -22,9 +35,124 @@ namespace TFE_DarkForces
 		s_reviveTick = s_curTick + 436;
 	}
 
+	vec3_float getPlayerPosition()
+	{
+		return
+		{
+			fixed16ToFloat(s_playerObject->posWS.x),
+			-fixed16ToFloat(s_playerObject->posWS.y),
+			fixed16ToFloat(s_playerObject->posWS.z),
+		};
+	}
+
+	void setPlayerPosition(vec3_float position)
+	{
+		fixed16_16 newX = floatToFixed16(position.x);
+		fixed16_16 newY = -floatToFixed16(position.y);
+		fixed16_16 newZ = floatToFixed16(position.z);
+
+		// Check if player object has moved out of its current sector
+		// Start with a bounds check
+		bool outOfHorzBounds = newX < s_playerObject->sector->boundsMin.x || newX > s_playerObject->sector->boundsMax.x ||
+			newZ < s_playerObject->sector->boundsMin.z || newZ > s_playerObject->sector->boundsMax.z;
+		bool outOfVertBounds = newY < s_playerObject->sector->ceilingHeight || newY > s_playerObject->sector->floorHeight;
+
+		// If within bounds, check if it has passed through a wall
+		RWall* collisionWall = nullptr;
+		if (!outOfHorzBounds && !outOfVertBounds)
+		{
+			collisionWall = collision_wallCollisionFromPath(s_playerObject->sector, s_playerObject->posWS.x, s_playerObject->posWS.z, newX, newZ);
+		}
+
+		if (collisionWall || outOfHorzBounds || outOfVertBounds)
+		{
+			// Try to find a new sector for the player object; if there is none, don't move it
+			RSector* sector = sector_which3D(newX, newY, newZ);
+			if (sector)
+			{
+				if (sector != s_playerObject->sector)
+				{
+					sector_addObject(sector, s_playerObject);
+				}
+			}
+			else
+			{
+				TFE_FrontEndUI::logToConsole("Cannot find a sector to move player to.");
+				return;
+			}
+		}
+
+		s_playerObject->posWS.x = newX;
+		s_playerObject->posWS.y = newY;
+		s_playerObject->posWS.z = newZ;
+		s_playerYPos = newY;
+	}
+
+	float getPlayerYaw()
+	{
+		return angleToFloat(s_playerObject->yaw);
+	}
+
+	void setPlayerYaw(float value)
+	{
+		angle14_32 yaw = floatToAngle(value);
+		s_playerObject->yaw = yaw;
+		s_playerYaw = yaw;
+	}
+
+	vec3_float getPlayerVelocity()
+	{
+		vec3_fixed velFixed;
+		TFE_DarkForces::player_getVelocity(&velFixed);
+
+		return {
+			fixed16ToFloat(velFixed.x),
+			-fixed16ToFloat(velFixed.y),
+			fixed16ToFloat(velFixed.z),
+		};
+	}
+	
+	void setPlayerVelocity(vec3_float vel)
+	{
+		s_playerVelX = floatToFixed16(vel.x);
+		s_playerUpVel  = -floatToFixed16(vel.y);
+		s_playerUpVel2 = -floatToFixed16(vel.y);
+		s_playerVelZ = floatToFixed16(vel.z);
+	}
+
 	s32 getBatteryPercent()
 	{
 		return (s32)(100.0 * s_batteryPower / FIXED(2) );
+	}
+
+	s32 getAmmo(s32 ammoType)
+	{
+		switch (ammoType)
+		{
+			case AMMO_ENERGY:
+				return s_playerInfo.ammoEnergy;
+			
+			case AMMO_POWER:
+				return s_playerInfo.ammoPower;
+
+			case AMMO_DETONATOR:
+				return s_playerInfo.ammoDetonator;
+
+			case AMMO_SHELL:
+				return s_playerInfo.ammoShell;
+
+			case AMMO_PLASMA:
+				return s_playerInfo.ammoPlasma;
+
+			case AMMO_MINE:
+				return s_playerInfo.ammoMine;
+
+			case AMMO_MISSILE:
+				return s_playerInfo.ammoMissile;
+
+			default:
+				return -1;
+		}
 	}
 
 	void setHealth(s32 value)
@@ -47,39 +175,41 @@ namespace TFE_DarkForces
 		s_batteryPower = (fixed16_16)((value / 100.0) * FIXED(2));
 	}
 
-	void setAmmoEnergy(s32 value)
+	void setAmmo(s32 ammoType, s32 value)
 	{
-		s_playerInfo.ammoEnergy = value;
-	}
+		switch (ammoType)
+		{
+			case AMMO_ENERGY:
+				s_playerInfo.ammoEnergy = value;
+				return;
 
-	void setAmmoPower(s32 value)
-	{
-		s_playerInfo.ammoPower = value;
-	}
+			case AMMO_POWER:
+				s_playerInfo.ammoPower = value;
+				return;
 
-	void setAmmoDetonator(s32 value)
-	{
-		s_playerInfo.ammoDetonator = value;
-	}
+			case AMMO_DETONATOR:
+				s_playerInfo.ammoDetonator = value;
+				return;
 
-	void setAmmoShell(s32 value)
-	{
-		s_playerInfo.ammoShell = value;
-	}
+			case AMMO_SHELL:
+				s_playerInfo.ammoShell = value;
+				return;
 
-	void setAmmoMine(s32 value)
-	{
-		s_playerInfo.ammoMine = value;
-	}
+			case AMMO_PLASMA:
+				s_playerInfo.ammoPlasma = value;
+				return;
 
-	void setAmmoMissile(s32 value)
-	{
-		s_playerInfo.ammoMissile = value;
-	}
+			case AMMO_MINE:
+				s_playerInfo.ammoMine = value;
+				return;
 
-	void setAmmoPlasma(s32 value)
-	{
-		s_playerInfo.ammoPlasma = value;
+			case AMMO_MISSILE:
+				s_playerInfo.ammoMissile = value;
+				return;
+
+			default:
+				return;
+		}
 	}
 
 	void addToHealth(s32 value)
@@ -206,168 +336,268 @@ namespace TFE_DarkForces
 		s_playerInfo.itemMask = JFALSE;
 	}
 
-	bool hasPistol()
+	void giveCodeKey(s32 num)
 	{
-		return s_playerInfo.itemPistol == JTRUE;
-	}
-
-	void givePistol()
-	{
-		s_playerInfo.itemPistol = JTRUE;
-	}
-
-	bool hasRifle() 
-	{
-		return s_playerInfo.itemRifle == JTRUE;
-	}
-
-	void giveRifle()
-	{
-		s_playerInfo.itemRifle = JTRUE;
-	}
-
-	bool hasAutogun()
-	{
-		return s_playerInfo.itemAutogun == JTRUE;
-	}
-
-	void giveAutogun()
-	{
-		s_playerInfo.itemAutogun = JTRUE;
-	}
-
-	bool hasFusion()
-	{
-		return s_playerInfo.itemFusion == JTRUE;
-	}
-
-	void giveFusion()
-	{
-		s_playerInfo.itemFusion = JTRUE;
-	}
-
-	bool hasMortar()
-	{
-		return s_playerInfo.itemMortar == JTRUE;
-	}
-
-	void giveMortar()
-	{
-		s_playerInfo.itemMortar = JTRUE;
-	}
-
-	bool hasConcussion()
-	{
-		return s_playerInfo.itemConcussion == JTRUE;
-	}
-
-	void giveConcussion()
-	{
-		s_playerInfo.itemConcussion = JTRUE;
-	}
-
-	bool hasCannon()
-	{
-		return s_playerInfo.itemCannon == JTRUE;
-	}
-
-	void giveCannon()
-	{
-		s_playerInfo.itemCannon = JTRUE;
-	}
-
-	void removePistol()
-	{
-		if (s_playerInfo.curWeapon == WPN_PISTOL)
+		switch (num)
 		{
-			s_playerInfo.newWeapon = s_playerInfo.itemRifle ? WPN_RIFLE : WPN_FIST;
+			case 1:
+				s_playerInfo.itemCode1 = JTRUE;
+				return;
+
+			case 2:
+				s_playerInfo.itemCode2 = JTRUE;
+				return;
+
+			case 3:
+				s_playerInfo.itemCode3 = JTRUE;
+				return;
+
+			case 4:
+				s_playerInfo.itemCode4 = JTRUE;
+				return;
+
+			case 5:
+				s_playerInfo.itemCode5 = JTRUE;
+				return;
+
+			case 6:
+				s_playerInfo.itemCode6 = JTRUE;
+				return;
+
+			case 7:
+				s_playerInfo.itemCode7 = JTRUE;
+				return;
+
+			case 8:
+				s_playerInfo.itemCode8 = JTRUE;
+				return;
+
+			case 9:
+				s_playerInfo.itemCode9 = JTRUE;
+				return;
+
+			default:
+				return;
 		}
-		s_playerInfo.itemPistol = JFALSE;
 	}
 
-	void removeRifle()
+	void giveItem(s32 item)
 	{
-		if (s_playerInfo.curWeapon == WPN_RIFLE)
+		switch (item)
 		{
-			s_playerInfo.newWeapon = s_playerInfo.itemPistol ? WPN_PISTOL : WPN_FIST;
+			case ITEM_PLANS:
+				s_playerInfo.itemPlans = JTRUE;
+				return;
+
+			case ITEM_PHRIK:
+				s_playerInfo.itemPhrik = JTRUE;
+				return;
+
+			case ITEM_NAVA:
+				s_playerInfo.itemNava = JTRUE;
+				return;
+
+			case ITEM_DT_WEAPON:
+				s_playerInfo.itemDtWeapon = JTRUE;
+				return;
+
+			case ITEM_DATATAPE:
+				s_playerInfo.itemDatatape = JTRUE;
+				return;
+
+			case ITEM_UNUSED:
+				s_playerInfo.itemUnused = JTRUE;
+				return;
+
+			default:
+				return;
 		}
-		s_playerInfo.itemRifle = JFALSE;
 	}
 
-	void removeAutogun()
+	bool hasWeapon(s32 weapon)
 	{
-		if (s_playerInfo.curWeapon == WPN_REPEATER)
+		switch (weapon)
 		{
-			s_playerInfo.newWeapon = s_playerInfo.itemPistol ? WPN_PISTOL : WPN_FIST;
+			case WPN_PISTOL:
+				return s_playerInfo.itemPistol == JTRUE;
+
+			case WPN_RIFLE:
+				return s_playerInfo.itemRifle == JTRUE;
+
+			case WPN_REPEATER:
+				return s_playerInfo.itemAutogun == JTRUE;
+
+			case WPN_FUSION:
+				return s_playerInfo.itemFusion == JTRUE;
+
+			case WPN_MORTAR:
+				return s_playerInfo.itemMortar == JTRUE;
+
+			case WPN_CONCUSSION:
+				return s_playerInfo.itemConcussion == JTRUE;
+
+			case WPN_CANNON:
+				return s_playerInfo.itemCannon == JTRUE;
+
+			default:
+				return false;
 		}
-		s_playerInfo.itemAutogun = JFALSE;
 	}
 
-	void removeFusion()
+	void giveWeapon(s32 weapon)
 	{
-		if (s_playerInfo.curWeapon == WPN_FUSION)
+		switch (weapon)
 		{
-			s_playerInfo.newWeapon = s_playerInfo.itemPistol ? WPN_PISTOL : WPN_FIST;
+			case WPN_PISTOL:
+				s_playerInfo.itemPistol = JTRUE;
+				return;
+
+			case WPN_RIFLE:
+				s_playerInfo.itemRifle = JTRUE;
+				return;
+
+			case WPN_REPEATER:
+				s_playerInfo.itemAutogun = JTRUE;
+				return;
+
+			case WPN_FUSION:
+				s_playerInfo.itemFusion = JTRUE;
+				return;
+
+			case WPN_MORTAR:
+				s_playerInfo.itemMortar = JTRUE;
+				return;
+
+			case WPN_CONCUSSION:
+				s_playerInfo.itemConcussion = JTRUE;
+				return;
+
+			case WPN_CANNON:
+				s_playerInfo.itemCannon = JTRUE;
+				return;
+
+			default:
+				return;
 		}
-		s_playerInfo.itemFusion = JFALSE;
 	}
 
-	void removeMortar()
+	void removeWeapon(s32 weapon)
 	{
-		if (s_playerInfo.curWeapon == WPN_MORTAR)
+		switch (weapon)
 		{
-			s_playerInfo.newWeapon = s_playerInfo.itemPistol ? WPN_PISTOL : WPN_FIST;
-		}
-		s_playerInfo.itemMortar = JFALSE;
-	}
+			case WPN_PISTOL:
+				if (s_playerInfo.curWeapon == WPN_PISTOL)
+				{
+					s_playerInfo.newWeapon = s_playerInfo.itemRifle ? WPN_RIFLE : WPN_FIST;
+				}
+				s_playerInfo.itemPistol = JFALSE;
+				return;
 
-	void removeConcussion()
-	{
-		if (s_playerInfo.curWeapon == WPN_CONCUSSION)
-		{
-			s_playerInfo.newWeapon = s_playerInfo.itemPistol ? WPN_PISTOL : WPN_FIST;
-		}
-		s_playerInfo.itemConcussion = JFALSE;
-	}
+			case WPN_RIFLE:
+				if (s_playerInfo.curWeapon == WPN_RIFLE)
+				{
+					s_playerInfo.newWeapon = s_playerInfo.itemPistol ? WPN_PISTOL : WPN_FIST;
+				}
+				s_playerInfo.itemRifle = JFALSE;
+				return;
 
-	void removeCannon()
-	{
-		if (s_playerInfo.curWeapon == WPN_CANNON)
-		{
-			s_playerInfo.newWeapon = s_playerInfo.itemPistol ? WPN_PISTOL : WPN_FIST;
+			case WPN_REPEATER:
+				if (s_playerInfo.curWeapon == WPN_REPEATER)
+				{
+					s_playerInfo.newWeapon = s_playerInfo.itemPistol ? WPN_PISTOL : WPN_FIST;
+				}
+				s_playerInfo.itemAutogun = JFALSE;
+				return;
+
+			case WPN_FUSION:
+				if (s_playerInfo.curWeapon == WPN_FUSION)
+				{
+					s_playerInfo.newWeapon = s_playerInfo.itemPistol ? WPN_PISTOL : WPN_FIST;
+				}
+				s_playerInfo.itemFusion = JFALSE;
+				return;
+
+			case WPN_MORTAR:
+				if (s_playerInfo.curWeapon == WPN_MORTAR)
+				{
+					s_playerInfo.newWeapon = s_playerInfo.itemPistol ? WPN_PISTOL : WPN_FIST;
+				}
+				s_playerInfo.itemMortar = JFALSE;
+				return;
+
+			case WPN_CONCUSSION:
+				if (s_playerInfo.curWeapon == WPN_CONCUSSION)
+				{
+					s_playerInfo.newWeapon = s_playerInfo.itemPistol ? WPN_PISTOL : WPN_FIST;
+				}
+				s_playerInfo.itemConcussion = JFALSE;
+				return;
+
+			case WPN_CANNON:
+				if (s_playerInfo.curWeapon == WPN_CANNON)
+				{
+					s_playerInfo.newWeapon = s_playerInfo.itemPistol ? WPN_PISTOL : WPN_FIST;
+				}
+				s_playerInfo.itemCannon = JFALSE;
+				return;
+
+			default:
+				return;
 		}
-		s_playerInfo.itemCannon = JFALSE;
 	}
 
 	bool GS_Player::scriptRegister(ScriptAPI api)
 	{
 		ScriptClassBegin("Player", "player", api);
 		{
+			// Enums
+			ScriptEnumRegister("Items");
+			ScriptEnum("PLANS", ITEM_PLANS);
+			ScriptEnum("PHRIK", ITEM_PHRIK);
+			ScriptEnum("NAVA", ITEM_NAVA);
+			ScriptEnum("DT_WEAPON", ITEM_DT_WEAPON);
+			ScriptEnum("DATATAPE", ITEM_DATATAPE);
+			ScriptEnum("ITEM10", ITEM_UNUSED);
+
+			ScriptEnumRegister("Weapons");
+			ScriptEnum("PISTOL", WPN_PISTOL);
+			ScriptEnum("RIFLE", WPN_RIFLE);
+			ScriptEnum("REPEATER", WPN_REPEATER);
+			ScriptEnum("FUSION", WPN_FUSION);
+			ScriptEnum("MORTAR", WPN_MORTAR);
+			ScriptEnum("CONCUSSION", WPN_CONCUSSION);
+			ScriptEnum("CANNON", WPN_CANNON);
+
+			ScriptEnumRegister("Ammo");
+			ScriptEnumStr(AMMO_ENERGY);
+			ScriptEnumStr(AMMO_POWER);
+			ScriptEnumStr(AMMO_DETONATOR);
+			ScriptEnumStr(AMMO_SHELL);
+			ScriptEnumStr(AMMO_PLASMA);
+			ScriptEnumStr(AMMO_MINE);
+			ScriptEnumStr(AMMO_MISSILE);
+
 			ScriptObjFunc("void kill()", killPlayer);
+			
+			// Position and velocity
+			ScriptPropertyGetFunc("float3 get_position()", getPlayerPosition);
+			ScriptPropertySetFunc("void set_position(float3)", setPlayerPosition);
+			ScriptPropertyGetFunc("float get_yaw()", getPlayerYaw);
+			ScriptPropertySetFunc("void set_yaw(float)", setPlayerYaw);
+			ScriptPropertyGetFunc("float3 get_velocity()", getPlayerVelocity);
+			ScriptPropertySetFunc("void set_velocity(float3)", setPlayerVelocity);
 			
 			// Health / ammo getters
 			ScriptLambdaPropertyGet("int get_health()", s32, { return s_playerInfo.health; });
 			ScriptLambdaPropertyGet("int get_shields()", s32, { return s_playerInfo.shields; });
-			ScriptLambdaPropertyGet("int get_ammoEnergy()", s32, { return s_playerInfo.ammoEnergy; });
-			ScriptLambdaPropertyGet("int get_ammoPower()", s32, { return s_playerInfo.ammoPower; });
-			ScriptLambdaPropertyGet("int get_ammoDetonator()", s32, { return s_playerInfo.ammoDetonator; });
-			ScriptLambdaPropertyGet("int get_ammoShell()", s32, { return s_playerInfo.ammoShell; });
-			ScriptLambdaPropertyGet("int get_ammoMine()", s32, { return s_playerInfo.ammoMine; });
-			ScriptLambdaPropertyGet("int get_ammoPlasma()", s32, { return s_playerInfo.ammoPlasma; });
-			ScriptLambdaPropertyGet("int get_ammoMissile()", s32, { return s_playerInfo.ammoMissile; });
 			ScriptPropertyGetFunc("int get_battery()", getBatteryPercent);
+			ScriptObjFunc("int getAmmo(uint)", getAmmo);
 
 			// Health / ammo setters
 			ScriptPropertySetFunc("void set_health(int)", setHealth);
 			ScriptPropertySetFunc("void set_shields(int)", setShields);
 			ScriptPropertySetFunc("void set_battery(int)", setBattery);
-			ScriptPropertySetFunc("void set_ammoEnergy(int)", setAmmoEnergy);
-			ScriptPropertySetFunc("void set_ammoPower(int)", setAmmoPower);
-			ScriptPropertySetFunc("void set_ammoDetonator(int)", setAmmoDetonator);
-			ScriptPropertySetFunc("void set_ammoShell(int)", setAmmoShell);
-			ScriptPropertySetFunc("void set_ammoMine(int)", setAmmoMine);
-			ScriptPropertySetFunc("void set_ammoMissile(int)", setAmmoMissile);
-			ScriptPropertySetFunc("void set_ammoPlasma(int)", setAmmoPlasma);
+			ScriptObjFunc("void setAmmo(int, int)", setAmmo);
 
 			ScriptObjFunc("void addToHealth(int)", addToHealth);
 			ScriptObjFunc("void addToShields(int)", addToShields);
@@ -394,30 +624,13 @@ namespace TFE_DarkForces
 			ScriptObjFunc("void removeCleats()", removeCleats);
 			ScriptObjFunc("void removeMask()", removeMask);
 
+			ScriptObjFunc("void giveCodeKey(int)", giveCodeKey);
+			ScriptObjFunc("void giveItem(int)", giveItem);
+
 			// Weapons
-			ScriptObjFunc("bool hasPistol()", hasPistol);
-			ScriptObjFunc("bool hasRifle()", hasRifle);
-			ScriptObjFunc("bool hasAutogun()", hasAutogun);
-			ScriptObjFunc("bool hasFusion()", hasFusion);
-			ScriptObjFunc("bool hasMortar()", hasMortar);
-			ScriptObjFunc("bool hasConcussion()", hasConcussion);
-			ScriptObjFunc("bool hasCannon()", hasCannon);
-
-			ScriptObjFunc("void givePistol()", givePistol);
-			ScriptObjFunc("void giveRifle()", giveRifle);
-			ScriptObjFunc("void giveAutogun()", giveAutogun);
-			ScriptObjFunc("void giveFusion()", giveFusion);
-			ScriptObjFunc("void giveMortar()", giveMortar);
-			ScriptObjFunc("void giveConcussion()", giveConcussion);
-			ScriptObjFunc("void giveCannon()", giveCannon);
-
-			ScriptObjFunc("void removePistol()", removePistol);
-			ScriptObjFunc("void removeRifle()", removeRifle);
-			ScriptObjFunc("void removeAutogun()", removeAutogun);
-			ScriptObjFunc("void removeFusion()", removeFusion);
-			ScriptObjFunc("void removeMortar()", removeMortar);
-			ScriptObjFunc("void removeConcussion()", removeConcussion);
-			ScriptObjFunc("void removeCannon()", removeCannon);
+			ScriptObjFunc("bool hasWeapon(int)", hasWeapon);
+			ScriptObjFunc("void giveWeapon(int)", giveWeapon);
+			ScriptObjFunc("void removeWeapon(int)", removeWeapon);
 		}
 		ScriptClassEnd();
 	}

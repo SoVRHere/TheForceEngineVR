@@ -78,6 +78,7 @@ namespace LevelEditor
 		history_registerName(LName_CreateSectorFromShape, "Create Sector (Shape)");
 		history_registerName(LName_ExtrudeSectorFromWall, "Extrude Sectors from Wall");
 		history_registerName(LName_MoveTexture, "Move Texture");
+		history_registerName(LName_ClearTextureOffset, "Reset Texture Offsets");
 		history_registerName(LName_SetTexture, "Set Texture");
 		history_registerName(LName_CopyTexture, "Copy Texture");
 		history_registerName(LName_ClearTexture, "Clear Texture");
@@ -132,8 +133,6 @@ namespace LevelEditor
 	////////////////////////////////
 	void cmd_sectorSnapshot(u32 name, std::vector<s32>& sectorIds)
 	{
-		if (sectorIds.empty()) { return; }
-
 		s_workBuffer[0].clear();
 		s_workBuffer[1].clear();
 		level_createSectorSnapshot(&s_workBuffer[0], sectorIds);

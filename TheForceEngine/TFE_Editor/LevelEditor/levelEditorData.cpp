@@ -4644,7 +4644,7 @@ namespace LevelEditor
 		// Sort by id from smallest to largest.
 		std::sort(sectorIds.begin(), sectorIds.end());
 		// Get the new sector count, which must be large enough to hold the largest sector ID.
-		u32 newSectorCount = std::max((s32)s_level.sectors.size(), sectorIds.back() + 1);
+		u32 newSectorCount = sectorIds.empty() ? (s32)s_level.sectors.size() : std::max((s32)s_level.sectors.size(), sectorIds.back() + 1);
 		// Extract unique textures and entities.
 		// Create a set of sectors to serialize.
 		const s32 idCount = (s32)sectorIds.size();
@@ -4923,7 +4923,22 @@ namespace LevelEditor
 			readData(&attrib, (u32)sizeof(SectorAttrib));
 
 			sector->groupId = attrib.groupId;
-			sector->groupIndex = groups_getById(sector->groupId)->index;
+			if (groups_isIdValid(attrib.groupId))
+			{
+				Group* group = groups_getById(sector->groupId);
+				assert(group);
+				sector->groupIndex = group->index;
+			}
+			else
+			{
+				LE_ERROR("level_unpackSectorAttribSnapshot - Invalid Group ID %d", attrib.groupId);
+
+				sector->groupId = groups_getMainId();
+				Group* group = groups_getById(sector->groupId);
+				assert(group);
+
+				sector->groupIndex = group->index;
+			}
 			sector->floorHeight = attrib.floorHeight;
 			sector->ceilHeight = attrib.ceilHeight;
 			sector->secHeight = attrib.secHeight;

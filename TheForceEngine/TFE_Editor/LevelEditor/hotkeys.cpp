@@ -3,9 +3,12 @@
 #include "levelEditor.h"
 #include "editGeometry.h"
 #include <TFE_Editor/LevelEditor/Rendering/viewport.h>
+#include <TFE_Editor/editorConfig.h>
 #include <TFE_Input/input.h>
 #include <TFE_System/system.h>
 #include <map>
+
+using namespace TFE_Editor;
 
 namespace LevelEditor
 {
@@ -175,12 +178,17 @@ namespace LevelEditor
 		"LEV_SHORTCUT_TEXOFFSET_LEFT",
 		"LEV_SHORTCUT_TEXOFFSET_RIGHT",
 		"LEV_SHORTCUT_TEXOFFSET_PAN",
+		"LEV_SHORTCUT_TEXOFFSET_RESET",
+		// Lighting
+		"LEV_SHORTCUT_ADJUST_LIGHTING",
 		// Drawing
 		"LEV_SHORTCUT_REDUCE_CURVE_SEGS",
 		"LEV_SHORTCUT_INCREASE_CURVE_SEGS",
 		"LEV_SHORTCUT_RESET_CURVE_SEGS",
 		"LEV_SHORTCUT_SET_GRID_HEIGHT",
 		"LEV_SHORTCUT_MOVE_GRID",
+		"LEV_SHORTCUT_RESET_GRID",
+		"LEV_SHORTCUT_ALIGN_GRID",
 		// Camera
 		"LEV_SHORTCUT_TOGGLE_GRAVITY",
 		"LEV_SHORTCUT_CAMERA_FWD",
@@ -202,6 +210,7 @@ namespace LevelEditor
 		"LEV_SHORTCUT_SAVE",
 		"LEV_SHORTCUT_RELOAD",
 		"LEV_SHORTCUT_FIND_SECTOR",
+		"LEV_SHORTCUT_JOIN_SECTORS",
 		"LEV_SHORTCUT_VIEW_2D",
 		"LEV_SHORTCUT_VIEW_3D",
 		"LEV_SHORTCUT_VIEW_WIREFRAME",
@@ -210,6 +219,12 @@ namespace LevelEditor
 		"LEV_SHORTCUT_VIEW_TEXTURED_FLOOR",
 		"LEV_SHORTCUT_VIEW_TEXTURED_CEIL",
 		"LEV_SHORTCUT_VIEW_FULLBRIGHT",
+		// Edit Modes
+		"LEV_SHORTCUT_MODE_DRAW",
+		"LEV_SHORTCUT_MODE_VERTEX",
+		"LEV_SHORTCUT_MODE_WALL",
+		"LEV_SHORTCUT_MODE_SECTOR",
+		"LEV_SHORTCUT_MODE_ENTITY",
 	};
 	const char* c_shortcutDesc[] =
 	{
@@ -233,11 +248,15 @@ namespace LevelEditor
 		"Move texture offset left",							// SHORTCUT_TEXOFFSET_LEFT
 		"Move texture offset right",						// SHORTCUT_TEXOFFSET_RIGHT
 		"Hold to pan the texture with the mouse",			// SHORTCUT_TEXOFFSET_PAN
+		"Reset the texture offset",							// SHORTCUT_TEXOFFSET_RESET
+		"Adjust lighting of surface or sector with mousewheel", // SHORTCUT_ADJUST_LIGHTING
 		"Reduce curve segments",							// SHORTCUT_REDUCE_CURVE_SEGS
 		"Increase curve segments",							// SHORTCUT_INCREASE_CURVE_SEGS
 		"Reset curve segments to default",					// SHORTCUT_RESET_CURVE_SEGS
 		"Set the grid to the selected floor/ceiling/sector height",// SHORTCUT_SET_GRID_HEIGHT
 		"Hold to move the grid up and down (3d view/sector draw)", // SHORTCUT_MOVE_GRID
+		"Reset Grid to default.",							// SHORTCUT_RESET_GRID,
+		"Align Grid to Edge.",								// SHORTCUT_ALIGN_GRID,
 		"Toggle gravity (3d view only)",					// SHORTCUT_TOGGLE_GRAVITY
 		"Camera Forward",									// SHORTCUT_CAMERA_FWD
 		"Camera Backward",									// SHORTCUT_CAMERA_BACK
@@ -256,6 +275,7 @@ namespace LevelEditor
 		"Save Level",										// SHORTCUT_SAVE
 		"Reload Level",										// SHORTCUT_RELOAD
 		"Find Sector",										// SHORTCUT_FIND_SECTOR
+		"Join Sectors",										// SHORTCUT_JOIN_SECTORS
 		"2D View",											// SHORTCUT_VIEW_2D
 		"3D View",											// SHORTCUT_VIEW_3D
 		"Display Wireframe",								// SHORTCUT_VIEW_WIREFRAME
@@ -264,6 +284,11 @@ namespace LevelEditor
 		"Display Textured Floors",							// SHORTCUT_VIEW_TEXTURED_FLOOR
 		"Display Texture Ceilings",							// SHORTCUT_VIEW_TEXTURED_CEIL
 		"Show Fullbright",									// SHORTCUT_VIEW_FULLBRIGHT
+		"Edit Mode - Draw",									// SHORTCUT_MODE_DRAW
+		"Edit Mode - Vertex",								// SHORTCUT_MODE_VERTEX
+		"Edit Mode - Wall/Surface",							// SHORTCUT_MODE_WALL
+		"Edit Mode - Sector",								// SHORTCUT_MODE_SECTOR
+		"Edit Mode - Entity",								// SHORTCUT_MODE_ENTITY
 	};
 
 	static std::vector<KeyboardShortcut> s_keyboardShortcutList;
@@ -281,7 +306,7 @@ namespace LevelEditor
 	const char* mouseButtonToString(MouseButton id);
 	const char* keycodeToString(KeyboardCode id);
 	const char* keyModifierToString(KeyModifier id);
-
+		
 	void addKeyboardShortcut(ShortcutId id, KeyboardCode code, KeyModifier mod, MouseButton mbtn)
 	{
 		KeyboardShortcut* shortcut = getShortcutFromId(id);
@@ -443,11 +468,15 @@ namespace LevelEditor
 		addKeyboardShortcut(SHORTCUT_TEXOFFSET_LEFT, KEY_LEFT);
 		addKeyboardShortcut(SHORTCUT_TEXOFFSET_RIGHT, KEY_RIGHT);
 		addKeyboardShortcut(SHORTCUT_TEXOFFSET_PAN, KEY_UNKNOWN, KEYMOD_NONE, MBUTTON_MIDDLE);
+		addKeyboardShortcut(SHORTCUT_TEXOFFSET_RESET, KEY_T, KEYMOD_ALT);
+		addKeyboardShortcut(SHORTCUT_ADJUST_LIGHTING, KEY_L);
 		addKeyboardShortcut(SHORTCUT_REDUCE_CURVE_SEGS, KEY_LEFTBRACKET);
 		addKeyboardShortcut(SHORTCUT_INCREASE_CURVE_SEGS, KEY_RIGHTBRACKET);
 		addKeyboardShortcut(SHORTCUT_RESET_CURVE_SEGS, KEY_BACKSLASH);
 		addKeyboardShortcut(SHORTCUT_SET_GRID_HEIGHT, KEY_G, KEYMOD_CTRL);
 		addKeyboardShortcut(SHORTCUT_MOVE_GRID, KEY_H);
+		addKeyboardShortcut(SHORTCUT_RESET_GRID, KEY_R);
+		addKeyboardShortcut(SHORTCUT_ALIGN_GRID, KEY_R, KEYMOD_ALT);
 		addKeyboardShortcut(SHORTCUT_TOGGLE_GRAVITY, KEY_G);
 		addKeyboardShortcut(SHORTCUT_CAMERA_FWD, KEY_W);
 		addKeyboardShortcut(SHORTCUT_CAMERA_BACK, KEY_S);
@@ -466,6 +495,7 @@ namespace LevelEditor
 		addKeyboardShortcut(SHORTCUT_SAVE, KEY_S, KEYMOD_CTRL);
 		addKeyboardShortcut(SHORTCUT_RELOAD, KEY_R, KEYMOD_CTRL);
 		addKeyboardShortcut(SHORTCUT_FIND_SECTOR, KEY_F, KEYMOD_CTRL);
+		addKeyboardShortcut(SHORTCUT_JOIN_SECTORS, KEY_J, KEYMOD_CTRL);
 		addKeyboardShortcut(SHORTCUT_VIEW_2D, KEY_1, KEYMOD_CTRL);
 		addKeyboardShortcut(SHORTCUT_VIEW_3D, KEY_2, KEYMOD_CTRL);
 		addKeyboardShortcut(SHORTCUT_VIEW_WIREFRAME, KEY_4, KEYMOD_CTRL);
@@ -474,6 +504,16 @@ namespace LevelEditor
 		addKeyboardShortcut(SHORTCUT_VIEW_TEXTURED_FLOOR, KEY_7, KEYMOD_CTRL);
 		addKeyboardShortcut(SHORTCUT_VIEW_TEXTURED_CEIL, KEY_8, KEYMOD_CTRL);
 		addKeyboardShortcut(SHORTCUT_VIEW_FULLBRIGHT, KEY_9, KEYMOD_CTRL);
+		addKeyboardShortcut(SHORTCUT_MODE_DRAW, KEY_D, KEYMOD_ALT);
+		addKeyboardShortcut(SHORTCUT_MODE_VERTEX, KEY_V, KEYMOD_ALT);
+		addKeyboardShortcut(SHORTCUT_MODE_WALL, KEY_W, KEYMOD_ALT);
+		addKeyboardShortcut(SHORTCUT_MODE_SECTOR, KEY_S, KEYMOD_ALT);
+		addKeyboardShortcut(SHORTCUT_MODE_ENTITY, KEY_E, KEYMOD_ALT);
+	}
+
+	bool isMouseInvertEnabled()
+	{
+		return (s_editorConfig.levelEditorFlags&LEVEDITOR_FLAG_INVERT_Y) != 0;
 	}
 				
 	bool isShortcutPressed(ShortcutId shortcutId, u32 allowedKeyMods)
