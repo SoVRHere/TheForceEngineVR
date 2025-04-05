@@ -680,7 +680,11 @@ namespace TFE_Input
 	bool inputMapping_handleInputs(SDL_Window* wnd, SDLEventHandler* eventHandler, IGame::State gameState)
 	{
 		//  Allow escape during playback except when in PDA mode
+#if defined(ENABLE_VR)
 		const bool replayVr = TFE_Settings::getTempSettings()->vr && (vr::GetControllerState(vr::Side::Left).mButtons & vr::ControllerButton::Menu) > 0;
+#else
+		const bool replayVr = false;
+#endif
 		if ((keyPressed(KEY_ESCAPE) || buttonDown(Button::CONTROLLER_BUTTON_GUIDE) || replayVr) && !TFE_DarkForces::pda_isOpen())
 		{
 			if (isDemoPlayback())
