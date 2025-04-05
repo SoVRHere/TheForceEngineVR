@@ -193,6 +193,7 @@ namespace TFE_SaveSystem
 		dir.clear();
 		FileList fileList;
 		FileUtil::readDirectory(s_gameSavePath, "tfe", fileList);
+		std::sort(fileList.begin(), fileList.end());
 		size_t saveCount = fileList.size();
 		dir.resize(saveCount);
 
