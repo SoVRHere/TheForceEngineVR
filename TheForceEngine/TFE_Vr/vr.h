@@ -62,6 +62,7 @@ namespace vr
 	bool IsInitialized();
 	void Shutdown();
 	const char* GetRuntimeInfo();
+	const char* GetVrWrapperVersion();
 
 	void CreateSwapchain(const Vec2ui& size);
 	const Vec2ui& GetRecommendedRenderTargetSize();

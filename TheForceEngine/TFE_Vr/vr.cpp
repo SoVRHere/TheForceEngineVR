@@ -276,6 +276,11 @@ namespace vr
 		return g_VrWrapper ? g_VrWrapper->GetRuntimeInfo() : "not available";
 	}
 
+	const char* GetVrWrapperVersion()
+	{
+		return g_VrWrapper ? g_VrWrapper->GetVersion() : "not available";
+	}
+
 	void CreateSwapchain(const Vec2ui& size)
 	{
 		if (mTargetSize.x == size.x && mTargetSize.y == size.y)

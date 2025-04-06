@@ -154,6 +154,7 @@ namespace vrw
 
 		virtual bool IsInitialized() = 0;
 		virtual bool IsFeatureSupported(Feature feature) = 0;
+		virtual const char* GetVersion() = 0;
 		virtual const char* GetRuntimeInfo() = 0;
 
 		virtual bool CreateSwapchain(const Vec2ui& size) = 0;

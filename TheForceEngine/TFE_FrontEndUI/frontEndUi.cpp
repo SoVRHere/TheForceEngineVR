@@ -3842,6 +3842,7 @@ namespace TFE_FrontEndUI
 		ImGui::NewLine();
 
 		ImGui::TextWrapped("VR runtime: %s", vr::GetRuntimeInfo());
+		ImGui::TextWrapped("VR wrapper version: %s", vr::GetVrWrapperVersion());
 
 		ImGui::Separator();
 		ImGui::NewLine();
