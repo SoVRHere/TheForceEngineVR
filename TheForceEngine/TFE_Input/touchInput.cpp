@@ -269,6 +269,11 @@ namespace TFE_Input
 
 	void SetDefault()
 	{
+		if (!s_TouchContext)
+		{
+			return;
+		}
+
 		s_TouchControls.clear();
 
 		const Vec2f displaySize = s_TouchContext->GetWindowSize();

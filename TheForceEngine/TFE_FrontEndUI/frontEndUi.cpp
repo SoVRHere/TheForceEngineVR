@@ -54,6 +54,7 @@ using namespace TFE_Audio;
 namespace TFE_FrontEndUI
 {
 	//bool preciseFrustum = true;
+	void drawSoVrHere();
 
 	struct VirtualKeyboardState
 	{
@@ -1024,14 +1025,16 @@ namespace TFE_FrontEndUI
 
 			ImGui::PushFont(s_versionFont);
 			char versionText[256];
-			sprintf(versionText, "Version %s", TFE_System::getVersionString());
+			sprintf(versionText, "Version %s.", TFE_System::getVersionString());
 			const f32 stringWidth = s_versionFont->CalcTextSizeA(s_versionFont->FontSize, 1024.0f, 0.0f, versionText).x;
 
 			// Make the version fit within the same area as the title.
 			f32 rightEdge = titleLeft + titleWidth;
-			ImGui::SetNextWindowPos(ImVec2(rightEdge - stringWidth - s_versionFont->FontSize*2.0f, f32(h) - s_versionFont->FontSize*4.0f));
-			ImGui::Begin("##Version", &titleActive, windowInvisFlags);
+			ImGui::SetNextWindowPos(ImVec2(rightEdge - stringWidth - s_versionFont->FontSize*2.0f, f32(h) - s_versionFont->FontSize*6.0f));
+			ImGui::Begin("##Version", &titleActive, windowInvisFlags & ~ImGuiWindowFlags_NoInputs);
 			ImGui::Text("%s", versionText);
+			ImGui::Text("Ported to VR & Android by \"So VR Here\".");
+			drawSoVrHere();
 			ImGui::End();
 			ImGui::PopFont();
 
@@ -3785,58 +3788,61 @@ namespace TFE_FrontEndUI
 		ImGui::PopStyleColor();
 	}
 
+	void drawSoVrHere()
+	{
+		ImGui::Text("Visit our");
+		ImGui::SameLine();
+		if (ImGui::Button("Discord"))
+		{
+			TFE_System::openURL("https://discord.gg/8XuXVFzyNu");
+		}
+#if !defined(ANDROID)
+		Tooltip("This will open a browser/Discord on your desktop, which may cause you to lose focus on the game window.");
+#endif
+		ImGui::SameLine();
+		ImGui::Text("/");
+
+		const char* toolTip = "This will open a browser on your desktop, which may cause you to lose focus on the game window.";
+		ImGui::SameLine();
+		if (ImGui::Button("YouTube"))
+		{
+			TFE_System::openURL("https://www.youtube.com/channel/UCI20xAhQjT6r4fjBRZ6SgbQ");
+		}
+#if !defined(ANDROID)
+		Tooltip(toolTip);
+#endif
+		ImGui::SameLine();
+		ImGui::Text("/");
+
+		ImGui::SameLine();
+		if (ImGui::Button("Patreon"))
+		{
+			TFE_System::openURL("https://www.patreon.com/SoVRHere");
+		}
+#if !defined(ANDROID)
+		Tooltip(toolTip);
+#endif
+		ImGui::SameLine();
+		ImGui::Text("/");
+
+		ImGui::SameLine();
+		if (ImGui::Button("GitHub"))
+		{
+			TFE_System::openURL("https://github.com/SoVRHere/TheForceEngineVR");
+		}
+#if !defined(ANDROID)
+		Tooltip(toolTip);
+#endif
+		ImGui::SameLine();
+		ImGui::Text(".");
+	}
+
 #if defined(ENABLE_VR)
 	void configVr()
 	{
 		TFE_Settings_Vr* vrSettings = TFE_Settings::getVrSettings();
 
-		{
-			ImGui::Text("Visit our");
-			ImGui::SameLine();
-			if (ImGui::Button("Discord"))
-			{
-				TFE_System::openURL("https://discord.gg/8XuXVFzyNu");
-			}
-#if !defined(ANDROID)
-			Tooltip("This will open a browser/Discord on your desktop, which may cause you to lose focus on the game window.");
-#endif
-			ImGui::SameLine();
-			ImGui::Text("/");
-
-			const char* toolTip = "This will open a browser on your desktop, which may cause you to lose focus on the game window.";
-			ImGui::SameLine();
-			if (ImGui::Button("YouTube"))
-			{
-				TFE_System::openURL("https://www.youtube.com/channel/UCI20xAhQjT6r4fjBRZ6SgbQ");
-			}
-#if !defined(ANDROID)
-			Tooltip(toolTip);
-#endif
-			ImGui::SameLine();
-			ImGui::Text("/");
-
-			ImGui::SameLine();
-			if (ImGui::Button("Patreon"))
-			{
-				TFE_System::openURL("https://www.patreon.com/SoVRHere");
-			}
-#if !defined(ANDROID)
-			Tooltip(toolTip);
-#endif
-			ImGui::SameLine();
-			ImGui::Text("/");
-
-			ImGui::SameLine();
-			if (ImGui::Button("GitHub"))
-			{
-				TFE_System::openURL("https://github.com/SoVRHere/TheForceEngineVR");
-			}
-#if !defined(ANDROID)
-			Tooltip(toolTip);
-#endif
-			ImGui::SameLine();
-			ImGui::Text(".");
-		}
+		drawSoVrHere();
 
 		ImGui::Separator();
 		ImGui::NewLine();

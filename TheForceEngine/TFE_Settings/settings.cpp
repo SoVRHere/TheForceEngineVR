@@ -47,19 +47,19 @@ void TFE_Settings_Vr::resetToDefaults()
 
 void TFE_Settings_Vr::reset2DToDefaults()
 {
-	menuToVr = { 2.0f, { 0.0f, 0.0f, -4.0f }, false, false, false };
-	pdaToVr = { 2.0f, { 0.0f, 0.0f, -4.0f }, false, false, false };
-	hudToVr = { 2.0f, { 0.0f, -2.0f, -4.0f }, true, false, false };
-	messagesToVr = { 2.0f, { 0.0f, 0.0f, -4.0f }, true, false, false };
+	menuToVr = { 2.0f, { 0.0f, 0.0f, -3.0f }, false, false, false };
+	pdaToVr = { 2.0f, { 0.0f, 0.0f, -3.0f }, false, false, false };
+	hudToVr = { 2.0f, { 0.0f, -2.0f, -3.0f }, true, false, false };
+	messagesToVr = { 2.0f, { 0.0f, 0.0f, -3.0f }, true, false, false };
 	weaponToVr = { 2.0f, { -1.0f, 0.0f, -2.0f }, false, false, false };
 	gasmaskToVr = { 2.0f, { -0.75f, 0.0f, -1.0f }, true, false, false };
 
-	configToVr = { 2.0f, { 0.0f, 0.0f, -4.0f }, false, true, true };
+	configToVr = { 2.0f, { 0.0f, 0.0f, -3.0f }, false, true, true };
 	configDotSize = 20.0f;
 	configDotColorMouse = RGBA::fromFloats(1.0f, 0.0f, 0.0f, 0.5f);
 	configDotColorPointer = RGBA::fromFloats(1.0f, 0.0f, 0.0f, 0.5f);
 
-	automapToVr = { 2.0f, { 0.0f, 0.0f, -4.0f }, true, false, false };
+	automapToVr = { 2.0f, { 0.0f, 0.0f, -3.0f }, true, false, false };
 	automapWidthMultiplier = 2.0f;
 
 	overlayToVr = { 2.0f, { 0.0f, 0.0f, 0.0f }, false, false, false };
@@ -75,14 +75,14 @@ void TFE_Settings_Vr::set2DPreset(Preset preset)
 	case TFE_Settings_Vr::Preset::Quest3:
 		break;
 	case TFE_Settings_Vr::Preset::HtcVivePro:
-		hudToVr = { 2.0f, { 0.0f, -0.6f, -4.0f }, true, false, false };
+		hudToVr = { 2.0f, { 0.0f, -0.6f, -3.0f }, true, false, false };
 		weaponToVr = { 2.0f, { -1.2f, 0.0f, -2.0f }, false, false, false };
 		break;
 	case TFE_Settings_Vr::Preset::PSVR2:
-		pdaToVr = { 2.0f, { 0.0f, -0.5, -4.0f }, false, false, false };
-		hudToVr = { 2.0f, { 0.0f, -1.0f, -4.0f }, true, false, false };
-		messagesToVr = { 2.0f, { 0.0f, 1.0f, -4.0f }, true, false, false };
-		automapToVr = { 2.0f, { 0.0f, 1.0f, -4.0f }, true, false, false };
+		pdaToVr = { 2.0f, { 0.0f, -0.5, -3.0f }, false, false, false };
+		hudToVr = { 2.0f, { 0.0f, -1.0f, -3.0f }, true, false, false };
+		messagesToVr = { 2.0f, { 0.0f, 1.0f, -3.0f }, true, false, false };
+		automapToVr = { 2.0f, { 0.0f, 1.0f, -3.0f }, true, false, false };
 		break;
 	default:
 		break;
