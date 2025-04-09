@@ -1,4 +1,4 @@
-"const char c_gitVersion[] = ""$(git describe --tags)"";" | Set-Content -Path ./TheForceEngine/gitVersion.h
+"const char c_gitVersionSoVrHere[] = ""$(git describe --tags)"";" | Set-Content -Path ./TheForceEngine/gitVersionSoVrHere.h
 cmake.exe -G"Visual Studio 17 2022" -A x64 -B ./BuildArtifacts/Build -DENABLE_VR=ON -DSTART_VR=ON
 cmake --build ./BuildArtifacts/Build --config RelWithDebInfo
 cmake --install ./BuildArtifacts/Build --config RelWithDebInfo --prefix ./BuildArtifacts/TheForceEngine

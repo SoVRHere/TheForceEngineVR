@@ -1,6 +1,6 @@
 #include "android.h"
 
-#include "gitVersion.h"
+#include "gitVersionSoVrHere.h"
 #include <jni.h>
 #include <android/log.h>
 #include <android/asset_manager.h>
@@ -225,8 +225,8 @@ JNIEXPORT void JNICALL TFE_JAVA_INTERFACE(onCreateActivity)(JNIEnv* env, jclass 
 				file.close();
 			}
 
-			LOGI("Comparing '%s' with '%s'", version.c_str(), c_gitVersion);
-			if (version != c_gitVersion)
+			LOGI("Comparing '%s' with '%s'", version.c_str(), c_gitVersionSoVrHere);
+			if (version != c_gitVersionSoVrHere)
 			{
 				removeData = true;
 			}
@@ -243,7 +243,7 @@ JNIEXPORT void JNICALL TFE_JAVA_INTERFACE(onCreateActivity)(JNIEnv* env, jclass 
 		const fs::path external = fs::path{ SDL_AndroidGetExternalStoragePath() };
 		ClearDirectory(external, { external / "Dark Forces", external / "TheForceEngine", external / "Mods" });
 		std::ofstream file{versionFilePath, std::ios::trunc };
-		file << c_gitVersion;
+		file << c_gitVersionSoVrHere;
 		file.close();
 	}
 

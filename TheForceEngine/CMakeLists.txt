@@ -25,5 +25,10 @@ endif()
 if(ENABLE_VR)
 	add_subdirectory(TFE_Vr)
 endif()
-target_sources(tfe PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp")
+
+target_sources(tfe PRIVATE 
+	"${CMAKE_CURRENT_SOURCE_DIR}/main.cpp"
+	"${CMAKE_CURRENT_SOURCE_DIR}/gitVersion.h"
+	"${CMAKE_CURRENT_SOURCE_DIR}/gitVersionSoVrHere.h"
+)
 target_sources(tfe PRIVATE TheForceEngine.rc)

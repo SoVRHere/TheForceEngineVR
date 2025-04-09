@@ -653,7 +653,7 @@ int main(int argc, char* argv[])
 	pathsSet &= TFE_Paths::setProgramDataPath("TheForceEngine");
 	pathsSet &= TFE_Paths::setUserDocumentsPath("TheForceEngine");
 	TFE_System::logOpen("the_force_engine_log.txt");
-	TFE_System::logWrite(LOG_MSG, "Main", "The Force Engine %s", c_gitVersion);
+	TFE_INFO("Main", "The Force Engine 'So VR Here' port {} based on original {}", c_gitVersionSoVrHere, c_gitVersion);
 	if (!pathsSet)
 	{
 		TFE_System::logWrite(LOG_ERROR, "Main", "Cannot set paths.");
@@ -728,7 +728,10 @@ int main(int argc, char* argv[])
 	}
 	TFE_Settings_Window* windowSettings = TFE_Settings::getWindowSettings();
 	TFE_Settings_Graphics* graphics = TFE_Settings::getGraphicsSettings();
-	TFE_System::init(s_refreshRate, graphics->vsync, c_gitVersion);
+	std::string version = fmt::format("{} (original {})", c_gitVersionSoVrHere, c_gitVersion);
+	version.erase(std::remove(version.begin(), version.end(), '\n'), version.end());
+	version.erase(std::remove(version.begin(), version.end(), '\r'), version.end());
+	TFE_System::init(s_refreshRate, graphics->vsync, version.c_str());
 
 	// Setup the GPU Device and Window.
 	u32 windowFlags = 0;
@@ -751,7 +754,7 @@ int main(int argc, char* argv[])
 		windowFlags,
 		s_refreshRate
 	};
-	sprintf(windowState.name, "The Force Engine  %s", TFE_System::getVersionString());
+	sprintf(windowState.name, "The Force Engine 'So VR Here' %s", TFE_System::getVersionString());
 	if (!TFE_RenderBackend::init(windowState))
 	{
 		TFE_System::logWrite(LOG_CRITICAL, "GPU", "Cannot initialize GPU/Window.");

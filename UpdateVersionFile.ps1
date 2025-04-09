@@ -1,2 +1,2 @@
-"const char c_gitVersion[] = ""$(git describe --tags)"";" | Set-Content -Path ./TheForceEngine/gitVersion.h
+"const char c_gitVersionSoVrHere[] = ""$(git describe --tags)"";" | Set-Content -Path ./TheForceEngine/gitVersionSoVrHere.h
 # pause

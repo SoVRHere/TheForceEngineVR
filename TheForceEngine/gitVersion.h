@@ -1,1 +1,3 @@
-const char c_gitVersion[] = "v0.9.73";
+const char c_gitVersion[] = R"(
+v1.22.300
+)";
