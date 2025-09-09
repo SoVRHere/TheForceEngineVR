@@ -652,7 +652,7 @@ int main(int argc, char* argv[])
 	pathsSet &= TFE_Paths::setProgramPath();
 	pathsSet &= TFE_Paths::setProgramDataPath("TheForceEngine");
 	pathsSet &= TFE_Paths::setUserDocumentsPath("TheForceEngine");
-	TFE_System::logOpen("the_force_engine_log.txt");
+	TFE_System::openRotatingLog("the_force_engine_log.txt");
 	TFE_INFO("Main", "The Force Engine 'So VR Here' port {} based on original {}", c_gitVersionSoVrHere, c_gitVersion);
 	if (!pathsSet)
 	{
@@ -690,6 +690,7 @@ int main(int argc, char* argv[])
 	const TFE_GameHeader* gameHeader = TFE_Settings::getGameHeader(game->game);
 	TFE_Paths::setPath(PATH_SOURCE_DATA, gameHeader->sourcePath);
 	TFE_Paths::setPath(PATH_EMULATOR, gameHeader->emulatorPath);
+	TFE_Paths::setRemasterDocsPath(game->id);
 
 	// Validate the current game path.
 	validatePath();

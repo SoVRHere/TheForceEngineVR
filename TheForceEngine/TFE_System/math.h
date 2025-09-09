@@ -268,6 +268,16 @@ namespace TFE_Math
 	// Returns false if no closest point can be found.
 	bool closestPointBetweenLines(const Vec3f* p1, const Vec3f* p2, const Vec3f* p3, const Vec3f* p4, f32* u, f32* v);
 
+	inline f32 degToRad(f32 deg)
+	{
+		return deg * (PI / 180.0f);
+	}
+
+	inline f32 radToDeg(f32 rad)
+	{
+		return rad * (180.0f / PI);
+	}
+
 	inline float getLinePointDistance(
 		const Vec3f& linePoint0, const Vec3f& linePoint1,
 		const Vec3f& point)

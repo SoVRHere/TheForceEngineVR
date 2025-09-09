@@ -22,11 +22,6 @@ namespace TFE_DarkForces
 
 namespace TFE_Jedi
 {
-	enum LevelStateVersion : u32
-	{
-		LevelState_InitVersion = 1,
-		LevelState_CurVersion = LevelState_InitVersion,
-	};
 	enum LevelTextureType : u32
 	{
 		LEVTEX_TYPE_TEX = 1,
@@ -41,6 +36,8 @@ namespace TFE_Jedi
 	void level_serializeAmbientSound(Stream* stream, AmbientSound* sound);
 	void level_serializeWall(Stream* stream, RWall* wall, RSector* sector);
 	void level_serializeTextureList(Stream* stream);
+
+	s32 findTextureIndex(const TextureData* texData);
 
 	/////////////////////////////////////////////
 	// Implementation
@@ -221,6 +218,9 @@ namespace TFE_Jedi
 			level_serializeFixupMirrors();
 		}
 
+		// Serialise sector names - so the scripting system can access sectors by their names after save & load
+		level_serializeMessageAddresses(stream);
+
 		// Serialize objects.
 		objData_serialize(stream);
 	}
@@ -297,6 +297,52 @@ namespace TFE_Jedi
 				}
 				(*texData)->animIndex = ((texIndex & 3) == LEVTEX_TYPE_ANM) ? index : -1;
 				(*texData)->frameIdx = frameIdx;
+			}
+		}
+	}
+		
+	void level_serializeTexturePointer(Stream* stream, TextureData*& texData)
+	{
+		u32 texIndex = 0u;
+		if (serialization_getMode() == SMODE_WRITE && texData)
+		{
+			if (texData->animIndex >= 0)
+			{
+				const u8 frameIndex = texData->frameIdx < 0 ? 0xff : (u8)texData->frameIdx;
+				texIndex = LEVTEX_TYPE_ANM | (frameIndex << 4) | ((u32)texData->animIndex << 12u);
+			}
+			else
+			{
+				s32 offset = findTextureIndex(texData);
+				if (offset >= 0 && offset < s_levelState.textureCount)
+				{
+					texIndex = LEVTEX_TYPE_TEX | ((u32)offset << 12u);
+				}
+				assert(texIndex && s_levelState.textures[offset] == texData);
+			}
+		}
+		SERIALIZE(LevelState_InitVersion, texIndex, 0u);
+
+		if (serialization_getMode() == SMODE_READ)
+		{
+			s32 index = texIndex >> 12;
+			s32 frameIdx = (texIndex >> 4) & 255;
+			if (frameIdx == 0xff) { frameIdx = -1; }
+
+			assert(index >= 0 && index < s_levelState.textureCount);
+			texData = (texIndex == 0) ? nullptr : s_levelState.textures[index];
+			if (texData)
+			{
+				if ((texIndex & 3) == LEVTEX_TYPE_ANM && frameIdx >= 0)
+				{
+					AnimatedTexture* anim = (AnimatedTexture*)texData->animPtr;
+					if (anim)
+					{
+						texData = anim->frameList[frameIdx];
+					}
+				}
+				texData->animIndex = ((texIndex & 3) == LEVTEX_TYPE_ANM) ? index : -1;
+				texData->frameIdx = frameIdx;
 			}
 		}
 	}
@@ -480,5 +526,17 @@ namespace TFE_Jedi
 		SERIALIZE(LevelState_InitVersion, wall->worldPos0, def);
 		SERIALIZE(LevelState_InitVersion, wall->wallLight, 0);
 		SERIALIZE(LevelState_InitVersion, wall->angle, 0);
+	}
+
+	s32 findTextureIndex(const TextureData* texData)
+	{
+		for (s32 i = 0; i < s_levelState.textureCount; i++)
+		{
+			if (texData == s_levelState.textures[i])
+			{
+				return i;
+			}
+		}
+		return -1;
 	}
 }

@@ -105,6 +105,8 @@ set(SOURCES
 	Scripting/gs_system.h
 	Scripting/scriptElev.cpp
 	Scripting/scriptElev.h
+	Scripting/scriptObject.cpp
+	Scripting/scriptObject.h
 	Scripting/scriptSector.cpp
 	Scripting/scriptSector.h
 	Scripting/scriptTexture.cpp

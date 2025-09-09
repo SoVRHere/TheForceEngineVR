@@ -95,6 +95,7 @@ namespace TFE_Settings
 	// Local State
 	//////////////////////////////////////////////////////////////////////////////////
 	static char s_settingsPath[TFE_MAX_PATH];
+	static char s_defaultSettingsPath[TFE_MAX_PATH];
 	static TFE_Settings_Window s_windowSettings = {};
 	static TFE_Settings_Graphics s_graphicsSettings = {};
 	static TFE_Settings_Enhancements s_enhancementsSettings = {};
@@ -109,6 +110,8 @@ namespace TFE_Settings
 	static TFE_Settings_Vr s_vrSettings = {};
 	static std::vector<char> s_iniBuffer;
 
+	// Default container for game settings.
+	static TFE_Settings_Game s_defaultGameSettings = {};
 
 	//MOD CONF Version ENUM
 	enum ModConfVersion
@@ -200,6 +203,17 @@ namespace TFE_Settings
 		strcpy(s_game.game, s_gameSettings.header[0].gameName);
 
 		TFE_Paths::appendPath(PATH_USER_DOCUMENTS, TFE_Paths::settingIniFile, s_settingsPath);
+		TFE_Paths::appendPath(PATH_USER_DOCUMENTS, TFE_Paths::defaultSettingIniFile, s_defaultSettingsPath);
+
+		// Make a backup of the default game settings.
+		memcpy(&s_defaultGameSettings, &s_gameSettings, sizeof(TFE_Settings_Game));
+
+		// Make a backup of the default settings.
+		if (!FileUtil::exists(s_defaultSettingsPath))
+		{
+			writeToDisk(true);
+		}
+
 		if (FileUtil::exists(s_settingsPath))
 		{
 			// This is still the first run if the settings(_vr).ini file is empty.
@@ -277,6 +291,13 @@ namespace TFE_Settings
 			{
 				// Remaster - search here first so that new assets are readily available.
 				pathValid = WindowsRegistry::getSteamPathFromRegistry(c_steamRemasterProductId[gameId], c_steamRemasterLocalPath[gameId], c_steamRemasterLocalSubPath[gameId], c_validationFile[gameId], s_gameSettings.header[gameId].sourcePath);
+				
+				// Try special case for trademark in Star Wars title
+				if (!pathValid)
+				{
+					pathValid = WindowsRegistry::getSteamPathFromRegistry(c_steamRemasterProductId[gameId], c_steamRemasterTMLocalPath[gameId], c_steamRemasterLocalSubPath[gameId], c_validationFile[gameId], s_gameSettings.header[gameId].sourcePath);
+				}
+
 				// Remaster on GOG.
 				if (!pathValid)
 				{
@@ -358,10 +379,19 @@ namespace TFE_Settings
 		return false;
 	}
 
-	bool writeToDisk()
+	bool writeToDisk(bool writeDefaultSettings)
 	{
+		static char settingFilePath[TFE_MAX_PATH];
+		if (writeDefaultSettings)
+		{
+			strcpy(settingFilePath, s_defaultSettingsPath);
+		}
+		else
+		{
+			strcpy(settingFilePath, s_settingsPath);
+		}
 		FileStream settings;
-		if (settings.open(s_settingsPath, Stream::MODE_WRITE))
+		if (settings.open(settingFilePath, Stream::MODE_WRITE))
 		{
 			writeWindowSettings(settings);
 			writeGraphicsSettings(settings);
@@ -493,6 +523,7 @@ namespace TFE_Settings
 		writeKeyValue_Bool(settings, "3doNormalFix", s_graphicsSettings.fix3doNormalOverflow);
 		writeKeyValue_Bool(settings, "ignore3doLimits", s_graphicsSettings.ignore3doLimits);
 		writeKeyValue_Bool(settings, "ditheredBilinear", s_graphicsSettings.ditheredBilinear);
+		writeKeyValue_Bool(settings, "useSmoothDeltaTime", s_graphicsSettings.useSmoothDeltaTime);
 
 		writeKeyValue_Bool(settings, "useBilinear", s_graphicsSettings.useBilinear);
 		writeKeyValue_Bool(settings, "useMipmapping", s_graphicsSettings.useMipmapping);
@@ -667,6 +698,9 @@ namespace TFE_Settings
 		writeKeyValue_Bool(settings, "df_enableRecording", s_gameSettings.df_enableRecording);
 		writeKeyValue_Bool(settings, "df_enableRecordingAll", s_gameSettings.df_enableRecordingAll);
 		writeKeyValue_Bool(settings, "df_demologging", s_gameSettings.df_demologging);
+		writeKeyValue_Bool(settings, "df_autoNextMission", s_gameSettings.df_autoEndMission);
+		writeKeyValue_Bool(settings, "df_showKeyUsed", s_gameSettings.df_showKeyUsed);
+		writeKeyValue_Bool(settings, "df_showKeyColors", s_gameSettings.df_showKeyColors);
 	}
 
 	void writePerGameSettings(FileStream& settings)
@@ -906,6 +940,10 @@ namespace TFE_Settings
 		else if (strcasecmp("useMipmapping", key) == 0)
 		{
 			s_graphicsSettings.useMipmapping = parseBool(value);
+		}
+		else if (strcasecmp("useSmoothDeltaTime", key) == 0)
+		{
+			s_graphicsSettings.useSmoothDeltaTime = parseBool(value);
 		}
 		else if (strcasecmp("bilinearSharpness", key) == 0)
 		{
@@ -1414,6 +1452,18 @@ namespace TFE_Settings
 		else if (strcasecmp("df_demologging", key) == 0)
 		{
 			s_gameSettings.df_demologging = parseBool(value);
+		}
+		else if (strcasecmp("df_autoNextMission", key) == 0)
+		{
+			s_gameSettings.df_autoEndMission = parseBool(value);
+		}
+		else if (strcasecmp("df_showKeyUsed", key) == 0)
+		{
+			s_gameSettings.df_showKeyUsed = parseBool(value);
+    }
+		else if (strcasecmp("df_showKeyColors", key) == 0)
+		{
+			s_gameSettings.df_showKeyColors = parseBool(value);
 		}
 	}
 
@@ -1950,5 +2000,18 @@ namespace TFE_Settings
 			}
 		}
 		free(data);
+	}
+
+	void resetGameSettings()
+	{
+		// Make a backup of the default game settings.
+		memcpy(&s_gameSettings, &s_defaultGameSettings, sizeof(TFE_Settings_Game));
+	}
+
+	void resetAllSettings()
+	{
+		FileUtil::copyFile(s_defaultSettingsPath, s_settingsPath);
+		bool firstRun = false;
+		TFE_Settings::init(firstRun);
 	}
 }
