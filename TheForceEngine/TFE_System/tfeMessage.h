@@ -5,6 +5,7 @@
 
 #include "types.h"
 #include "system.h"
+#include <TFE_Jedi/Serialization/serialization.h>
 
 enum TFE_Message
 {
@@ -22,6 +23,10 @@ enum TFE_Message
 	TFE_MSG_HARDCORE,
 	TFE_MSG_FULLBRIGHT,
 	TFE_MSG_HD,
+	TFE_MSG_RED,
+	TFE_MSG_BLUE,
+	TFE_MSG_YELLOW,
+	TFE_MSG_KEY,
 	TFE_MSG_COUNT
 };
 
@@ -29,5 +34,9 @@ namespace TFE_System
 {
 	const char* getMessage(TFE_Message msg);
 	bool loadMessages(const char* path);
+	bool modMessagesLoaded();
+	bool loadMessagesBuffer(char* contents, int len, bool isMod = false);
+	void restoreDefaultMessages();
 	void freeMessages();
+	void messages_serialize(Stream* stream);
 }

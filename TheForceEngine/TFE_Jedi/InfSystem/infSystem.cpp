@@ -11,6 +11,7 @@
 #include <TFE_DarkForces/agent.h>
 #include <TFE_DarkForces/sound.h>
 #include <TFE_DarkForces/automap.h>
+#include <TFE_DarkForces/mission.h>
 #include <TFE_FileSystem/paths.h>
 #include <TFE_Jedi/Memory/allocator.h>
 #include <TFE_Jedi/Level/level.h>
@@ -22,6 +23,7 @@
 #include <TFE_System/system.h>
 #include <TFE_System/memoryPool.h>
 #include <TFE_System/math.h>
+#include <TFE_System/tfeMessage.h>
 #include <TFE_Jedi/Level/rtexture.h>
 #include <TFE_Jedi/Task/task.h>
 // TODO: This will make adding Outlaws harder, fix the abstraction.
@@ -1921,6 +1923,10 @@ namespace TFE_Jedi
 			case KW_LIGHTS:
 				*type = MSG_LIGHTS;
 				break;
+			// TFE - camera feature
+			case KW_CAMERA:
+				*type = MSG_CAMERA;
+				break;
 			case KW_M_TRIGGER:
 			default:
 				if (elevator)
@@ -2786,26 +2792,54 @@ namespace TFE_Jedi
 
 			// Does the player have the key?
 			KeyItem key = elev->key;
-			if (key == KEY_RED && !s_playerInfo.itemRedKey)
+			char keyBuffer[50];
+			char keyBufferWrapper[50];
+			snprintf(keyBufferWrapper, 50, "%s", TFE_System::getMessage(TFE_MSG_KEY));
+
+			if (key == KEY_RED)
 			{
-				// "You need the red key."
-				hud_sendTextMessage(6);
-				sound_play(s_needKeySoundId);
-				return;
+				if (TFE_Settings::getGameSettings()->df_showKeyUsed &&  s_playerInfo.itemRedKey)
+				{
+					sprintf(keyBuffer, keyBufferWrapper, TFE_System::getMessage(TFE_MSG_RED));
+					TFE_DarkForces::hud_sendTextMessage(keyBuffer, 1, false);
+				}
+				else if (!s_playerInfo.itemRedKey)
+				{
+					// "You need the red key."
+					hud_sendTextMessage(6);
+					sound_play(s_needKeySoundId);
+					return;
+				}
 			}
-			else if (key == KEY_YELLOW && !s_playerInfo.itemYellowKey)
+			else if (key == KEY_YELLOW)
 			{
-				// "You need the yellow key."
-				hud_sendTextMessage(7);
-				sound_play(s_needKeySoundId);
-				return;
+				if (TFE_Settings::getGameSettings()->df_showKeyUsed && s_playerInfo.itemYellowKey)
+				{
+					sprintf(keyBuffer, keyBufferWrapper, TFE_System::getMessage(TFE_MSG_YELLOW));
+					TFE_DarkForces::hud_sendTextMessage(keyBuffer, 1, false);
+				}
+				else if (!s_playerInfo.itemYellowKey)
+				{
+					// "You need the yellow key."
+					hud_sendTextMessage(7);
+					sound_play(s_needKeySoundId);
+					return;
+				}
 			}
-			else if (key == KEY_BLUE && !s_playerInfo.itemBlueKey)
+			else if (key == KEY_BLUE)
 			{
-				// "You need the blue key."
-				hud_sendTextMessage(8);
-				sound_play(s_needKeySoundId);
-				return;
+				if (TFE_Settings::getGameSettings()->df_showKeyUsed && s_playerInfo.itemBlueKey)
+				{
+					sprintf(keyBuffer, keyBufferWrapper, TFE_System::getMessage(TFE_MSG_BLUE));
+					TFE_DarkForces::hud_sendTextMessage(keyBuffer, 1, false);
+				}
+				else if (!s_playerInfo.itemBlueKey)	
+				{
+					// "You need the blue key."
+					hud_sendTextMessage(8);
+					sound_play(s_needKeySoundId);
+					return;
+				}
 			}
 		}
 				
@@ -3231,6 +3265,42 @@ namespace TFE_Jedi
 						i++;
 					}
 				}
+			} break;
+			// TFE - camera feature
+			case MSG_CAMERA:
+			{
+				if (s_externalCameraMode == JFALSE)
+				{
+					// Change EYE to external camera if there is one
+					s32 objCount = sector->objectCount;
+					s32 objCapacity = sector->objectCapacity;
+					SecObject** objList = sector->objectList;
+
+					for (s32 i = 0; i < objCount && i < objCapacity; objList++)
+					{
+						SecObject* obj = *objList;
+						if (obj)
+						{
+							if (obj->flags & OBJ_FLAG_CAMERA)
+							{
+								// Disable night vision
+								if (s_nightVisionActive) { disableNightVision(); }
+
+								player_setupEyeObject(obj);
+								s_externalCameraMode = JTRUE;
+								break;
+							}
+							i++;
+						}
+					}
+				}
+				else
+				{
+					// Move EYE back to player
+					player_setupEyeObject(s_playerObject);
+					s_externalCameraMode = JFALSE;
+				}
+				
 			} break;
 			case MSG_SET_BITS:
 			{
@@ -3834,5 +3904,16 @@ namespace TFE_Jedi
 			}
 		}
 		return JFALSE;
+	}
+
+	u8 sector_getKey(RSector* sector)
+	{
+		InfLink* link = (InfLink*)allocator_getHead(sector->infLink);
+		if (link && link->type == LTYPE_SECTOR)
+		{
+			InfElevator* elev = link->elev;
+			return elev->key;			
+		}
+		return KEY_NONE;
 	}
 }
