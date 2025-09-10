@@ -88,3 +88,6 @@ SDL_image_/
 
 # Linux
 TheForceEngine/tfelnx
+
+# Ignore dumps
+*.dmp
