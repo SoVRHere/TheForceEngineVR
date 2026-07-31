@@ -30,6 +30,8 @@ elseif(ANDROID)
 	list(APPEND SOURCES android.cpp android.h)
 elseif(LINUX)
 	list(APPEND SOURCES CrashHandler/crashHandlerLinux.cpp)
+elseif(APPLE)
+	list(APPEND SOURCES CrashHandler/crashHandlerMac.cpp)
 endif()
 
 #add_custom_target(${PROJECT_NAME} "" SOURCES ${SOURCES})

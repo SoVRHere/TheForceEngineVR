@@ -36,7 +36,9 @@ namespace TFE_Jedi
 	{
 		LevelState_InitVersion = 1,
 		LevelState_SaveSectorNames = 2,
-		LevelState_CurVersion = LevelState_SaveSectorNames,
+		LevelState_SecretUpdate = 3,
+		LevelState_TextureFlags = 4,
+		LevelState_CurVersion = LevelState_TextureFlags,
 	};
 
 	enum GoalConstants

@@ -49,10 +49,11 @@ namespace TFE_Jedi
 		ITRIGGER_SINGLE
 	};
 		
+	// Note: These values correspond to object EntityTypeFlags
 	enum InfEntityMask
 	{
-		INF_ENTITY_ENEMY     = FLAG_BIT(0),
-		INF_ENTITY_WEAPON    = FLAG_BIT(3),
+		INF_ENTITY_AI_ACTOR   = FLAG_BIT(0),
+		INF_ENTITY_PROJECTILE = FLAG_BIT(3),
 		INF_ENTITY_SMART_OBJ = FLAG_BIT(11),
 		INF_ENTITY_PLAYER    = FLAG_BIT(31),
 		INF_ENTITY_ANY = 0xffffffffu
@@ -150,7 +151,8 @@ namespace TFE_Jedi
 	{
 		void* funcPtr;
 		s32 argCount;
-		TFE_ForceScript::ScriptArg args[5];
+		TFE_ForceScript::ScriptArg args[TFE_ForceScript::MAX_SCRIPT_CALL_ARG];
+		char funcName[TFE_ForceScript::MAX_SCRIPT_CALL_NAME_LEN];	// Needed for serialization.
 	};
 
 	struct Slave

@@ -199,6 +199,7 @@ namespace TFE_DarkForces
 	s32 s_baseAtten = 0;
 	fixed16_16 s_gravityAccel;
 
+	u32   s_playerDying = 0;
 	s32   s_invincibility = 0;
 	JBool s_weaponFiring = JFALSE;
 	JBool s_weaponFiringSec = JFALSE;
@@ -326,6 +327,7 @@ namespace TFE_DarkForces
 	// TFE
 	void player_warp(const ConsoleArgList& args);
 	void player_sector(const ConsoleArgList& args);
+	JBool player_hasWeapon(s32 weapon);
 		
 	///////////////////////////////////////////
 	// API Implentation
@@ -812,6 +814,19 @@ namespace TFE_DarkForces
 			disableNightVision();
 			hud_clearMessage();
 		}
+
+		// Don't start the game with a weapon you don't have after overrides.
+		if (!player_hasWeapon(s_playerInfo.curWeapon + 1))
+		{
+			if (s_playerInfo.itemPistol)
+			{
+				s_playerInfo.curWeapon = WPN_PISTOL;
+			}
+			else
+			{
+				s_playerInfo.curWeapon = WPN_FIST;
+			}
+		}
 	}
 		
 	void player_createController(JBool clearData)
@@ -941,10 +956,10 @@ namespace TFE_DarkForces
 		TFE_System::logWrite(LOG_MSG, "Player", "Setting up level '%s'", levelName);
 
 		// Handle custom level player overrides
-		ModSettingLevelOverride modLevelOverride = TFE_Settings::getLevelOverrides(levelName);
-		if (!modLevelOverride.levName.empty())
+		ModSettingLevelOverride* modLevelOverride = TFE_Settings::getLevelOverrides(levelName);
+		if (modLevelOverride && !modLevelOverride->levName.empty())
 		{
-			player_handleLevelOverrides(modLevelOverride);
+			player_handleLevelOverrides(*modLevelOverride);
 		}
 		else if (!strcasecmp(levelName, "jabship"))
 		{
@@ -2334,13 +2349,15 @@ namespace TFE_DarkForces
 				}
 			}
 
-			if (newSector->flags1 & SEC_FLAGS1_SECRET)
+			if (isSecretSector(newSector) && !newSector->secretDiscovered)
 			{
 				// If enabled, show the secret found message.
 				tfe_showSecretFoundMsg();
+				newSector->secretDiscovered = true;
 
 				// Remove the flag so the secret isn't counted twice.
-				newSector->flags1 &= ~SEC_FLAGS1_SECRET;
+				// No Longer needed ? 
+				// newSector->flags1 &= ~SEC_FLAGS1_SECRET;
 				s_secretsFound++;
 				level_updateSecretPercent();
 			}

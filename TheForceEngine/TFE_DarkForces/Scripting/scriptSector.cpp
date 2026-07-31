@@ -1,10 +1,14 @@
 #include "scriptSector.h"
 #include "scriptWall.h"
 #include "scriptTexture.h"
+#include "scriptObject.h"
 #include <TFE_ForceScript/ScriptAPI-Shared/scriptMath.h>
+#include <TFE_ForceScript/Angelscript/add_on/scriptarray/scriptarray.h>
 #include <TFE_Jedi/Level/levelData.h>
 #include <TFE_Jedi/Level/rwall.h>
 #include <TFE_Jedi/Level/rsector.h>
+#include <TFE_Jedi/Level/robjData.h>
+#include <TFE_Jedi/InfSystem/message.h>
 #include <angelscript.h>
 
 using namespace TFE_Jedi;
@@ -169,6 +173,52 @@ namespace TFE_DarkForces
 		}
 	}
 
+	// Message with event and arg, eg. GOTO_STOP 131072 2
+	void sendMessageToSector(MessageType messageType, u32 evt, u32 msgArg1, ScriptSector* sSector)
+	{
+		if (!isScriptSectorValid(sSector))
+		{
+			return;
+		}
+
+		// TODO: investigate how to do this safely
+		// s_msgArg1 = msgArg1;
+
+		RSector* sector = &s_levelState.sectors[sSector->m_id];
+		message_sendToSector(sector, nullptr, evt, messageType);
+	}
+
+	// Message with no event and no arg, eg. NEXT_STOP
+	void sendMessageToSector1(MessageType messageType, ScriptSector* sSector)
+	{
+		sendMessageToSector(messageType, 0, 0, sSector);
+	}
+
+	// Message with event, eg. NEXT_STOP 131072
+	void sendMessageToSector2(MessageType messageType, u32 evt, ScriptSector* sSector)
+	{
+		sendMessageToSector(messageType, evt, 0, sSector);
+	}
+
+	void getSectorObjects(CScriptArray& results, ScriptSector* sSector)
+	{
+		results.Resize(0);
+		if (!isScriptSectorValid(sSector)) { return; }
+		
+		RSector* sector = &s_levelState.sectors[sSector->m_id];
+		SecObject** objList = sector->objectList;
+		for (s32 i = 0, idx = 0; i < sector->objectCount && idx < sector->objectCapacity; idx++)
+		{
+			SecObject* obj = objList[idx];
+			if (obj)
+			{
+				s32 objIndex = obj_getRefIndex(obj);
+				ScriptObject sObj(objIndex);
+				results.InsertLast(&sObj);
+			}
+		}
+	}
+
 	void ScriptSector::registerType()
 	{
 		s32 res = 0;
@@ -185,6 +235,12 @@ namespace TFE_DarkForces
 		ScriptObjFunc("void setFlag(int, uint)", setSectorFlag);
 		ScriptObjFunc("float2 getCenterXZ()", getCenterXZ);
 		ScriptObjFunc("Wall getWall(int)", getWall);
+		ScriptObjFunc("void getObjects(array<Object>&)", getSectorObjects);
+
+		ScriptObjFunc("void sendMessage(int)", sendMessageToSector1);
+		ScriptObjFunc("void sendMessage(int, uint)", sendMessageToSector2);
+		//ScriptObjFunc("void sendMessage(int, uint, uint)", sendMessageToSector);		// For now do not expose the ability to pass an arg
+
 		// Properties
 		ScriptPropertyGetFunc("float get_floorHeight()", getFloorHeight);
 		ScriptPropertyGetFunc("float get_ceilHeight()", getCeilHeight);

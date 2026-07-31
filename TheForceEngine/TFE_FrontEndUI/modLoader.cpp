@@ -24,6 +24,7 @@
 #include <TFE_Jedi/Renderer/jediRenderer.h>
 #include <map>
 #include <algorithm>
+#include <cinttypes>
 
 using namespace TFE_Input;
 
@@ -92,7 +93,7 @@ namespace TFE_FrontEndUI
 	void createModDirIfNeeded(char * directory)
 	{
 		TFE_Paths::fixupPathAsDirectory(directory);
-		if (!FileUtil::directoryExits(directory))
+		if (!FileUtil::directoryExists(directory))
 		{
 			FileUtil::makeDirectory(directory);
 		}
@@ -136,17 +137,17 @@ namespace TFE_FrontEndUI
 
 		s32 modPathCount = 0;
 		char modPaths[3][TFE_MAX_PATH];
-		if (FileUtil::directoryExits(sourceDataModDir))
+		if (FileUtil::directoryExists(sourceDataModDir))
 		{
 			strcpy(modPaths[modPathCount], sourceDataModDir);
 			modPathCount++;
 		}
-		if (FileUtil::directoryExits(programDataModDir))
+		if (FileUtil::directoryExists(programDataModDir))
 		{
 			strcpy(modPaths[modPathCount], programDataModDir);
 			modPathCount++;
 		}
-		if (FileUtil::directoryExits(programDirModDir))
+		if (FileUtil::directoryExists(programDirModDir))
 		{
 			strcpy(modPaths[modPathCount], programDirModDir);
 			modPathCount++;
@@ -420,11 +421,11 @@ namespace TFE_FrontEndUI
 	{
 		readFromQueue(c_itemsPerFrame);
 	}
-		
+
 	bool modLoader_selectionUI()
 	{
 		bool stayOpen = true;
-		f32 uiScale = (f32)TFE_Ui::getUiScale() * 0.01f;	
+		f32 uiScale = (f32)TFE_Ui::getUiScale() * 0.01f;
 
 		// Load in the mod data a few at a time so to limit waiting for loading.
 		readFromQueue(c_itemsPerFrame);
@@ -485,7 +486,6 @@ namespace TFE_FrontEndUI
 			modLoader_read();
 		}
 
-		#ifdef _WIN32
 		ImGui::SameLine(730.0f * uiScale);
 		if (ImGui::Button("Open Mod Folder"))
 		{
@@ -496,7 +496,6 @@ namespace TFE_FrontEndUI
 				TFE_System::logWrite(LOG_ERROR, "ModLoader", "Failed to open the directory: '%s'", programDirModDir);
 			}
 		}
-		#endif
 		
 		ImGui::Separator();
 
@@ -524,10 +523,10 @@ namespace TFE_FrontEndUI
 
 		ImVec4 infoColor = ImVec4(0.2f, 0.8f, 0.4f, 1.0f);  // RGBA
 
-		ImGui::TextColored(infoColor, "Showing %d out of %d mods.", s_filteredMods.size(), s_mods.size());
+		ImGui::TextColored(infoColor, "Showing %lu out of %lu mods.", s_filteredMods.size(), s_mods.size());
 
 		ImGui::Separator();
-					   
+
 		if (s_viewMode == VIEW_IMAGES)
 		{
 			modLoader_imageListUI(uiScale);

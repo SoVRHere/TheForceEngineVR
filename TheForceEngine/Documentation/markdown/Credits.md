@@ -3,6 +3,8 @@ I believe that I have captured all of the individual contributors and dependenci
 
 ## Individual Contributors
   * luciusDXL (me) - Principle Developer / Project Lead.
+  * Jerethk - Project Developer - Logic enhancements,  Scripting
+  * Karjala - Project Developer - Modding, UI, Replay System, Cutscene enhancements
   * Azamat H. Hackimov - Fixed VS 2019 Compilation issues.
   * Manuel Lauss - Most of the Linux support contributions, other contributions.
   * Matthew Gilmore - Contributed to Linux support and testing.
@@ -12,6 +14,8 @@ I believe that I have captured all of the individual contributors and dependenci
   * Craig Yates - TFE Logo design. Minimalist title screen design.
   * Pawel "Dzierzan" Dzierzanowski - Adjustable Hud mod (built-in).
   * Secbase Unlimited - Thorough testing and very cool test levels that are now used internally to provide regression testing.
+  * Eliotttate - Support for OGV, DCSS parser, SRT parser.
+  * acpushbutton - Improvements to the TFE editor.
 
   * Ernest Mikita - VR port (PCVR & Quest), Android port, Windows installer ("So VR Here" [Discord](https://discord.gg/8XuXVFzyNu))
 

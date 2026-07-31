@@ -1,7 +1,7 @@
 project(TFE_FileSystem)
 set(SOURCES
-	filewriterAsync.cpp
-	filewriterAsync.h
+	#filewriterAsync.cpp
+	#filewriterAsync.h
 	memorystream.cpp
 	memorystream.h
 )
@@ -14,7 +14,7 @@ if(WIN32)
 		paths.cpp
 		paths.h
 	)
-elseif(LINUX)
+elseif(UNIX)
 	list(APPEND SOURCES
 		filestream-posix.cpp
 		fileutil-posix.cpp

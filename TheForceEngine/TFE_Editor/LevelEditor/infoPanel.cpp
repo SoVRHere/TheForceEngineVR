@@ -2232,35 +2232,26 @@ namespace LevelEditor
 
 	void addLogicVariables(const std::string& logicName, s32* varList, s32& varCount)
 	{
-		if (logicName.empty())
+		const s32 id = getLogicId(logicName.c_str());
+		if (id >= 0)
 		{
-			// Add common variables.
-			const LogicDef* def = &s_logicDefList.back();
-			const s32 commonCount = (s32)def->var.size();
+			const LogicDef* def = &s_logicDefList[id];
+			const s32 count = (s32)def->var.size();
+
 			const LogicVar* var = def->var.data();
-			for (s32 v = 0; v < commonCount; v++, var++)
+			for (s32 v = 0; v < count; v++, var++)
 			{
 				addVariableToList(var->varId, varList, varCount);
 			}
-			return;
 		}
 
-		const s32 id = getLogicId(logicName.c_str());
-		if (id < 0) { return; }
-		const LogicDef* def = &s_logicDefList[id];
-		const s32 count = (s32)def->var.size();
-
-		// If there are no variables, use the defaults.
-		if (count <= 0)
+		// Add common variables.
+		const LogicDef* commonDef = &s_logicDefList.back();
+		const s32 commonCount = (s32)commonDef->var.size();
+		const LogicVar* commonVar = commonDef->var.data();
+		for (s32 v = 0; v < commonCount; v++, commonVar++)
 		{
-			addLogicVariables("", varList, varCount);
-			return;
-		}
-
-		const LogicVar* var = def->var.data();
-		for (s32 v = 0; v < count; v++, var++)
-		{
-			addVariableToList(var->varId, varList, varCount);
+			addVariableToList(commonVar->varId, varList, varCount);
 		}
 	}
 
@@ -2593,6 +2584,7 @@ namespace LevelEditor
 					switch (def->type)
 					{
 					case EVARTYPE_BOOL:
+					case EVARTYPE_BOOL2:
 					{
 						sprintf(name, "##VarBool%d", i);
 						ImGui::Checkbox(name, &list[i].value.bValue);
@@ -2642,19 +2634,33 @@ namespace LevelEditor
 						strcpy(pair1, list[i].value.sValue.c_str());
 						strcpy(pair2, list[i].value.sValue1.c_str());
 						ImGui::SetNextItemWidth(128.0f);
-						if (ImGui::InputText("###Pair1", pair1, 256))
+						sprintf(name, "##Pair1_%d", i);
+						if (ImGui::InputText(name, pair1, 256))
 						{
 							list[i].value.sValue = pair1;
 						}
 						s_textInputFocused |= ImGui::IsItemActive();
 						ImGui::SameLine(0.0f, 8.0f);
 						ImGui::SetNextItemWidth(128.0f);
-						if (ImGui::InputText("###Pair2", pair2, 256))
+						sprintf(name, "##Pair2_%d", i);
+						if (ImGui::InputText(name, pair2, 256))
 						{
 							list[i].value.sValue1 = pair2;
 						}
 						s_textInputFocused |= ImGui::IsItemActive();
 					} break;
+					case EVARTYPE_INPUT_STRING:
+					{
+						char str[256];
+						strcpy(str, list[i].value.sValue.c_str());
+						ImGui::SetNextItemWidth(192.0f);
+						sprintf(name, "##VarStr%d", i);
+						if (ImGui::InputText(name, str, 256))
+						{
+							list[i].value.sValue = str;
+						}
+						s_textInputFocused |= ImGui::IsItemActive();
+					}
 					}
 				}
 			}
@@ -2876,22 +2882,23 @@ namespace LevelEditor
 	{
 		s32 id = s_curLevelNote >= 0 ? s_curLevelNote : s_hoveredLevelNote;
 		if (id < 0) { return; }
-				
-		LevelNote* note = &s_level.notes[id];
 		
-		ImGui::CheckboxFlags("2D Only", &note->flags, LNF_2D_ONLY); ImGui::SameLine();
-		ImGui::CheckboxFlags("No Fade in 3D", &note->flags, LNF_3D_NO_FADE); ImGui::SameLine();
-		ImGui::CheckboxFlags("Always Show Text", &note->flags, LNF_TEXT_ALWAYS_SHOW);
+		LevelNote* note = &s_level.notes[id];
+		bool changed = false;
+		
+		changed |= ImGui::CheckboxFlags("2D Only", &note->flags, LNF_2D_ONLY); ImGui::SameLine();
+		changed |= ImGui::CheckboxFlags("No Fade in 3D", &note->flags, LNF_3D_NO_FADE); ImGui::SameLine();
+		changed |= ImGui::CheckboxFlags("Always Show Text", &note->flags, LNF_TEXT_ALWAYS_SHOW);
 		ImGui::Spacing();
 		ImGui::SetNextItemWidth(128.0f);
 		ImGui::LabelText("##Label", "Start Fade (3D)"); ImGui::SameLine();
 		ImGui::SetNextItemWidth(128.0f);
-		ImGui::InputFloat("##StartFade", &note->fade.x, 1.0f, 10.0f, "%.1f");
+		changed |= ImGui::InputFloat("##StartFade", &note->fade.x, 1.0f, 10.0f, "%.1f");
 		s_textInputFocused |= ImGui::IsItemActive();
 		ImGui::SetNextItemWidth(128.0f);
 		ImGui::LabelText("##Label", "End Fade (3D)"); ImGui::SameLine();
 		ImGui::SetNextItemWidth(128.0f);
-		ImGui::InputFloat("##EndFade", &note->fade.z, 1.0f, 10.0f, "%.1f");
+		changed |= ImGui::InputFloat("##EndFade", &note->fade.z, 1.0f, 10.0f, "%.1f");
 		s_textInputFocused |= ImGui::IsItemActive();
 		ImGui::Separator();
 		ImGui::SetNextItemWidth(128.0f);
@@ -2899,6 +2906,7 @@ namespace LevelEditor
 		Vec4f iconColor = packedColorToVec4(note->iconColor);
 		if (ImGui::ColorEdit4(editor_getUniqueLabel(""), iconColor.m, ImGuiColorEditFlags_NoLabel | ImGuiColorEditFlags_NoInputs))
 		{
+			changed = true;
 			note->iconColor = colorVec4ToPacked(iconColor);
 		}
 		ImGui::SetNextItemWidth(128.0f);
@@ -2906,6 +2914,7 @@ namespace LevelEditor
 		Vec4f textColor = packedColorToVec4(note->textColor);
 		if (ImGui::ColorEdit4(editor_getUniqueLabel(""), textColor.m, ImGuiColorEditFlags_NoLabel | ImGuiColorEditFlags_NoInputs))
 		{
+			changed = true;
 			note->textColor = colorVec4ToPacked(textColor);
 		}
 		ImGui::Separator();
@@ -2917,9 +2926,23 @@ namespace LevelEditor
 
 		if (ImGui::InputTextMultiline(textInputId, tmpBuffer, 4096, { s_infoWith - 16.0f, 354.0f }))
 		{
+			changed = true;
 			note->note = tmpBuffer;
 		}
 		s_textInputFocused |= ImGui::IsItemActive();
+
+		if (changed)
+		{
+			if (s_prevLevelNote == s_curLevelNote)
+			{
+				cmd_levelNoteSnapshot(LName_LevelNote_Change, false);
+			}
+			else
+			{
+				cmd_levelNoteSnapshot(LName_LevelNote_Change, true);
+			}
+			s_prevLevelNote = s_curLevelNote;
+		}
 	}
 		
 	bool drawInfoPanel(EditorView view)

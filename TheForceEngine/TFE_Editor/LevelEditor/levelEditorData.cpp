@@ -508,6 +508,7 @@ namespace LevelEditor
 	void levelClear()
 	{
 		// Clear the INF data.
+		s_levelInf.item.clear();
 		s_levelInf.elevator.clear();
 		s_levelInf.teleport.clear();
 		s_levelInf.trigger.clear();
@@ -529,6 +530,7 @@ namespace LevelEditor
 		FileUtil::stripExtension(asset->name.c_str(), slotName);
 
 		// Clear the INF data.
+		s_levelInf.item.clear();
 		s_levelInf.elevator.clear();
 		s_levelInf.teleport.clear();
 		s_levelInf.trigger.clear();
@@ -538,8 +540,9 @@ namespace LevelEditor
 		selection_clearHovered();
 		s_featureTex = {};
 
-		// Clear notes.
+		// Clear notes and guidelines
 		s_level.notes.clear();
+		s_level.guidelines.clear();
 		levelSetClean();
 
 		// First check to see if there is a "tfl" version of the level.
@@ -913,15 +916,27 @@ namespace LevelEditor
 	{
 		if (!sector)
 		{
-			s_level.bounds[0] = { FLT_MAX,  FLT_MAX,  FLT_MAX };
-			s_level.bounds[1] = { -FLT_MAX, -FLT_MAX, -FLT_MAX };
-			s_level.layerRange[0] = INT_MAX;
-			s_level.layerRange[1] = -INT_MAX;
 			const size_t count = s_level.sectors.size();
 			sector = s_level.sectors.data();
-			for (size_t i = 0; i < count; i++, sector++)
+
+			if (count == 0)
 			{
-				updateBoundsWithSector(sector);
+				s_level.bounds[0] = { 0 };
+				s_level.bounds[1] = { 0 };
+				s_level.layerRange[0] = 0;
+				s_level.layerRange[1] = 0;
+			}
+			else
+			{
+				s_level.bounds[0] = { FLT_MAX,  FLT_MAX,  FLT_MAX };
+				s_level.bounds[1] = { -FLT_MAX, -FLT_MAX, -FLT_MAX };
+				s_level.layerRange[0] = INT_MAX;
+				s_level.layerRange[1] = -INT_MAX;
+
+				for (size_t i = 0; i < count; i++, sector++)
+				{
+					updateBoundsWithSector(sector);
+				}
 			}
 		}
 		else
@@ -1518,6 +1533,14 @@ namespace LevelEditor
 						WRITE_LINE("            %s:     %s\r\n", def->name.c_str(), var[v].value.bValue ? "TRUE" : "FALSE");
 					}
 				} break;
+				case EVARTYPE_BOOL2:
+				{
+					// If the bool doesn't match the "default" value - then don't write it at all.
+					if (var[v].value.bValue == def->defValue.bValue)
+					{
+						WRITE_LINE("            %s\r\n", def->name.c_str());
+					}
+				} break;
 				case EVARTYPE_FLOAT:
 				{
 					WRITE_LINE("            %s:     %f\r\n", def->name.c_str(), var[v].value.fValue);
@@ -1535,8 +1558,23 @@ namespace LevelEditor
 				{
 					if (!var[v].value.sValue.empty())
 					{
-						WRITE_LINE("            %s:     %s \"%s\"\r\n", def->name.c_str(), var[v].value.sValue.c_str(), var[v].value.sValue1.c_str());
+						const char* varName = def->name.c_str();
+						const char* sValue1 = var[v].value.sValue1.c_str();
+						
+						if ((strcasecmp(varName, "Vue") == 0 || strcasecmp(varName, "Vue_Append") == 0) && strcasecmp(sValue1, "camera") == 0)
+						{
+							// Special case for vue camera, don't write quote marks
+							WRITE_LINE("            %s:     %s %s\r\n", varName, var[v].value.sValue.c_str(), sValue1);
+						}
+						else
+						{
+							WRITE_LINE("            %s:     %s \"%s\"\r\n", varName, var[v].value.sValue.c_str(), sValue1);
+						}
 					}
+				} break;
+				case EVARTYPE_INPUT_STRING:
+				{
+					WRITE_LINE("            %s:     %s\r\n", def->name.c_str(), var[v].value.sValue.c_str());
 				} break;
 			}
 		}
@@ -2477,6 +2515,14 @@ namespace LevelEditor
 						WRITE_TO_BUFFER("      %s: %s\r\n", def->name.c_str(), var[v].value.bValue ? "TRUE" : "FALSE");
 					}
 				} break;
+				case EVARTYPE_BOOL2:
+				{
+					// If the bool doesn't match the "default" value - then don't write it at all.
+					if (var[v].value.bValue == def->defValue.bValue)
+					{
+						WRITE_TO_BUFFER("      %s\r\n", def->name.c_str());
+					}
+				} break;
 				case EVARTYPE_FLOAT:
 				{
 					WRITE_TO_BUFFER("      %s: %f\r\n", def->name.c_str(), var[v].value.fValue);
@@ -2494,8 +2540,23 @@ namespace LevelEditor
 				{
 					if (!var[v].value.sValue.empty())
 					{
-						WRITE_TO_BUFFER("      %s: %s \"%s\"\r\n", def->name.c_str(), var[v].value.sValue.c_str(), var[v].value.sValue1.c_str());
+						const char* varName = def->name.c_str();
+						const char* sValue1 = var[v].value.sValue1.c_str();
+
+						if ((strcasecmp(varName, "Vue") == 0 || strcasecmp(varName, "Vue_Append") == 0) && strcasecmp(sValue1, "camera") == 0)
+						{
+							// Special case for vue camera, don't write quote marks
+							WRITE_TO_BUFFER("      %s: %s %s\r\n", varName, var[v].value.sValue.c_str(), sValue1);
+						}
+						else
+						{
+							WRITE_TO_BUFFER("      %s: %s \"%s\"\r\n", varName, var[v].value.sValue.c_str(), sValue1);
+						}
 					}
+				} break;
+				case EVARTYPE_INPUT_STRING:
+				{
+					WRITE_TO_BUFFER("      %s: %s\r\n", def->name.c_str(), var[v].value.sValue.c_str());
 				} break;
 			}
 		}
@@ -5242,6 +5303,33 @@ namespace LevelEditor
 		readGuidelineFromSnapshot(guideline);
 	}
 
+	void level_createLevelNoteSnapshot(SnapshotBuffer* buffer)
+	{
+		setSnapshotWriteBuffer(buffer);
+		const u32 noteCount = (u32)s_level.notes.size();
+		const LevelNote* note = s_level.notes.data();
+
+		writeU32(noteCount);
+		for (u32 i = 0; i < noteCount; i++, note++)
+		{
+			writeLevelNoteToSnapshot(note);
+		}
+	}
+
+	void level_unpackLevelNoteSnapshot(u32 size, void* data)
+	{
+		setSnapshotReadBuffer((u8*)data, size);
+
+		const u32 noteCount = readU32();
+		s_level.notes.resize(noteCount);
+
+		LevelNote* note = s_level.notes.data();
+		for (u32 i = 0; i < noteCount; i++, note++)
+		{
+			readLevelNoteFromSnapshot(note);
+		}
+	}
+
 	// Find a sector based on DF rules.
 	EditorSector* findSectorDf(const Vec3f pos)
 	{
@@ -5438,6 +5526,30 @@ namespace LevelEditor
 			{
 				levHistory_createSnapshot("Clean Zero-Sectors");
 			}
+		}
+	}
+
+	// Update visible layer when history replay changes the overall layer bounds.
+	void updateCurrentLayer(s32* oldLayerRange)
+	{
+		bool inRange = s_curLayer >= s_level.layerRange[0] && s_curLayer <= s_level.layerRange[1];
+		if (inRange)
+		{
+			// If layer bounds expands, follow it
+			if (oldLayerRange[0] > s_level.layerRange[0])
+			{
+				s_curLayer = s_level.layerRange[0];
+			}
+			else if (oldLayerRange[1] < s_level.layerRange[1])
+			{
+				s_curLayer = s_level.layerRange[1];
+			}
+		}
+		else
+		{
+			// Drifted out of range, find closest
+			s_curLayer = std::min(s_curLayer, s_level.layerRange[1]);
+			s_curLayer = std::max(s_curLayer, s_level.layerRange[0]);
 		}
 	}
 }

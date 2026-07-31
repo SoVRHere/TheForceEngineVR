@@ -530,7 +530,7 @@ namespace TFE_Jedi
 
 	JBool task_canRun()
 	{
-		bool timeLimiter = s_enableTimeLimiter && !TFE_Settings::getGraphicsSettings()->useSmoothDeltaTime;
+		bool timeLimiter = s_enableTimeLimiter;
 		if (s_taskCount && timeLimiter)
 		{
 			const f64 time = TFE_System::getTime();
@@ -560,11 +560,12 @@ namespace TFE_Jedi
 		// Limit the update rate by the minimum interval.
 		// Dark Forces uses discrete 'ticks' to track time and the game behavior is very odd with 0 tick frames.
 		const f64 time = TFE_System::getTime();
-		const bool timeLimiter = s_enableTimeLimiter && !TFE_Settings::getGraphicsSettings()->useSmoothDeltaTime && !TFE_Input::isReplaySystemLive();
+		const bool timeLimiter = s_enableTimeLimiter && !TFE_Input::isReplaySystemLive();
 		if (time - s_prevTime < s_minIntervalInSec && timeLimiter)
 		{
 			return JFALSE;
 		}
+
 		s_prevTime = time;
 		s_currentMsg = MSG_RUN_TASK;
 		s_frameActiveTaskCount = 0;

@@ -91,3 +91,7 @@ TheForceEngine/tfelnx
 
 # Ignore dumps
 *.dmp
+
+# ignore recipe
+*.recipe
+.DS_Store

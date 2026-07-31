@@ -22,7 +22,8 @@ namespace TFE_Jedi
 		SaveVersionHitEffectTaskUpdate,
 		SaveVersionSmoothDeltatime,
 		SavVersionTFEMessages,
-		SaveVersionCur = SavVersionTFEMessages,
+		SaveVersionHitEffectTaskUpdate2,
+		SaveVersionCur = SaveVersionHitEffectTaskUpdate2,
 	};
 
 	enum SerializationMode
@@ -110,4 +111,5 @@ namespace TFE_Jedi
 	void serialization_serialize3doPtr(Stream* stream, u32 version, JediModel*& model);
 	void serialization_serializeWaxPtr(Stream* stream, u32 version, JediWax*& wax);
 	void serialization_serializeFramePtr(Stream* stream, u32 version, JediFrame*& frame);
+	void serialization_serializeScriptArg(Stream* stream, u32 version, TFE_ForceScript::ScriptArg* arg);
 }

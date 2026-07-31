@@ -217,7 +217,7 @@ namespace TFE_Paths
 
 	void addSearchPath(const char* fullPath)
 	{
-		if (FileUtil::directoryExits(fullPath))
+		if (FileUtil::directoryExists(fullPath))
 		{
 			const size_t count = s_searchPaths.size();
 			const std::string* path = s_searchPaths.data();
@@ -236,7 +236,7 @@ namespace TFE_Paths
 
 	void addSearchPathToHead(const char* fullPath)
 	{
-		if (FileUtil::directoryExits(fullPath))
+		if (FileUtil::directoryExists(fullPath))
 		{
 			const size_t count = s_searchPaths.size();
 			const std::string* path = s_searchPaths.data();

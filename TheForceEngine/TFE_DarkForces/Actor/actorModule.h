@@ -109,10 +109,10 @@ enum AttackFlags
 
 enum ActorCollisionFlags
 {
-	ACTORCOL_NO_Y_MOVE	= FLAG_BIT(0),		// When _not_ set, an actor can move vertically. Set for non-flying enemies.
-	ACTORCOL_GRAVITY	= FLAG_BIT(1),
-	ACTORCOL_BIT2		= FLAG_BIT(2),		// Alters the way collision is handled. This is generally set for flying enemies and bosses
-	ACTORCOL_ALL		= ACTORCOL_NO_Y_MOVE | ACTORCOL_GRAVITY | ACTORCOL_BIT2
+	ACTORCOL_NO_Y_MOVE       = FLAG_BIT(0),  // When _not_ set, an actor can move vertically. Set for non-flying enemies.
+	ACTORCOL_GRAVITY         = FLAG_BIT(1),
+	ACTORCOL_SLIDE_RESPONSE  = FLAG_BIT(2),  // Actor will "slide" along a wall that they collide with. This is generally set for flying enemies and bosses.
+	ACTORCOL_ALL             = ACTORCOL_NO_Y_MOVE | ACTORCOL_GRAVITY | ACTORCOL_SLIDE_RESPONSE
 };
 
 struct ActorModule
@@ -142,6 +142,15 @@ struct ActorTarget
 	u32 flags;
 };
 
+struct ActorBurstFire
+{
+	u32 burstNumber;
+	u32 variation;
+	Tick interval;
+	Tick lastShot;
+	s32 shotCount;
+};
+
 struct AttackModule
 {
 	ActorModule header;
@@ -162,6 +171,10 @@ struct AttackModule
 	fixed16_16 meleeDmg;
 	fixed16_16 meleeRate;
 	u32 attackFlags;		// see AttackFlags above.
+
+	// New in TFE - Burst fire properties
+	JBool hasBurstFire;
+	ActorBurstFire burstFire;
 };
 
 struct MovementModule

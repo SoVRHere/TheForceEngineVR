@@ -3,6 +3,7 @@
 #include "actor.h"
 #include "actorInternal.h"
 #include "actorSerialization.h"
+#include "actorEnhanced.h"
 #include "../logic.h"
 #include "../gameMusic.h"
 #include "../sound.h"
@@ -77,6 +78,11 @@ namespace TFE_DarkForces
 		SERIALIZE(SaveVersionInit, dispatch->vel, {0});
 		SERIALIZE(SaveVersionInit, dispatch->lastPlayerPos, {0});
 		SERIALIZE(SaveVersionInit, dispatch->flags, 4);
+
+		// Indexes to ScriptCalls
+		SERIALIZE(ObjState_LogicScriptCallV1, dispatch->deathScriptCall, -1);
+		SERIALIZE(ObjState_LogicScriptCallV1, dispatch->alertScriptCall, -1);
+
 		// Animation Table.
 		s32 animTableIndex = -1;
 		if (serialization_getMode() == SMODE_WRITE)
@@ -186,8 +192,8 @@ namespace TFE_DarkForces
 		SERIALIZE(SaveVersionInit, colInfo->offsetX, 0);
 		SERIALIZE(SaveVersionInit, colInfo->offsetY, 0);
 		SERIALIZE(SaveVersionInit, colInfo->offsetZ, 0);
-		SERIALIZE(SaveVersionInit, colInfo->botOffset, 0);
-		SERIALIZE(SaveVersionInit, colInfo->yPos, 0);
+		SERIALIZE(SaveVersionInit, colInfo->stepUpHeight, 0);
+		SERIALIZE(SaveVersionInit, colInfo->stepDownHeight, 0);
 		SERIALIZE(SaveVersionInit, colInfo->height, 0);
 		SERIALIZE(SaveVersionInit, colInfo->u24, 0);
 		SERIALIZE(SaveVersionInit, colInfo->width, 0);
@@ -293,6 +299,38 @@ namespace TFE_DarkForces
 		SERIALIZE(SaveVersionInit, attackMod->meleeDmg, 0);
 		SERIALIZE(SaveVersionInit, attackMod->meleeRate, 0);
 		SERIALIZE(SaveVersionInit, attackMod->attackFlags, 0);
+
+		SERIALIZE(ObjState_BurstFire, attackMod->hasBurstFire, JFALSE);
+		SERIALIZE(ObjState_BurstFire, attackMod->burstFire.burstNumber, 5);
+		SERIALIZE(ObjState_BurstFire, attackMod->burstFire.variation, 2);
+		SERIALIZE(ObjState_BurstFire, attackMod->burstFire.interval, 29);
+		SERIALIZE(ObjState_BurstFire, attackMod->burstFire.shotCount, 5);
+		SERIALIZE(ObjState_BurstFire, attackMod->burstFire.lastShot, 0);
+
+		// Fixup for savegames when burstfire was still in defaultAttackFunc 
+		if (serialization_getMode() == SMODE_READ)
+		{
+			if (attackMod->hasBurstFire == JTRUE && attackMod->header.func != enhancedAttackFunc)
+			{
+				attackMod->header.func = enhancedAttackFunc;
+			}
+		}
+	}
+
+	const ActorFunc c_actorAttackFunc[] =
+	{
+		defaultAttackFunc,		// 0
+		sewerCreatureEnemyFunc,	// 1
+		enhancedAttackFunc,		// 2
+	};
+
+	s32 actor_getAttackFuncIndex(ActorFunc func)
+	{
+		for (s32 i = 0; i < TFE_ARRAYSIZE(c_actorAttackFunc); i++)
+		{
+			if (c_actorAttackFunc[i] == func) { return i; }
+		}
+		return -1;
 	}
 
 	void actor_serializeAttackModule(Stream* stream, ActorModule*& mod, ActorDispatch* dispatch)
@@ -302,7 +340,7 @@ namespace TFE_DarkForces
 		if (serialization_getMode() == SMODE_WRITE)
 		{
 			attackMod = (AttackModule*)mod;
-			funcIdx = attackMod->header.func == defaultAttackFunc ? 0 : 1;
+			funcIdx = actor_getAttackFuncIndex(attackMod->header.func);
 		}
 		SERIALIZE(SaveVersionInit, funcIdx, 0);
 		if (serialization_getMode() == SMODE_READ)
@@ -312,14 +350,14 @@ namespace TFE_DarkForces
 			memset(attackMod, 0, sizeof(AttackModule));
 			actor_initModule(mod, (Logic*)dispatch);
 			
-			attackMod->header.func = funcIdx == 0 ? defaultAttackFunc : sewerCreatureEnemyFunc;
+			attackMod->header.func = c_actorAttackFunc[funcIdx];
 			attackMod->header.freeFunc = nullptr;
 			attackMod->header.msgFunc = defaultAttackMsgFunc;
 			attackMod->header.type = ACTMOD_ATTACK;
 		}
 		else if (attackMod)
 		{
-			assert(attackMod->header.func == defaultAttackFunc || attackMod->header.func == sewerCreatureEnemyFunc);
+			assert(attackMod->header.func == defaultAttackFunc || attackMod->header.func == sewerCreatureEnemyFunc || attackMod->header.func == enhancedAttackFunc);
 			assert(attackMod->header.msgFunc == defaultAttackMsgFunc);
 			assert(attackMod->header.freeFunc == nullptr);
 		}

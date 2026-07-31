@@ -102,6 +102,8 @@ namespace TFE_RenderBackend
 
 	void setClearColor(const f32* color);
 	void swap(bool blitVirtualDisplay);
+	void setSkipDisplayAndClear(bool skip);
+	bool getSkipDisplayAndClear();
 	void queueScreenshot(const char* screenshotPath);
 	void startGifRecording(const char* path, bool skipCountdown = false);
 	void stopGifRecording();
@@ -178,6 +180,9 @@ namespace TFE_RenderBackend
 
 	// Generic line draw.
 	void drawLines(u32 lineCount);
+
+	// macOS: Bind the global VAO
+	void bindGlobalVAO();
 
 	void updateVRCamera();
 };

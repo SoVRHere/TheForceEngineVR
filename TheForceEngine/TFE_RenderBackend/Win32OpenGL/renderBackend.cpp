@@ -8,6 +8,7 @@
 #include <TFE_Ui/ui.h>
 #include <TFE_Asset/imageAsset.h>	// For image saving, this should be refactored...
 #include <TFE_System/profiler.h>
+#include <TFE_System/system.h>
 #include <TFE_PostProcess/blit.h>
 #include <TFE_PostProcess/bloomThreshold.h>
 #include <TFE_PostProcess/bloomDownsample.h>
@@ -68,6 +69,7 @@ namespace TFE_RenderBackend
 	static bool s_gpuColorConvert = false;
 	static bool s_useRenderTarget = false;
 	static bool s_bloomEnable = false;
+	static bool s_skipDisplayAndClear = false;
 	static DisplayMode s_displayMode;
 	static f32 s_clearColor[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
 	static u32 s_rtWidth, s_rtHeight;
@@ -94,6 +96,89 @@ namespace TFE_RenderBackend
 	void setupPostEffectChain(bool useDynamicTexture, bool useBloom);
 	bool initVR();
 
+	static GLuint s_globalVAO = 0;
+	static bool s_isMacOS = false;
+
+
+
+	static void showGpuWarningDialog(const char* rendererName)
+	{
+		// Don't show the warning if muted - this is a permanent change unless settings are wiped. 
+		TFE_Settings_Graphics* graphicsSettings = TFE_Settings::getGraphicsSettings();
+		if (graphicsSettings->suppressGPUWarnings) return;
+
+		char msg[512];
+		snprintf(msg, sizeof(msg),
+			"Integrated GPU detected: %s\n\nThis engine is optimized for discrete GPUs. "
+			"\nContinuing may result in poor performance or rendering issues.",
+			rendererName);
+
+		const SDL_MessageBoxButtonData buttons[] =
+		{
+			{ SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT, 0, "Continue" },
+			{ 0,                                       1, "Always Ignore" },
+			{ SDL_MESSAGEBOX_BUTTON_ESCAPEKEY_DEFAULT, 2, "Quit" },
+		};
+
+		const SDL_MessageBoxData data =
+		{
+			SDL_MESSAGEBOX_WARNING,
+			nullptr,
+			"Graphics Warning",
+			msg,
+			SDL_arraysize(buttons),
+			buttons,
+			nullptr
+		};
+
+		int buttonId = 0;
+		if (SDL_ShowMessageBox(&data, &buttonId) < 0)
+		{
+			TFE_System::logWrite(LOG_ERROR, "RenderBackend", "SDL_ShowMessageBox failed: %s", SDL_GetError());
+			return;
+		}
+
+		if (buttonId == 1)
+		{
+			TFE_System::logWrite(LOG_MSG, "RenderBackend", "User chose to always ignore warnings due to integrated GPU.");
+			graphicsSettings->suppressGPUWarnings = true;			
+		}
+		else if (buttonId == 2)
+		{
+			TFE_System::logWrite(LOG_ERROR, "RenderBackend", "User chose to quit due to integrated GPU.");
+			exit(1);
+		}
+	}
+
+	static bool isIntegratedgraphics(string renderer)
+	{
+		std::string lowerRenderer = renderer;
+		std::transform(lowerRenderer.begin(), lowerRenderer.end(), lowerRenderer.begin(), ::tolower);
+
+		// List of keywords that indicate integrated graphics.
+		// This is not an exhaustive list , but covers the most common integrated graphics.
+		const std::vector<std::string> integratedKeywords = { 
+			"intel(r) uhd",
+			"intel(r) hd",
+			"intel(r) iris",
+			"intel arc graphics", 
+			"amd radeon(tm) graphics",
+			"radeon vega",
+			"radeon(tm) vega"
+		};
+		
+		// Check if the renderer string contains any of the integrated graphics keywords
+		for (const auto& keyword : integratedKeywords)
+		{
+			if (lowerRenderer.find(keyword) != std::string::npos)
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
 	static void printGLInfo(void)
 	{
 		const char* gl_ver = (const char *)glGetString(GL_VERSION);
@@ -104,24 +189,30 @@ namespace TFE_RenderBackend
 		}
 		const char* gl_ren = (const char *)glGetString(GL_RENDERER);
 		TFE_System::logWrite(LOG_MSG, "RenderBackend", "GL Info: %s, %s", gl_ver, gl_ren);
+
+		if (isIntegratedgraphics(gl_ren))
+		{
+			showGpuWarningDialog(gl_ren);
+		}
 	}
 
 	bool isWindowMinimized()
 	{
 		return (SDL_GetWindowFlags(s_window) & SDL_WINDOW_MINIMIZED) != 0;
 	}
-		
+
 	SDL_Window* createWindow(const WindowState& state)
 	{
 		u32 windowFlags = SDL_WINDOW_OPENGL;
 		bool windowed = !(state.flags & WINFLAG_FULLSCREEN);
+		s_isMacOS = (strcmp(SDL_GetPlatform(), "Mac OS X") == 0);
 
 		TFE_Settings_Window* windowSettings = TFE_Settings::getWindowSettings();
-		
+
 		s32 x = windowSettings->x, y = windowSettings->y;
 		s32 displayIndex = getDisplayIndex(x, y);
 		assert(displayIndex >= 0);
-		
+
 		if (windowed)
 		{
 			y = std::max(32, y);
@@ -146,6 +237,13 @@ namespace TFE_RenderBackend
 #if defined(ANDROID)
 		SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
 #endif
+		if (s_isMacOS) {
+			// macOS specific OpenGL context setup
+			SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+			SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
+			SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
+			SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG);
+		}
 
 		TFE_System::logWrite(LOG_MSG, "RenderBackend", "SDL Videodriver: %s", SDL_GetCurrentVideoDriver());
 		SDL_Window* window = SDL_CreateWindow(state.name, x, y, state.width, state.height, windowFlags);
@@ -220,9 +318,30 @@ namespace TFE_RenderBackend
 #endif
 #endif
 
-	#ifndef _WIN32
+		if (s_isMacOS) {
+			// macOS specific setup:
+			// Create and bind a global VAO for macOS
+			glGenVertexArrays(1, &s_globalVAO);
+			if (!s_globalVAO)
+			{
+				TFE_System::logWrite(LOG_ERROR, "RenderBackend", "Failed to create global VAO");
+				SDL_DestroyWindow(window);
+				return nullptr;
+			}
+			glBindVertexArray(s_globalVAO);
+
+			// handle Retina displays
+			s32 drawableWidth, drawableHeight;
+			SDL_GL_GetDrawableSize(window, &drawableWidth, &drawableHeight);
+			if (drawableWidth > state.width)
+			{
+				uiScale = (uiScale * drawableWidth) / state.width;
+			}
+		}
+
+#ifndef _WIN32
 		SDL_SetWindowFullscreen(window, windowed ? 0 : SDL_WINDOW_FULLSCREEN_DESKTOP);
-	#endif
+#endif
 
 		TFE_Ui::init(window, context, uiScale);
 		return window;
@@ -292,7 +411,7 @@ namespace TFE_RenderBackend
 
 		s_bloomMerge = new BloomMerge{ optimized /*TODO: ignored inside*/};
 		s_bloomMerge->init();
-		
+
 		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 		glClearDepthf(0.0f);
 
@@ -318,6 +437,12 @@ namespace TFE_RenderBackend
 
 	void destroy()
 	{
+		if (s_isMacOS && s_globalVAO) {
+			// Unbind and delete the global VAO for macOS
+			glDeleteVertexArrays(1, &s_globalVAO);
+			s_globalVAO = 0;
+		}
+
 		delete s_screenCapture;
 		s_screenCapture = nullptr;
 
@@ -388,11 +513,30 @@ namespace TFE_RenderBackend
 
 		memcpy(s_clearColor, color, sizeof(f32) * 4);
 	}
-		
+
+	void setSkipDisplayAndClear(bool skip)
+	{
+		s_skipDisplayAndClear = skip;
+	}
+
+	bool getSkipDisplayAndClear()
+	{
+		return s_skipDisplayAndClear;
+	}
+
 	void swap(bool blitVirtualDisplay)
 	{
-		// Blit the texture or render target to the screen.
-		if (blitVirtualDisplay) { drawVirtualDisplay(); }
+		// If an external renderer (e.g. OGV player) already drew to the backbuffer, skip.
+		if (s_skipDisplayAndClear)
+		{
+			s_skipDisplayAndClear = false;
+		}
+		else if (blitVirtualDisplay)
+		{
+			// [DBG] drawVirtualDisplay firing - if this logs during cutscene, stale texture is reaching the screen.
+			//TFE_System::logWrite(LOG_WARNING, "Cutscene", "[DBG] swap: drawVirtualDisplay() called (blitVirtualDisplay=%d, skipDisplay was false)", (int)blitVirtualDisplay);
+			drawVirtualDisplay();
+		}
 		else { glClear(GL_COLOR_BUFFER_BIT); }
 
 		// Handle the UI.
@@ -461,7 +605,7 @@ namespace TFE_RenderBackend
 		strcpy(s_screenshotPath, screenshotPath);
 		s_screenshotQueued = true;
 	}
-		
+
 	void startGifRecording(const char* path, bool skipCountdown)
 	{
 		s_screenCapture->beginRecording(path, skipCountdown);
@@ -518,7 +662,7 @@ namespace TFE_RenderBackend
 			SDL_GetDisplayBounds(i, &s_displayBounds[i]);
 		}
 	}
-		
+
 	s32 getDisplayCount()
 	{
 		enumerateDisplays();
@@ -543,7 +687,7 @@ namespace TFE_RenderBackend
 
 		return displayIndex;
 	}
-		
+
 	bool getDisplayMonitorInfo(s32 displayIndex, MonitorInfo* monitorInfo)
 	{
 #if defined(ENABLE_VR)
@@ -907,7 +1051,7 @@ namespace TFE_RenderBackend
 	{
 		RenderTarget::copy(s_virtualRenderTarget, (RenderTarget*)src);
 	}
-		
+
 	void copyBackbufferToRenderTarget(RenderTargetHandle dst)
 	{
 		s_copyTarget = (RenderTarget*)dst;
@@ -1366,6 +1510,13 @@ namespace TFE_RenderBackend
 				{ PTYPE_DYNAMIC_TEX, s_palette }
 			};
 			TFE_PostProcess::appendEffect(s_postEffectBlit, TFE_ARRAYSIZE(blitInputs), blitInputs, nullptr, x, y, w, h);
+		}
+	}
+
+	void bindGlobalVAO(void)
+	{
+		if (s_isMacOS) {
+			glBindVertexArray(s_globalVAO);
 		}
 	}
 

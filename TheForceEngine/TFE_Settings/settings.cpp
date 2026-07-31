@@ -336,7 +336,7 @@ namespace TFE_Settings
 				const char* const * locations = c_gameLocations[gameId];
 				for (u32 i = 0; i < c_hardcodedPathCount[gameId]; i++)
 				{
-					if (FileUtil::directoryExits(locations[i]))
+					if (FileUtil::directoryExists(locations[i]))
 					{
 						strcpy(s_gameSettings.header[gameId].sourcePath, locations[i]);
 						pathValid = true;
@@ -524,6 +524,7 @@ namespace TFE_Settings
 		writeKeyValue_Bool(settings, "ignore3doLimits", s_graphicsSettings.ignore3doLimits);
 		writeKeyValue_Bool(settings, "ditheredBilinear", s_graphicsSettings.ditheredBilinear);
 		writeKeyValue_Bool(settings, "useSmoothDeltaTime", s_graphicsSettings.useSmoothDeltaTime);
+		writeKeyValue_Bool(settings, "suppressGPUWarnings", s_graphicsSettings.suppressGPUWarnings);
 
 		writeKeyValue_Bool(settings, "useBilinear", s_graphicsSettings.useBilinear);
 		writeKeyValue_Bool(settings, "useMipmapping", s_graphicsSettings.useMipmapping);
@@ -562,6 +563,7 @@ namespace TFE_Settings
 		writeKeyValue_Int(settings, "hdTextures", s_enhancementsSettings.enableHdTextures);
 		writeKeyValue_Int(settings, "hdSprites", s_enhancementsSettings.enableHdSprites);
 		writeKeyValue_Int(settings, "hdHud", s_enhancementsSettings.enableHdHud);
+		writeKeyValue_Int(settings, "hdCutscenes", s_enhancementsSettings.enableHdCutscenes);
 	}
 
 	void writeHudSettings(FileStream& settings)
@@ -678,29 +680,33 @@ namespace TFE_Settings
 
 	void writeDarkForcesGameSettings(FileStream& settings)
 	{
-		writeKeyValue_Int(settings, "airControl", s_gameSettings.df_airControl);
+		writeKeyValue_Int(settings,  "airControl", s_gameSettings.df_airControl);
 		writeKeyValue_Bool(settings, "bobaFettFacePlayer", s_gameSettings.df_bobaFettFacePlayer);
 		writeKeyValue_Bool(settings, "smoothVUEs", s_gameSettings.df_smoothVUEs);
 		writeKeyValue_Bool(settings, "disableFightMusic", s_gameSettings.df_disableFightMusic);
 		writeKeyValue_Bool(settings, "enableAutoaim", s_gameSettings.df_enableAutoaim);
 		writeKeyValue_Bool(settings, "showSecretFoundMsg", s_gameSettings.df_showSecretFoundMsg);
+		writeKeyValue_Bool(settings, "showSecretCount", s_gameSettings.df_showSecretCount);
 		writeKeyValue_Bool(settings, "autorun", s_gameSettings.df_autorun);
 		writeKeyValue_Bool(settings, "crouchToggle", s_gameSettings.df_crouchToggle);
 		writeKeyValue_Bool(settings, "ignoreInfLimit", s_gameSettings.df_ignoreInfLimit);
 		writeKeyValue_Bool(settings, "stepSecondAlt", s_gameSettings.df_stepSecondAlt);
-		writeKeyValue_Int(settings, "pitchLimit", s_gameSettings.df_pitchLimit);
+		writeKeyValue_Int(settings,  "pitchLimit", s_gameSettings.df_pitchLimit);
 		writeKeyValue_Bool(settings, "solidWallFlagFix", s_gameSettings.df_solidWallFlagFix);
 		writeKeyValue_Bool(settings, "enableUnusedItem", s_gameSettings.df_enableUnusedItem);
 		writeKeyValue_Bool(settings, "jsonAiLogics", s_gameSettings.df_jsonAiLogics);
-		writeKeyValue_Bool(settings, "df_showReplayCounter", s_gameSettings.df_showReplayCounter);
-		writeKeyValue_Int(settings,  "df_recordFrameRate", s_gameSettings.df_recordFrameRate);
-		writeKeyValue_Int(settings,  "df_playbackFrameRate", s_gameSettings.df_playbackFrameRate);
-		writeKeyValue_Bool(settings, "df_enableRecording", s_gameSettings.df_enableRecording);
-		writeKeyValue_Bool(settings, "df_enableRecordingAll", s_gameSettings.df_enableRecordingAll);
-		writeKeyValue_Bool(settings, "df_demologging", s_gameSettings.df_demologging);
-		writeKeyValue_Bool(settings, "df_autoNextMission", s_gameSettings.df_autoEndMission);
-		writeKeyValue_Bool(settings, "df_showKeyUsed", s_gameSettings.df_showKeyUsed);
-		writeKeyValue_Bool(settings, "df_showKeyColors", s_gameSettings.df_showKeyColors);
+		writeKeyValue_Bool(settings, "showReplayCounter", s_gameSettings.df_showReplayCounter);
+		writeKeyValue_Int(settings,  "recordFrameRate", s_gameSettings.df_recordFrameRate);
+		writeKeyValue_Int(settings,  "playbackFrameRate", s_gameSettings.df_playbackFrameRate);
+		writeKeyValue_Bool(settings, "enableRecording", s_gameSettings.df_enableRecording);
+		writeKeyValue_Bool(settings, "enableRecordingAll", s_gameSettings.df_enableRecordingAll);
+		writeKeyValue_Bool(settings, "demologging", s_gameSettings.df_demologging);
+		writeKeyValue_Bool(settings, "autoNextMission", s_gameSettings.df_autoEndMission);
+		writeKeyValue_Bool(settings, "showKeyUsed", s_gameSettings.df_showKeyUsed);
+		writeKeyValue_Bool(settings, "showKeyColors", s_gameSettings.df_showKeyColors);
+		writeKeyValue_Bool(settings, "centerHudPos", s_gameSettings.df_centerHudPosition);
+		writeKeyValue_Bool(settings, "showMapSecrets", s_gameSettings.df_showMapSecrets);
+		writeKeyValue_Bool(settings, "showMapObjects", s_gameSettings.df_showMapObjects);
 	}
 
 	void writePerGameSettings(FileStream& settings)
@@ -945,6 +951,10 @@ namespace TFE_Settings
 		{
 			s_graphicsSettings.useSmoothDeltaTime = parseBool(value);
 		}
+		else if (strcasecmp("suppressGPUWarnings", key) == 0)
+		{
+			s_graphicsSettings.suppressGPUWarnings = parseBool(value);
+		}
 		else if (strcasecmp("bilinearSharpness", key) == 0)
 		{
 			s_graphicsSettings.bilinearSharpness = parseFloat(value);
@@ -1052,6 +1062,10 @@ namespace TFE_Settings
 		else if (strcasecmp("hdHud", key) == 0)
 		{
 			s_enhancementsSettings.enableHdHud = parseBool(value);
+		}
+		else if (strcasecmp("hdCutscenes", key) == 0)
+		{
+			s_enhancementsSettings.enableHdCutscenes = parseBool(value);
 		}
 	}
 
@@ -1397,6 +1411,10 @@ namespace TFE_Settings
 		{
 			s_gameSettings.df_showSecretFoundMsg = parseBool(value);
 		}
+		else if (strcasecmp("showSecretCount", key) == 0)
+		{
+			s_gameSettings.df_showSecretCount = parseBool(value);
+		}
 		else if (strcasecmp("autorun", key) == 0)
 		{
 			s_gameSettings.df_autorun = parseBool(value);
@@ -1429,41 +1447,53 @@ namespace TFE_Settings
 		{
 			s_gameSettings.df_jsonAiLogics = parseBool(value);
 		}
-		else if (strcasecmp("df_showReplayCounter", key) == 0)
+		else if (strcasecmp("showReplayCounter", key) == 0)
 		{
 			s_gameSettings.df_showReplayCounter = parseBool(value);
 		}		
-		else if (strcasecmp("df_recordFrameRate", key) == 0)
+		else if (strcasecmp("recordFrameRate", key) == 0)
 		{
 			s_gameSettings.df_recordFrameRate = parseInt(value);
 		}
-		else if (strcasecmp("df_playbackFrameRate", key) == 0)
+		else if (strcasecmp("playbackFrameRate", key) == 0)
 		{
 			s_gameSettings.df_playbackFrameRate = parseInt(value);
 		}
-		else if (strcasecmp("df_enableRecording", key) == 0)
+		else if (strcasecmp("enableRecording", key) == 0)
 		{
 			s_gameSettings.df_enableRecording = parseBool(value);
 		}
-		else if (strcasecmp("df_enableRecordingAll", key) == 0)
+		else if (strcasecmp("enableRecordingAll", key) == 0)
 		{
 			s_gameSettings.df_enableRecordingAll = parseBool(value);
 		}
-		else if (strcasecmp("df_demologging", key) == 0)
+		else if (strcasecmp("demologging", key) == 0)
 		{
 			s_gameSettings.df_demologging = parseBool(value);
 		}
-		else if (strcasecmp("df_autoNextMission", key) == 0)
+		else if (strcasecmp("autoNextMission", key) == 0)
 		{
 			s_gameSettings.df_autoEndMission = parseBool(value);
 		}
-		else if (strcasecmp("df_showKeyUsed", key) == 0)
+		else if (strcasecmp("showKeyUsed", key) == 0)
 		{
 			s_gameSettings.df_showKeyUsed = parseBool(value);
     }
-		else if (strcasecmp("df_showKeyColors", key) == 0)
+		else if (strcasecmp("showKeyColors", key) == 0)
 		{
 			s_gameSettings.df_showKeyColors = parseBool(value);
+		}
+		else if (strcasecmp("centerHudPos", key) == 0)
+		{
+			s_gameSettings.df_centerHudPosition = parseBool(value);
+		}
+		else if (strcasecmp("showMapSecrets", key) == 0)
+		{
+			s_gameSettings.df_showMapSecrets = parseBool(value);
+		}
+		else if (strcasecmp("showMapObjects", key) == 0)
+		{
+			s_gameSettings.df_showMapObjects = parseBool(value);
 		}
 	}
 
@@ -1508,7 +1538,7 @@ namespace TFE_Settings
 
 	bool validatePath(const char* path, const char* sentinel)
 	{
-		if (!FileUtil::directoryExits(path)) { return false; }
+		if (!FileUtil::directoryExists(path)) { return false; }
 
 		char sentinelPath[TFE_MAX_PATH];
 		sprintf(sentinelPath, "%s%s", path, sentinel);
@@ -1664,15 +1694,15 @@ namespace TFE_Settings
 	// Mod Settings/Overrides.
 	//////////////////////////////////////////////////
 
-	ModSettingLevelOverride getLevelOverrides(string levelName)
+	ModSettingLevelOverride* getLevelOverrides(string levelName)
 	{
 		string lowerLevel = TFE_A11Y::toLower(levelName);
 		if (s_modSettings.levelOverrides.find(lowerLevel) != s_modSettings.levelOverrides.end())
 		{
-			return s_modSettings.levelOverrides[lowerLevel];
+			return &s_modSettings.levelOverrides[lowerLevel];
 		}
-		ModSettingLevelOverride empty;
-		return empty;
+		
+		return nullptr;
 	}
 
 	ModSettingOverride parseJSonBoolToOverride(const cJSON* item)
@@ -1732,6 +1762,22 @@ namespace TFE_Settings
 		}
 		return value;
 	};
+
+	TextureData* parseTextureOverride(const cJSON* item)
+	{
+		TextureData* tex = nullptr;
+		if (cJSON_IsString(item))
+		{
+			char* filename = item->valuestring;
+			tex = bitmap_load(filename, 1, POOL_GAME);
+		}
+		else
+		{
+			TFE_System::logWrite(LOG_WARNING, "MOD_CONF", "Override '%s' is an invalid type and should be a filename (string). Ignoring override.", item->string);
+		}
+
+		return tex;
+	}
 
 	void parseTfeOverride(TFE_ModSettings* modSettings, const cJSON* tfeOverride)
 	{
@@ -1854,9 +1900,24 @@ namespace TFE_Settings
 
 							// Check if it is an bool-type override
 							int boolArraySize = sizeof(modBoolOverrides) / sizeof(modBoolOverrides[0]);
+							bool isBoolParam = false;
 							for (int i = 0; i < boolArraySize; ++i) {
 								if (strcmp(modBoolOverrides[i], overrideName) == 0) {
 									levelOverride.boolOverrideMap[overrideName] = parseJSonBoolToOverride(levelOverrideIter) == MSO_TRUE ? JTRUE : JFALSE;
+									isBoolParam = true;
+									break;
+								}
+							}
+
+							if (isBoolParam) { continue; }
+
+							// Texture override
+							int assetArraySize = sizeof(modTextureOverrides) / sizeof(modTextureOverrides[0]);
+							for (int i = 0; i < assetArraySize; i++)
+							{
+								if (strcmp(modTextureOverrides[i], overrideName) == 0)
+								{
+									levelOverride.textureOverrideMap[overrideName] = parseTextureOverride(levelOverrideIter);
 									break;
 								}
 							}
