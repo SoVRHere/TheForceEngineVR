@@ -32,6 +32,8 @@
 #include <TFE_ExternalData/dfLogics.h>
 #include <TFE_ExternalData/weaponExternal.h>
 #include <TFE_ExternalData/pickupExternal.h>
+#include <TFE_ExternalData/customProjectile.h>
+#include <TFE_ExternalData/customEffect.h>
 // Game
 #include <TFE_DarkForces/mission.h>
 #include <TFE_DarkForces/gameMusic.h>
@@ -526,6 +528,8 @@ namespace TFE_FrontEndUI
 		TFE_ExternalData::clearExternalProjectiles();					// clear projectiles
 		TFE_ExternalData::clearExternalEffects();						// clear effects
 		TFE_ExternalData::clearExternalPickups();						// clear pickups
+		TFE_ExternalData::clearCustomProjectiles();						// clear custom projectiles
+		TFE_ExternalData::clearCustomEffects();							// clear custom effects
 
 		// Restore the default messages if you are exiting a mod. 
 		if (TFE_System::modMessagesLoaded())
@@ -1127,8 +1131,6 @@ namespace TFE_FrontEndUI
 			FileUtil::fixupPath(testPath);
 
 			sprintf(testFile, "%sDARK.GOB", testPath);
-			strcpy(darkForces->sourcePath, testPath);
-			TFE_Paths::setPath(PATH_SOURCE_DATA, testPath);
 
 			if (FileUtil::exists(testFile))
 			{
@@ -1149,7 +1151,7 @@ namespace TFE_FrontEndUI
 
 		ImGui::Text("Outlaws:"); ImGui::SameLine(100*s_uiScale);
 		convertExtendedAsciiToUtf8(outlaws->sourcePath, utf8Path);
-		if (ImGui::InputText("##OutlawsSource", outlaws->sourcePath, 1024))
+		if (ImGui::InputText("##OutlawsSource", utf8Path, 1024))
 		{
 			convertUtf8ToExtendedAscii(utf8Path, outlaws->sourcePath);
 			// TODO
@@ -1201,18 +1203,6 @@ namespace TFE_FrontEndUI
 			gameSettings->df_enableAutoaim = enableAutoaim;
 		}
 
-		bool showSecretMsg = gameSettings->df_showSecretFoundMsg;
-		if (ImGui::Checkbox("Show Secret Found Message", &showSecretMsg))
-		{
-			gameSettings->df_showSecretFoundMsg = showSecretMsg;
-		}
-
-		bool showKeysUsed = gameSettings->df_showKeyUsed;
-		if (ImGui::Checkbox("Show Key Used messages", &showKeysUsed))
-		{
-			gameSettings->df_showKeyUsed = showKeysUsed;
-		}
-
 		bool autorun = gameSettings->df_autorun;
 		if (ImGui::Checkbox("Autorun", &autorun))
 		{
@@ -1243,47 +1233,39 @@ namespace TFE_FrontEndUI
 			gameSettings->df_autoEndMission = autoEndMission;
 		}
 
-		bool showKeyColors = gameSettings->df_showKeyColors;
-		if (ImGui::Checkbox("Show the key color of the door on the map", &showKeyColors))
-		{
-			gameSettings->df_showKeyColors = showKeyColors;
-		}
-
 		ImGui::Separator();
 
 		ImGui::PushFont(s_versionFont);
-		ImGui::LabelText("##ConfigLabel", "Engine Settings");
+		ImGui::LabelText("##ConfigLabel", "UI Settings");
 		ImGui::PopFont();
-		
-		bool ignoreInfLimit = gameSettings->df_ignoreInfLimit;
-		if (ImGui::Checkbox("Remove INF Item Limit (requires restart)", &ignoreInfLimit))
+
+		if (ImGui::TreeNodeEx("Expand UI Settings", ImGuiTreeNodeFlags_None))
 		{
-			gameSettings->df_ignoreInfLimit = ignoreInfLimit;
+			ImGui::Checkbox("Show the key color of the door on the map", &gameSettings->df_showKeyColors);
+			ImGui::Checkbox("Center the hud LADATA overlay", &gameSettings->df_centerHudPosition);
+			ImGui::Checkbox("Show Secret Found Message", &gameSettings->df_showSecretFoundMsg);
+			ImGui::Checkbox("Show the Total Number of Secrets Found", &gameSettings->df_showSecretCount);
+			ImGui::Checkbox("Show Key Used messages", &gameSettings->df_showKeyUsed);
+			ImGui::Checkbox("Show Secrets on the AutoMap", &gameSettings->df_showMapSecrets);
+			ImGui::Checkbox("Show Objects on the AutoMap", &gameSettings->df_showMapObjects);
+			ImGui::TreePop();
 		}
 
-		bool stepSecondAlt = gameSettings->df_stepSecondAlt;
-		if (ImGui::Checkbox("Allow the player to step up onto second heights, similar to normal stairs.", &stepSecondAlt))
+		ImGui::PushFont(s_versionFont);
+		ImGui::LabelText("##ConfigLabel", "Engine Settings");
+		ImGui::PopFont(); 
+
+		if (ImGui::TreeNodeEx("Expand Engine Settings", ImGuiTreeNodeFlags_None))
 		{
-			gameSettings->df_stepSecondAlt = stepSecondAlt;
+			ImGui::Checkbox("Remove INF Item Limit (requires restart)", &gameSettings->df_ignoreInfLimit);
+			ImGui::Checkbox("Allow the player to step up onto second heights, similar to normal stairs.", &gameSettings->df_stepSecondAlt);
+			ImGui::Checkbox("Enforce solid wall flag for moving walls", &gameSettings->df_solidWallFlagFix);
+			ImGui::Checkbox("Enable unused inventory item \"ITEM10\"", &gameSettings->df_enableUnusedItem);
+			ImGui::Checkbox("Enhanced AI logics (requires restart)", &gameSettings->df_jsonAiLogics);
+			ImGui::TreePop();
 		}
 
-		bool solidWallFlagFix = gameSettings->df_solidWallFlagFix;
-		if (ImGui::Checkbox("Enforce solid wall flag for moving walls", &solidWallFlagFix))
-		{
-			gameSettings->df_solidWallFlagFix = solidWallFlagFix;
-		}
-
-		bool enableUnusedItem = gameSettings->df_enableUnusedItem;
-		if (ImGui::Checkbox("Enable unused inventory item \"ITEM10\"", &enableUnusedItem))
-		{
-			gameSettings->df_enableUnusedItem = enableUnusedItem;
-		}
-
-		bool jsonAiLogics = gameSettings->df_jsonAiLogics;
-		if (ImGui::Checkbox("Enhanced AI logics (requires restart)", &jsonAiLogics))
-		{
-			gameSettings->df_jsonAiLogics = jsonAiLogics;
-		}		
+		ImGui::Spacing();
 
 		if (s_drawNoGameDataMsg)
 		{
@@ -1325,8 +1307,9 @@ namespace TFE_FrontEndUI
 					sprintf(testFile, "%sDARK.GOB", filePath);
 					if (FileUtil::exists(testFile))
 					{
-						strcpy(darkForces->sourcePath, filePath);
-						TFE_Paths::setPath(PATH_SOURCE_DATA, darkForces->sourcePath);
+						strcpy(darkForces->sourcePath, filePath);		
+						TFE_System::logWrite(LOG_MSG, "Settings", "Updating Game Path to %s", filePath);
+						TFE_Paths::setPath(PATH_SOURCE_DATA, filePath);
 					}
 					else
 					{
@@ -1360,7 +1343,6 @@ namespace TFE_FrontEndUI
 			ImGui::EndPopup();
 		}
 
-		
 		if (ImGui::Button("Reset Game Settings"))
 		{
 			TFE_Settings::resetGameSettings();
@@ -1374,8 +1356,8 @@ namespace TFE_FrontEndUI
 		ImGui::PopFont();
 		const TFE_Game* game = TFE_Settings::getGame();
 		if (game->id == Game_Dark_Forces && s_menuRetState == APP_STATE_GAME)
-		{ 
-			configDarkForcesCheats(); 
+		{
+			configDarkForcesCheats();
 		}
 		else
 		{
@@ -1452,11 +1434,11 @@ namespace TFE_FrontEndUI
 		if (ImGui::Button("Reveal full map (LACDS)"))
 		{
 			TFE_DarkForces::cheat_revealMap();
-		}	
+		}
 		if (ImGui::Button("Grant supercharge (LARANDY)"))
 		{
 			TFE_DarkForces::cheat_supercharge();
-		}	
+		}
 		if (ImGui::Button("Grant all weapons/max health (LAPOSTAL)"))
 		{
 			TFE_DarkForces::cheat_postal();
@@ -1499,10 +1481,11 @@ namespace TFE_FrontEndUI
 		if (enhanceGOBExists())
 		{
 			TFE_Settings_Enhancements* enhancements = TFE_Settings::getEnhancementsSettings();
-			bool useHdAssets = enhancements->enableHdTextures && enhancements->enableHdSprites && enhancements->enableHdHud;
+			bool useHdAssets = enhancements->enableHdTextures && enhancements->enableHdSprites && enhancements->enableHdHud && enhancements->enableHdCutscenes;
 			enhancements->enableHdTextures = !useHdAssets;
 			enhancements->enableHdSprites = !useHdAssets;
 			enhancements->enableHdHud = !useHdAssets;
+			enhancements->enableHdCutscenes = !useHdAssets;
 
 			renderBackground(true);
 			return useHdAssets;
@@ -1557,10 +1540,14 @@ namespace TFE_FrontEndUI
 			enhancements->enableHdTextures = false;
 			enhancements->enableHdSprites = false;
 			enhancements->enableHdHud = false;
+
+			// Special case for cutscenes. You should still be able to watch them in 8bit mode
+			// So only disable the cutscenes if the enhanced gob doesn't exist.
+			if (!enhancedGobExists) { enhancements->enableHdCutscenes = false; }
 		}
 
 		ImGui::Spacing();
-		bool useHdAssets = enhancements->enableHdTextures && enhancements->enableHdSprites && enhancements->enableHdHud;
+		bool useHdAssets = enhancements->enableHdTextures && enhancements->enableHdSprites && enhancements->enableHdHud && enhancements->enableHdCutscenes;
 		if (ImGui::Checkbox("Use HD Assets", &useHdAssets))
 		{
 			toggleEnhancements();
@@ -1592,6 +1579,23 @@ namespace TFE_FrontEndUI
 			ImGui::PopItemFlag();
 			ImGui::PopStyleVar();
 		}
+
+		#ifdef ENABLE_OGV_CUTSCENES
+		ImGui::Spacing();
+		ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.25f, 1.0f));
+		ImGui::TextWrapped("HD cutscenes can be used if remaster assets exist. True\n"
+			               "Color is not required.");
+		ImGui::PopStyleColor();
+
+		// Special case for HD cutscenes
+		bool useHdCutscenes = enhancements->enableHdCutscenes;
+		if (enhancedGobExists && ImGui::Checkbox("Use HD Cutscenes", &useHdCutscenes))
+		{
+			enhancements->enableHdCutscenes = useHdCutscenes;
+			forceTextureUpdate = true;
+		}
+        #endif
+
 		return forceTextureUpdate;
 	}
 
@@ -2055,7 +2059,7 @@ namespace TFE_FrontEndUI
 			size.y *= s_uiScale;
 
 			ImGui::Image(TFE_RenderBackend::getGpuPtr(s_replayImageView), size,
-				ImVec2(0, 0), ImVec2(1, 1), ImVec4(1, 1, 1, 1), ImVec4(0.5f, 0.5f, 0.5f, 1.0f));			
+				ImVec2(0, 0), ImVec2(1, 1), ImVec4(1, 1, 1, 1), ImVec4(0.5f, 0.5f, 0.5f, 1.0f));
 
 			// Replay Info
 			size.y = 200 * s_uiScale;
@@ -2130,7 +2134,7 @@ namespace TFE_FrontEndUI
 			#else
 			size.y = 100 * s_uiScale;
 			#endif		
-			
+
 			ImGui::BeginChild("##InfoWithBorderRecord", size, true);
 			{
 				ImGui::TextWrapped("When this checkbox is pressed simply start any mission and the game will record the mission for replay.");
@@ -2206,17 +2210,15 @@ namespace TFE_FrontEndUI
 			}
 			ImGui::EndChild();
 
-			#ifdef _WIN32
 			ImGui::Spacing();
-			if (ImGui::Button("Open Replay Folder")) 
+			if (ImGui::Button("Open Replay Folder"))
 			{
 				if (!TFE_System::osShellExecute(s_replayDir, NULL, NULL, false))
 				{
 					TFE_System::logWrite(LOG_ERROR, "frontEndUi", "Failed to open the directory: '%s'", s_replayDir);
 				}
 			}
-			ImGui::SameLine(0.0f);
-            #endif		
+			ImGui::SameLine(0.0f);	
 
 			if (ImGui::Button("Refresh Demo Folder"))
 			{
@@ -2255,7 +2257,7 @@ namespace TFE_FrontEndUI
 				bool selected = i == s_selectedReplay;
 				const char* replayName;
 				replayName = header[i - listOffset].fileName;
-				
+
 				// Color things differently depending if the mod exists or if the version is valid.
 				if (!TFE_SaveSystem::versionValid(s_replayDirContents[s32(i) - listOffset].saveVersion))
 				{
@@ -2344,7 +2346,7 @@ namespace TFE_FrontEndUI
 						loadReplayWrapper(replayFilePath, s_modReplayName, s_replayLevelId);
 					}
 				}
-				else 
+				else
 				{
 					ImGui::Text("Mod %s not found", s_modReplayName);
 				}
@@ -2723,7 +2725,7 @@ namespace TFE_FrontEndUI
 				inputMapping("Pause",             IADF_PAUSE);
 				inputMapping("Automap",           IADF_AUTOMAP);
 				inputMapping("Screenshot",        IADF_SCREENSHOT);
-				inputMapping("GIF Recording",     IADF_GIF_RECORD);				
+				inputMapping("GIF Recording",     IADF_GIF_RECORD);
 				Tooltip("Display a countdown and then start recording a GIF. Press again to stop recording.");
 				inputMapping("Instant GIF Record",IADF_GIF_RECORD_NO_COUNTDOWN);
 				Tooltip("Start recording immediately without the countdown. Press again to stop recording.");
@@ -2942,7 +2944,7 @@ namespace TFE_FrontEndUI
 		ImGui::PopStyleVar();
 		ImGui::SetCursorPosY(yNext + (s_inputMappingOpen ? inputMappingHeight : 29.0f*s_uiScale));
 	}
-		
+
 	void configGraphics()
 	{
 		TFE_Settings_Graphics* graphics = TFE_Settings::getGraphicsSettings();
@@ -3229,7 +3231,7 @@ namespace TFE_FrontEndUI
 			graphics->saturation = 1.0f;
 			graphics->gamma = 1.0f;
 		}
-				
+
 		ImGui::Separator();
 
 		//////////////////////////////////////////////////////
@@ -3282,7 +3284,7 @@ namespace TFE_FrontEndUI
 		}
 
 		const ColorCorrection colorCorrection = { graphics->brightness, graphics->contrast, graphics->saturation, graphics->gamma };
-		TFE_RenderBackend::setColorCorrection(graphics->colorCorrection, &colorCorrection, bloomChanged);		
+		TFE_RenderBackend::setColorCorrection(graphics->colorCorrection, &colorCorrection, bloomChanged);
 	}
 
 	void configHud()
@@ -3512,7 +3514,7 @@ namespace TFE_FrontEndUI
 		}
 		Tooltip("Appears in upper-left corner of screen. If disabled, a generic 'recording saved' message will be shown instead.");
 
-	#ifdef _WIN32
+
 		ImGui::Separator();
 		if (ImGui::Button("Open Log Folder"))
 		{
@@ -3532,14 +3534,13 @@ namespace TFE_FrontEndUI
 				TFE_System::logWrite(LOG_ERROR, "Settings", "Failed to open directory: '%s'", screenshotDir);
 			}
 		}
-	#endif
+
 		const char * resetMsg = "             Reset All Settings";
 
 		if (ImGui::Button("Reset All Settings"))
 		{
 			ImGui::OpenPopup(resetMsg);
-		}	
-
+		}
 
 		if (ImGui::BeginPopupModal(resetMsg, NULL, ImGuiWindowFlags_AlwaysAutoResize))
 		{
@@ -3559,8 +3560,7 @@ namespace TFE_FrontEndUI
 			}
 
 			ImGui::EndPopup();
-			
-		}		
+		}
 	}
 
 	void DrawFontSizeCombo(float labelWidth, float valueWidth, const char* label, const char* comboTag, s32* currentValue)
@@ -3609,7 +3609,7 @@ namespace TFE_FrontEndUI
 		ImGui::SetNextItemWidth(valueWidth);
 		ImGui::SliderFloat3(tag, value, min, max);
 	}
-	
+
 	void DrawLabelledIntSlider(float labelWidth, float valueWidth, const char* label, const char* tag, int* value, int min, int max)
 	{
 		ImGui::SetNextItemWidth(labelWidth);
@@ -3618,7 +3618,7 @@ namespace TFE_FrontEndUI
 		ImGui::SetNextItemWidth(valueWidth);
 		ImGui::SliderInt(tag, value, min, max);
 	}
-	
+
 	string DrawFileListCombo(const char* tag, string currentFileName, string currentFilePath, TFE_A11Y::FilePathList filePathList)
 	{
 		// We only display the file name in the dropdown, but internally track the full path.
@@ -3633,14 +3633,14 @@ namespace TFE_FrontEndUI
 				string path = paths->at(n);
 				bool is_selected = (currentFilePath == path);
 				if (ImGui::Selectable(name.c_str(), is_selected)) { currentFilePath = path; }
-				if (is_selected) 
-				{ 
+				if (is_selected)
+				{
 					ImGui::SetItemDefaultFocus();
 				}
 			}
 			ImGui::EndCombo();
 		}
-		return currentFilePath;	
+		return currentFilePath;
 	}
 
 	void pickCurrentResolution()
@@ -3691,7 +3691,7 @@ namespace TFE_FrontEndUI
 		ImGui::PopFont();
 
 		// Check status, and init the caption system if necessary.
-		if (TFE_A11Y::getCaptionSystemStatus() == TFE_A11Y::CC_NOT_LOADED) 
+		if (TFE_A11Y::getCaptionSystemStatus() == TFE_A11Y::CC_NOT_LOADED)
 		{
 			TFE_A11Y::refreshFiles();
 		}
@@ -3797,7 +3797,7 @@ namespace TFE_FrontEndUI
 		string tag2 = "##LB" + to_string(index);
 		string tag3 = "##LVS" + to_string(index);
 		string tag4 = "##LWS" + to_string(index);
-		ImGui::LabelText("##ConfigLabel3", label1.c_str());
+		ImGui::LabelText("##ConfigLabel3", "%s", label1.c_str());
 		DrawLabelledFloatSlider(labelW, valueW * 0.5f - 2, "  Brightness", tag2.c_str(), &RClassic_Float::s_cameraLight[index].brightness, 0.0f, 8.0f);
 		Tooltip("Values above 1.0 only affect obliquely lit faces.");
 
@@ -4003,6 +4003,7 @@ namespace TFE_FrontEndUI
 		s_inputConfig = inputMapping_get();
 		TFE_Settings_Game* gameSettings = TFE_Settings::getGameSettings();
 		TFE_Settings_Graphics* graphicsSettings = TFE_Settings::getGraphicsSettings();
+		TFE_Settings_Enhancements* enhancements = TFE_Settings::getEnhancementsSettings();
 
 		switch (temp)
 		{
@@ -4011,15 +4012,23 @@ namespace TFE_FrontEndUI
 			{
 				// Controls
 				s_inputConfig->mouseMode = MMODE_LOOK;
-				// Game
+				// Game			
 				gameSettings->df_showSecretFoundMsg = true;
+				gameSettings->df_showSecretCount = true;
+				gameSettings->df_showKeyUsed = true;
 				gameSettings->df_bobaFettFacePlayer = true;
 				gameSettings->df_smoothVUEs = true;
-				gameSettings->df_pitchLimit = (temp == TEMPLATE_MODERN) ? PITCH_MAXIMUM : PITCH_VANILLA_PLUS;
 				gameSettings->df_solidWallFlagFix = true;
 				gameSettings->df_enableUnusedItem = true;
 				gameSettings->df_jsonAiLogics = true;
-				gameSettings->df_enableUnusedItem = true;
+				gameSettings->df_ignoreInfLimit = true;
+				gameSettings->df_showKeyColors = true;
+				gameSettings->df_stepSecondAlt = true; 
+				gameSettings->df_centerHudPosition = true;
+				gameSettings->df_showMapSecrets = false;
+				gameSettings->df_showMapObjects = true;
+				gameSettings->df_pitchLimit = (temp == TEMPLATE_MODERN) ? PITCH_MAXIMUM : PITCH_VANILLA_PLUS;
+
 				// Graphics
 				graphicsSettings->rendererIndex = RENDERER_HARDWARE;
 				graphicsSettings->skyMode = SKYMODE_CYLINDER;
@@ -4059,6 +4068,14 @@ namespace TFE_FrontEndUI
 				reticle_setShape(graphicsSettings->reticleIndex);
 				reticle_setScale(graphicsSettings->reticleScale);
 				reticle_setColor(&graphicsSettings->reticleRed);
+
+				// Enhancements
+				bool useHD = temp == TEMPLATE_MODERN && enhanceGOBExists();
+				enhancements->enableHdTextures = useHD;
+				enhancements->enableHdSprites = useHD;
+				enhancements->enableHdHud = useHD;
+				enhancements->enableHdCutscenes = useHD;
+
 			} break;
 			case TEMPLATE_VANILLA:
 			{
@@ -4066,11 +4083,19 @@ namespace TFE_FrontEndUI
 				s_inputConfig->mouseMode = MMODE_TURN;
 				// Game
 				gameSettings->df_showSecretFoundMsg = false;
+				gameSettings->df_showSecretCount = false;
+				gameSettings->df_showKeyUsed = false;
 				gameSettings->df_bobaFettFacePlayer = false;
 				gameSettings->df_smoothVUEs = false;
 				gameSettings->df_solidWallFlagFix = false;
 				gameSettings->df_enableUnusedItem = false;
 				gameSettings->df_jsonAiLogics = false;
+				gameSettings->df_ignoreInfLimit = false;
+				gameSettings->df_showKeyColors = false;
+				gameSettings->df_stepSecondAlt = false;
+				gameSettings->df_centerHudPosition = false;
+				gameSettings->df_showMapSecrets = false;
+				gameSettings->df_showMapObjects = true;
 				// Graphics
 				graphicsSettings->rendererIndex = RENDERER_SOFTWARE;
 				graphicsSettings->widescreen = false;

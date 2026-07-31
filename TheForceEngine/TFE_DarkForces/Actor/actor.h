@@ -92,6 +92,9 @@ enum ActorDispatchFlags
 	ACTOR_PLAYER_VISIBLE	= FLAG_BIT(3),
 	ACTOR_OFFIC_ALERT		= FLAG_BIT(4),	// use officer alert sounds
 	ACTOR_TROOP_ALERT		= FLAG_BIT(5),	// use stormtrooper alert sounds
+
+	// Added for TFE
+	ACTOR_DYING             = FLAG_BIT(6),
 };
 
 // Forward Declarations.
@@ -129,6 +132,10 @@ struct ActorDispatch
 
 	Task* freeTask;
 	u32 flags;
+
+	// Scriptcall indexes
+	s32 deathScriptCall;
+	s32 alertScriptCall;
 };
 
 struct ActorState
@@ -191,6 +198,7 @@ namespace TFE_DarkForces
 
 	AttackModule* actor_createAttackModule(ActorDispatch* dispatch);
 	ThinkerModule* actor_createThinkerModule(ActorDispatch* dispatch);
+	fixed16_16 actor_initAttackModule(AttackModule* attackMod, Logic* logic);
 	void actor_thinkerModuleInit(ThinkerModule* thinkerMod);
 	void actor_setupInitAnimation();
 	void actor_setDeathCollisionFlags();

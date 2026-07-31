@@ -7,6 +7,8 @@
 #include <TFE_ExternalData/dfLogics.h>
 #include <TFE_ExternalData/weaponExternal.h>
 #include <TFE_ExternalData/pickupExternal.h>
+#include <TFE_ExternalData/customProjectile.h>
+#include <TFE_ExternalData/customEffect.h>
 #include <TFE_Settings/gameSourceData.h>
 #include <TFE_System/system.h>
 #include <cassert>
@@ -257,6 +259,8 @@ namespace TFE_SaveSystem
 			TFE_ExternalData::clearExternalProjectiles();
 			TFE_ExternalData::clearExternalEffects();
 			TFE_ExternalData::clearExternalPickups();
+			TFE_ExternalData::clearCustomProjectiles();
+			TFE_ExternalData::clearCustomEffects();
 
 			ret = s_game->serializeGameState(&stream, filename, false);
 			stream.close();
@@ -332,7 +336,7 @@ namespace TFE_SaveSystem
 	{
 		char relativeBasePath[TFE_MAX_PATH];
 		TFE_Paths::appendPath(PATH_USER_DOCUMENTS, "Saves/", relativeBasePath);
-		if (!FileUtil::directoryExits(s_gameSavePath))
+		if (!FileUtil::directoryExists(s_gameSavePath))
 		{
 			FileUtil::makeDirectory(relativeBasePath);
 		}
@@ -341,7 +345,7 @@ namespace TFE_SaveSystem
 		sprintf(relativePath, "Saves/%s/", TFE_Settings::c_gameName[id]);
 
 		TFE_Paths::appendPath(PATH_USER_DOCUMENTS, relativePath, s_gameSavePath);
-		if (!FileUtil::directoryExits(s_gameSavePath))
+		if (!FileUtil::directoryExists(s_gameSavePath))
 		{
 			FileUtil::makeDirectory(s_gameSavePath);
 		}

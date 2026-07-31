@@ -26,6 +26,9 @@ namespace TFE_DarkForces
 		s32 amount;
 		s32 msgId[2];
 		s32 maxAmount;
+
+		// Scriptcall index
+		s32 pickupScriptCall;
 	};
 
 	ItemId getPickupItemId(const char* keyword);
@@ -42,7 +45,6 @@ namespace TFE_DarkForces
 	void pickupLogic_serializeTasks(Stream* stream);
 	void pickupLogic_serialize(Logic*& logic, SecObject* obj, Stream* stream);
 	
-	extern u32 s_playerDying;
 	extern Task* s_superchargeTask;
 	extern Task* s_invincibilityTask;
 	extern Task* s_gasmaskTask;

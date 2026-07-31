@@ -66,8 +66,8 @@ namespace TFE_Input
 	bool showReplayMsgFrame = false;
 	bool alwaysRecord = false;
 	
-	extern f64 gameFrameLimit = 0;	
-	extern f64 replayFrameLimit = 0;
+	f64 gameFrameLimit = 0;
+	f64 replayFrameLimit = 0;
 
 	// Notification for replay system initialization. 
 	bool demoStartNotified = false;
@@ -96,12 +96,12 @@ namespace TFE_Input
 		TFE_Paths::fixupPathAsDirectory(s_replayDir);
 
 		// Check TFE/Replays first 
-		if (!FileUtil::directoryExits(s_replayDir))
+		if (!FileUtil::directoryExists(s_replayDir))
 		{
 			sprintf(s_replayDir, "%sReplays/", TFE_Paths::getPath(PATH_USER_DOCUMENTS));
 			TFE_Paths::fixupPathAsDirectory(s_replayDir);
 			// Otherwise check <USER>/TheForceEngine/Replays
-			if (!FileUtil::directoryExits(s_replayDir))
+			if (!FileUtil::directoryExists(s_replayDir))
 			{
 				FileUtil::makeDirectory(s_replayDir);
 			}

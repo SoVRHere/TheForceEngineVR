@@ -53,19 +53,28 @@ include(GNUInstallDirs)
 option(ENABLE_TFE "Enable building “The Force Engine”" ON)
 option(ENABLE_SYSMIDI "Enable System-MIDI Output if RTMidi is available" ON)
 option(ENABLE_EDITOR "Enable TFE Editor" OFF)
-option(ENABLE_ADJUSTABLEHUD_MOD "Install the build‑in “AdjustableHud mod” with TFE" ON)
+option(ENABLE_OGV_CUTSCENES "Enable OGV (Ogg Theora) video cutscene support" OFF)
+option(ENABLE_ADJUSTABLEHUD_MOD "Install the build‑in 'AdjustableHud mod' with TFE" ON)
 
 if(ENABLE_TFE)
 	add_executable(tfe)
-	set_target_properties(tfe PROPERTIES OUTPUT_NAME "theforceengine")
+
+	if(APPLE)
+		# cant have executable have the same name as the cmake working dir
+		set_target_properties(tfe PROPERTIES OUTPUT_NAME "theforceengine_osx")
+	else()
+		set_target_properties(tfe PROPERTIES OUTPUT_NAME "theforceengine")
+	endif()
 
 	if(UNIX)
 		set(THREADS_PREFER_PTHREAD_FLAG ON)
 		find_package(Threads REQUIRED)
 		find_package(PkgConfig REQUIRED)
-		find_package(SDL2 REQUIRED)
+		pkg_check_modules(SDL2 REQUIRED sdl2)
 		pkg_check_modules(SDL2_IMAGE REQUIRED SDL2_image)
+
 		target_include_directories(tfe PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+
 		target_include_directories(tfe PRIVATE ${SDL2_INCLUDE_DIRS})
 		target_include_directories(tfe PRIVATE ${SDL2_IMAGE_INCLUDE_DIRS})
 		target_link_libraries(tfe PRIVATE ${SDL2_LIBRARIES}
@@ -73,6 +82,8 @@ if(ENABLE_TFE)
 					${CMAKE_DL_LIBS}
 					Threads::Threads
 		)
+		
+		target_link_directories(tfe PRIVATE ${SDL2_LIBRARY_DIRS} ${SDL2_IMAGE_LIBRARY_DIRS})		
 
 		# set up build directory to be able to run TFE immediately: symlink
 		# the necessary support file directories into the build env.
@@ -108,6 +119,17 @@ if(ENABLE_TFE)
 	endif()
 	if(ENABLE_EDITOR)
 		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DBUILD_EDITOR")
+	endif()
+	if(ENABLE_OGV_CUTSCENES)
+		if(UNIX)
+			pkg_check_modules(THEORA REQUIRED theoradec)
+			pkg_check_modules(OGG REQUIRED ogg)
+			pkg_check_modules(VORBIS REQUIRED vorbis vorbisfile)
+			target_include_directories(tfe PRIVATE ${THEORA_INCLUDE_DIRS} ${OGG_INCLUDE_DIRS} ${VORBIS_INCLUDE_DIRS})
+			target_link_libraries(tfe PRIVATE ${THEORA_LIBRARIES} ${OGG_LIBRARIES} ${VORBIS_LIBRARIES})
+			target_link_directories(tfe PRIVATE ${THEORA_LIBRARY_DIRS} ${OGG_LIBRARY_DIRS} ${VORBIS_LIBRARY_DIRS})
+		endif()
+		add_definitions("-DENABLE_OGV_CUTSCENES")
 	endif()
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DBUILD_FORCE_SCRIPT")
 

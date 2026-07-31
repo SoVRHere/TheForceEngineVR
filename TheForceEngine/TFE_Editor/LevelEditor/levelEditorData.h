@@ -311,6 +311,7 @@ namespace LevelEditor
 	bool loadFromTFL(const char* name);
 	bool loadFromTFLWithPath(const char* filePath);
 	void updateLevelBounds(EditorSector* sector = nullptr);
+	void updateCurrentLayer(s32* oldLayerRange);
 
 	bool exportLevel(const char* path, const char* name, const StartPoint* start);
 	bool exportSelectionToText(std::string& buffer);
@@ -335,6 +336,7 @@ namespace LevelEditor
 	void level_createFeatureTextureSnapshot(TFE_Editor::SnapshotBuffer* buffer, s32 count, const FeatureId* feature);
 	void level_createEntiyListSnapshot(TFE_Editor::SnapshotBuffer* buffer, s32 sectorId);
 	void level_createGuidelineSnapshot(TFE_Editor::SnapshotBuffer* buffer);
+	void level_createLevelNoteSnapshot(TFE_Editor::SnapshotBuffer* buffer);
 	void level_createSingleGuidelineSnapshot(TFE_Editor::SnapshotBuffer* buffer, s32 index);
 
 	void level_createLevelSectorSnapshotSameAssets(std::vector<EditorSector>& sectors);
@@ -348,6 +350,7 @@ namespace LevelEditor
 	void level_unpackEntiyListSnapshot(u32 size, void* data);
 	void level_unpackGuidelineSnapshot(u32 size, void* data);
 	void level_unpackSingleGuidelineSnapshot(u32 size, void* data);
+	void level_unpackLevelNoteSnapshot(u32 size, void* data);
 	
 	// Spatial Queries
 	s32  findSectorByName(const char* name, s32 excludeId = -1);

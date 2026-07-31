@@ -4,7 +4,7 @@ if(WIN32)
 		"${CMAKE_CURRENT_SOURCE_DIR}/fileutil.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/paths.cpp"
         )
-elseif(LINUX)
+elseif(UNIX)
 	target_sources(tfe PRIVATE
 		"${CMAKE_CURRENT_SOURCE_DIR}/filestream-posix.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/fileutil-posix.cpp"
@@ -12,7 +12,6 @@ elseif(LINUX)
 	)
 endif()
 target_sources(tfe PRIVATE
-		"${CMAKE_CURRENT_SOURCE_DIR}/filewriterAsync.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/memorystream.cpp"
 		)
 

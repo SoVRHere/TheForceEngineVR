@@ -55,18 +55,25 @@ namespace TFE_DarkForces
 	enum Timing : u32
 	{
 		SHOOT_DELAY_RANGE_VANILLA = 291,
-		SHOOT_DELAY_RANGE_ENH = 145,
+		SHOOT_DELAY_RANGE_ENH = 291,
+		ATTACK_POINT_DURATION = 728,    // 5 seconds
+		ATTACK_CIRCLE_DURATION = 1456,  // 10 seconds
+		ATTACK_FIGURE8_DURATION = 2184, // 15 seconds
+		FIGURE8_INTERVAL = 291,         // 2 seconds
+		CHANGE_HEIGHT_INTERVAL = 728,   // 5 seconds
+		SEARCH_DURATION = 8739,         // 60 seconds
+		SEARCH_PHASE_INTERVAL = 1456,   // 10 seconds
 	};
 
 	struct BobaFettMoveState
 	{
 		vec3_fixed target;
-		fixed16_16 yAccel;
+		fixed16_16 thrustFactor;
 		SoundSourceId soundSrc;
 		angle14_32 thrustPitchRange;
-		fixed16_16 thrustPitch;
+		angle14_32 thrustPitch;
 		fixed16_16 thrustScale;
-		fixed16_16 accel;
+		fixed16_16 lateralAccel;
 	};
 
 	struct BobaFett
@@ -256,22 +263,24 @@ namespace TFE_DarkForces
 			fixed16_16 dy = target - pos;
 			if (vel != dy)
 			{
-				vel = max(0, dy - vel);
+				fixed16_16 targetThrust = max(0, dy - vel);
 				*thrustPitchRange = clamp(ONE_16 - (vel - 0x13333), 0, ONE_16);
-				vel = min(ONE_16, vel);
-
-				fixed16_16 maxChange = mul16(TFE_Jedi::abs(dy) + FIXED(4), s_deltaTime);
-				return clamp(vel - curThrust, -maxChange, maxChange) + curThrust;
+				
+				s32 maxDelta = mul16(TFE_Jedi::abs(dy) + FIXED(4), s_deltaTime);
+				fixed16_16 deltaThrust = min(ONE_16, targetThrust) - curThrust;
+				fixed16_16 newThrust = clamp(deltaThrust, -maxDelta, maxDelta) + curThrust;
+				return newThrust;
 			}
 		}
 		return 0;
 	}
 
-	void bobaFett_handleForces(PhysicsActor* physicsActor, fixed16_16 thrustScale, angle14_32 thrustPitch, fixed16_16 thrustMax, SoundSourceId soundSrc)
+	void bobaFett_handleForces(PhysicsActor* physicsActor, fixed16_16 thrustScale, angle14_32 thrustPitch, fixed16_16 thrustFactor, SoundSourceId soundSrc)
 	{
 		SecObject* obj = physicsActor->moveMod.header.obj;
 		if (thrustScale)
 		{
+			// Set the sound effect volume
 			physicsActor->moveSndId = sound_maintain(physicsActor->moveSndId, soundSrc, obj->posWS);
 			if (s_lastMaintainVolume)
 			{
@@ -279,7 +288,7 @@ namespace TFE_DarkForces
 				sound_setVolume(physicsActor->moveSndId, vol);
 			}
 
-			const fixed16_16 thrust = mul16(mul16(thrustScale, thrustMax), s_deltaTime);
+			const fixed16_16 thrust = mul16(mul16(thrustScale, thrustFactor), s_deltaTime);
 
 			// Vertical thrust.
 			fixed16_16 sinPitch, cosPitch;
@@ -322,7 +331,7 @@ namespace TFE_DarkForces
 			obj->yaw = (obj->yaw + angleDelta) & ANGLE_MASK;
 		}
 
-		// Adjust the vertical movement angle.
+		// Adjust the thrust pitch.
 		fixed16_16 dist = distApprox(obj->posWS.x, obj->posWS.z, moveState->target.x, moveState->target.z);
 		fixed16_16 scaledDist = min(ONE_16, dist >> 7);
 		fixed16_16 newThrustPitch = mul16(scaledDist, FIXED(100));
@@ -331,27 +340,29 @@ namespace TFE_DarkForces
 		sinCosFixed(velAngle, &cosVelAngle, &sinVelAngle);
 
 		newThrustPitch -= (mul16(physicsActor->vel.z, cosVelAngle) + mul16(physicsActor->vel.x, sinVelAngle));
-		newThrustPitch = clamp(div16(newThrustPitch, FIXED(100)), moveState->thrustPitchRange, -moveState->thrustPitchRange);
+		newThrustPitch = clamp(div16(newThrustPitch, FIXED(100)), -moveState->thrustPitchRange, moveState->thrustPitchRange);
 
-		fixed16_16 targetThrustPitch = floor16(mul16(newThrustPitch, FIXED(2048)));
-		fixed16_16 maxThrustPitchDelta = floor16(mul16(FIXED(1365), s_deltaTime));
-		fixed16_16 thrustPitchDelta    = clamp(targetThrustPitch - moveState->thrustPitch, -maxThrustPitchDelta, maxThrustPitchDelta);
+		angle14_32 targetThrustPitch = floor16(mul16(newThrustPitch, FIXED(2048))); // 2048 = 45 degrees
+		angle14_32 maxThrustPitchDelta = floor16(mul16(FIXED(1365), s_deltaTime)); // 1365 = 30 degrees
+		angle14_32 thrustPitchDelta    = clamp(targetThrustPitch - moveState->thrustPitch, -maxThrustPitchDelta, maxThrustPitchDelta);
 		moveState->thrustPitch += thrustPitchDelta;
 
-		// Change the Y velocity offset and vertical angle range.
+		// Change the thrust scale and thrust pitch range.
 		moveState->thrustScale = bobaFett_thrust(moveState->target.y, obj->posWS.y, physicsActor->vel.y, moveState->thrustScale, &moveState->thrustPitchRange);
-		if (moveState->accel)
+		
+		// Apply lateral acceleration
+		if (moveState->lateralAccel)
 		{
 			fixed16_16 sinYaw, cosYaw;
-			sinCosFixed(obj->yaw + 4095, &sinYaw, &cosYaw);
+			sinCosFixed(obj->yaw + 4095, &sinYaw, &cosYaw);  // 4095 = 90 degrees
 
-			fixed16_16 velDelta = mul16(moveState->accel, s_deltaTime);
+			fixed16_16 velDelta = mul16(moveState->lateralAccel, s_deltaTime);
 			physicsActor->vel.x += mul16(velDelta, sinYaw);
 			physicsActor->vel.z += mul16(velDelta, cosYaw);
 		}
 
 		// Handle velocity adjustments based on forces.
-		bobaFett_handleForces(physicsActor, moveState->thrustScale, moveState->thrustPitch, moveState->yAccel, moveState->soundSrc);
+		bobaFett_handleForces(physicsActor, moveState->thrustScale, moveState->thrustPitch, moveState->thrustFactor, moveState->soundSrc);
 	}
 
 	void bobaFett_handleMovement(BobaFett* bobaFett)
@@ -402,7 +413,7 @@ namespace TFE_DarkForces
 			Tick nextChangeHeightTick;
 			Tick nextPhaseChangeTick;
 			Tick nextSwapAccelTick;
-			fixed16_16 accel;
+			fixed16_16 lateralAccel;
 			fixed16_16 heightTarget;
 		};
 		task_begin_ctx;
@@ -422,7 +433,7 @@ namespace TFE_DarkForces
 		local(nextPhaseChangeTick) = 0;
 		local(nextSwapAccelTick) = 0;
 		local(heightTarget) = 0;
-		local(accel) = 0;
+		local(lateralAccel) = 0;
 
 		while (local(physicsActor)->state == BOBASTATE_MOVE_AND_ATTACK)
 		{
@@ -449,8 +460,7 @@ namespace TFE_DarkForces
 
 					if (local(phase) == ATTACK_POINT)
 					{
-						local(nextPhaseChangeTick)   = s_curTick + 728;
-						local(moveState)->thrustPitch = ONE_16;
+						local(nextPhaseChangeTick)   = s_curTick + ATTACK_POINT_DURATION;
 						local(moveState)->thrustScale = ONE_16;
 						local(phase) = ATTACK_POINT1;
 
@@ -475,13 +485,13 @@ namespace TFE_DarkForces
 
 					if (local(phase) == ATTACK_CIRCLE)
 					{
-						local(nextPhaseChangeTick) = s_curTick + 1456;
-						local(accel) = (s_curTick & 1) ? -FIXED(15) : FIXED(15);
+						local(nextPhaseChangeTick) = s_curTick + ATTACK_CIRCLE_DURATION;
+						local(lateralAccel) = (s_curTick & 1) ? -FIXED(15) : FIXED(15);
 						local(phase) = ATTACK_CIRCLE1;
 					}
 
 					// Phase == ATTACK_CIRCLE1
-					local(moveState)->accel    = FIXED(15);
+					local(moveState)->lateralAccel    = FIXED(15);		// this doesn't seem right - it should probably have been: local(moveState)->lateralAccel = local(lateralAccel)
 					local(moveState)->target.x = s_playerObject->posWS.x;
 					local(moveState)->target.y = local(heightTarget);
 					local(moveState)->target.z = s_playerObject->posWS.z;
@@ -497,24 +507,22 @@ namespace TFE_DarkForces
 
 					if (local(phase) == ATTACK_FIGURE8)
 					{
-						local(nextPhaseChangeTick) = s_curTick + 2184;
-						local(nextSwapAccelTick)   = s_curTick +
-							(TFE_Settings::getGameSettings()->df_bobaFettFacePlayer ? SHOOT_DELAY_RANGE_ENH : SHOOT_DELAY_RANGE_VANILLA);
+						local(nextPhaseChangeTick) = s_curTick + ATTACK_FIGURE8_DURATION;
+						local(nextSwapAccelTick)   = s_curTick + FIGURE8_INTERVAL;
 						local(phase) = ATTACK_FIGURE8_1;
-						local(accel) = FIXED(50);
+						local(lateralAccel) = FIXED(50);
 					}
 
 					// Phase == ATTACK_FIGURE8_1
-					local(moveState)->accel    = local(accel);
+					local(moveState)->lateralAccel    = local(lateralAccel);
 					local(moveState)->target.x = s_playerObject->posWS.x;
 					local(moveState)->target.y = local(heightTarget);
 					local(moveState)->target.z = s_playerObject->posWS.z;
 
 					if (local(nextSwapAccelTick) < s_curTick)
 					{
-						local(accel) = -local(accel);
-						local(nextSwapAccelTick) = s_curTick +
-							(TFE_Settings::getGameSettings()->df_bobaFettFacePlayer ? SHOOT_DELAY_RANGE_ENH : SHOOT_DELAY_RANGE_VANILLA);
+						local(lateralAccel) = -local(lateralAccel);
+						local(nextSwapAccelTick) = s_curTick + FIGURE8_INTERVAL;
 					}
 				}
 				else if (local(phase) == ATTACK_NEWMODE)
@@ -524,7 +532,7 @@ namespace TFE_DarkForces
 				}
 
 				bobaFett_handleMovement(local(bobaFett));
-				local(moveState)->accel = 0;
+				local(moveState)->lateralAccel = 0;
 
 				if (local(nextPhaseChangeTick) < s_curTick)
 				{
@@ -532,8 +540,9 @@ namespace TFE_DarkForces
 				}
 
 				const angle14_32 angleDiff = getAngleDifference(angle, local(obj)->yaw);
-				if (angleDiff < 1592)
+				if (angleDiff < 1592) // 35 degrees
 				{
+					// Standard projectile attack
 					if (local(nextAimedShotTick) < s_curTick && actor_canSeeObject(local(obj), s_playerObject))
 					{
 						local(nextAimedShotTick) = s_curTick + floor16(random(FIXED(TFE_Settings::getGameSettings()->df_bobaFettFacePlayer ? SHOOT_DELAY_RANGE_ENH : SHOOT_DELAY_RANGE_VANILLA)));
@@ -547,6 +556,7 @@ namespace TFE_DarkForces
 						actor_leadTarget(proj);
 					}
 
+					// Close range attack. Occurs at distance < 25 units and projectiles last 1 second only
 					fixed16_16 dist = distApprox(s_playerObject->posWS.x, s_playerObject->posWS.z, local(obj)->posWS.x, local(obj)->posWS.z);
 					if (dist < FIXED(25) && local(nextShootTick) < s_curTick && actor_canSeeObject(local(obj), s_playerObject))
 					{
@@ -559,13 +569,13 @@ namespace TFE_DarkForces
 						SecObject* projObj = proj->logic.obj;
 						projObj->yaw = angle;
 						proj_aimAtTarget(proj, s_playerObject->posWS);
-						proj->duration = s_curTick + 145;
+						proj->duration = s_curTick + 145; // 1 second
 					}
 				}  // if (angleDiff < 1592)
 
 				if (local(nextChangeHeightTick) < s_curTick)  // Pick a target height
 				{
-					local(nextChangeHeightTick) = s_curTick + floor16(random(FIXED(728)));
+					local(nextChangeHeightTick) = s_curTick + floor16(random(FIXED(CHANGE_HEIGHT_INTERVAL)));
 					RSector* sector = local(obj)->sector;
 					fixed16_16 height = sector->floorHeight - sector->ceilingHeight;
 					local(heightTarget) = sector->floorHeight - random(height);
@@ -659,9 +669,9 @@ namespace TFE_DarkForces
 
 		local(phase) = SEARCH_FIND;
 		local(nextCheckForPlayerTick) = 0;
-		local(changeStateTick) = s_curTick + 8739;
-		local(nextChangePhaseTick) = s_curTick + 1456;
-		local(physicsActor)->moveMod.collisionFlags |= ACTORCOL_BIT2;
+		local(changeStateTick) = s_curTick + SEARCH_DURATION;
+		local(nextChangePhaseTick) = s_curTick + SEARCH_PHASE_INTERVAL;
+		local(physicsActor)->moveMod.collisionFlags |= ACTORCOL_SLIDE_RESPONSE;
 
 		while (local(physicsActor)->state == BOBASTATE_SEARCH)
 		{
@@ -693,7 +703,7 @@ namespace TFE_DarkForces
 			if (local(nextChangePhaseTick) < s_curTick)
 			{
 				local(phase) = (s_curTick & 1) ? SEARCH_FIND : SEARCH_RAND;
-				local(nextChangePhaseTick) = s_curTick + 1456;
+				local(nextChangePhaseTick) = s_curTick + SEARCH_PHASE_INTERVAL;
 			}
 
 			if (local(nextCheckForPlayerTick) < s_curTick)
@@ -713,7 +723,7 @@ namespace TFE_DarkForces
 			}
 		}  // while (state == BOBASTATE_SEARCH)
 
-		local(physicsActor)->moveMod.collisionFlags |= ACTORCOL_BIT2;
+		local(physicsActor)->moveMod.collisionFlags |= ACTORCOL_SLIDE_RESPONSE;
 		task_end;
 	}
 
@@ -900,11 +910,11 @@ namespace TFE_DarkForces
 		SERIALIZE(SaveVersionInit, physicsActor->state, BOBASTATE_DEFAULT);
 
 		SERIALIZE(SaveVersionInit, bobaFett->moveState.target, { 0 });
-		SERIALIZE(SaveVersionInit, bobaFett->moveState.yAccel, 0);
+		SERIALIZE(SaveVersionInit, bobaFett->moveState.thrustFactor, 0);
 		SERIALIZE(SaveVersionInit, bobaFett->moveState.thrustPitchRange, 0);
 		SERIALIZE(SaveVersionInit, bobaFett->moveState.thrustPitch, 0);
 		SERIALIZE(SaveVersionInit, bobaFett->moveState.thrustScale, 0);
-		SERIALIZE(SaveVersionInit, bobaFett->moveState.accel, 0);
+		SERIALIZE(SaveVersionInit, bobaFett->moveState.lateralAccel, 0);
 	}
 		
 	Logic* bobaFett_setup(SecObject* obj, LogicSetupFunc* setupFunc)
@@ -931,12 +941,12 @@ namespace TFE_DarkForces
 
 		bobaFett->unused   = 0;
 		bobaFett->hitSndId = 0;
-		bobaFett->moveState.yAccel = FIXED(220);
+		bobaFett->moveState.thrustFactor = FIXED(220);
 		bobaFett->moveState.thrustPitchRange = ONE_16;
 		bobaFett->moveState.thrustPitch = 0;
 		bobaFett->moveState.thrustScale = 0;
 		bobaFett->moveState.soundSrc   = s_shared.bobaRocket2SndID;
-		bobaFett->moveState.accel = 0;
+		bobaFett->moveState.lateralAccel = 0;
 		bobaFett->logic.obj = obj;
 		actor_addPhysicsActorToWorld(physicsActor);
 
@@ -945,11 +955,11 @@ namespace TFE_DarkForces
 		actor_setupSmartObj(&physicsActor->moveMod);
 
 		physicsActor->moveMod.physics.width = FIXED(2);
-		physicsActor->moveMod.physics.botOffset = 0;
+		physicsActor->moveMod.physics.stepUpHeight = 0;
 
 		physicsActor->moveMod.collisionFlags &= ~ACTORCOL_ALL;
-		physicsActor->moveMod.collisionFlags |= (ACTORCOL_GRAVITY | ACTORCOL_BIT2);
-		physicsActor->moveMod.physics.yPos = COL_INFINITY;
+		physicsActor->moveMod.collisionFlags |= (ACTORCOL_GRAVITY | ACTORCOL_SLIDE_RESPONSE);
+		physicsActor->moveMod.physics.stepDownHeight = COL_INFINITY;
 		physicsActor->moveMod.physics.height = obj->worldHeight;
 
 		LogicAnimation* anim = &physicsActor->anim;
@@ -961,7 +971,7 @@ namespace TFE_DarkForces
 		actor_setupBossAnimation(obj, 5, anim);
 
 		ActorTarget* target = &physicsActor->moveMod.target;
-		target->speedRotation = 6826;
+		target->speedRotation = 6826; // 150 degrees
 
 		obj_addLogic(obj, (Logic*)bobaFett, LOGIC_BOBA_FETT, task, bobaFettCleanupFunc);
 

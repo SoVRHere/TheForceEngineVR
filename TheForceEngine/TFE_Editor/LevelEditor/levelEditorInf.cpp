@@ -477,6 +477,9 @@ namespace LevelEditor
 			case KW_LIGHTS:
 				*type = IMT_LIGHTS;
 				break;
+			case KW_CAMERA:
+				*type = IMT_CAMERA;
+				break;
 			case KW_M_TRIGGER:
 			default:
 				if (elevator)
@@ -1228,6 +1231,26 @@ namespace LevelEditor
 		return true;
 	}
 
+	void mergeExistingInfItem()
+	{
+		Editor_InfItem* last = &s_levelInf.item.back();
+		Editor_InfItem* item = s_levelInf.item.data();
+		for (s32 i = 0; i < (s32)s_levelInf.item.size() - 1; i++, item++) // -1: dont match self
+		{
+			if (item->name == last->name && item->wallNum == last->wallNum)
+			{
+				LE_WARNING("Merging INF item - Name: %s - Wall number: %d", last->name.c_str(), last->wallNum);
+				for (size_t j = 0; j < last->classData.size(); j++)
+				{
+					s_levelInf.item[i].classData.push_back(s_levelInf.item.back().classData[j]);
+				}
+
+				s_levelInf.item.pop_back();
+				return;
+			}
+		}
+	}
+
 	bool loadLevelInfFromAsset(const Asset* asset)
 	{
 		char infFile[TFE_MAX_PATH];
@@ -1451,6 +1474,9 @@ namespace LevelEditor
 					}  // while (!seqEnd) - outer (Line Classes).
 				} break;
 			}
+			
+			// Fix up sibling classes split over multiple seq blocks if we can
+			mergeExistingInfItem();
 		}
 
 		return true;
@@ -1574,16 +1600,16 @@ namespace LevelEditor
 
 	const char* c_infEntityMaskNames[] =
 	{
-		"Enemy",     // INF_ENTITY_ENEMY,
-		"Weapon",    // INF_ENTITY_WEAPON,
+		"Enemy",     // INF_ENTITY_AI_ACTOR,
+		"Weapon",    // INF_ENTITY_PROJECTILE,
 		"Smart Obj", // INF_ENTITY_SMART_OBJ,
 		"Player",    // INF_ENTITY_PLAYER,
 	};
 
 	const u32 c_infEntityMaskFlags[] =
 	{
-		u32(INF_ENTITY_ENEMY),
-		u32(INF_ENTITY_WEAPON),
+		u32(INF_ENTITY_AI_ACTOR),
+		u32(INF_ENTITY_PROJECTILE),
 		u32(INF_ENTITY_SMART_OBJ),
 		u32(INF_ENTITY_PLAYER),
 	};
@@ -1611,6 +1637,7 @@ namespace LevelEditor
 		"M_Trigger",	// IMT_TRIGGER,
 		"Done",			// IMT_DONE,
 		"Wakeup",		// IMT_WAKEUP,
+		"Camera",       // IMT_CAMERA,
 	};
 		
 	const ImVec4 colorKeywordOuterSel = { 0.453f, 0.918f, 1.00f, 1.0f };
@@ -2181,6 +2208,7 @@ namespace LevelEditor
 						case IMT_MASTER_OFF:
 						case IMT_LIGHTS:
 						case IMT_TRIGGER:
+						case IMT_CAMERA:
 						{
 							// Nothing
 						} break;
@@ -2693,6 +2721,7 @@ namespace LevelEditor
 					case IMT_TRIGGER:
 					case IMT_DONE:
 					case IMT_WAKEUP:
+					case IMT_CAMERA:
 					{
 						// Nothing
 					} break;
@@ -3070,7 +3099,7 @@ namespace LevelEditor
 	void selectableClassName(const char* className, ImVec2 itemStart, s32 classIndex)
 	{
 		ImVec2 itemEnd = ImGui::GetCursorPos();
-		ImGui::TextColored(colorKeywordInner, className);
+		ImGui::TextColored(colorKeywordInner, "%s", className);
 		itemEnd.x += ImGui::CalcTextSize(className).x;
 		ImVec2 itemNext = ImGui::GetCursorPos();
 
