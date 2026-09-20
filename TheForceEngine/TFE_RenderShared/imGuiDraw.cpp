@@ -121,7 +121,7 @@ namespace TFE_RenderShared
 		io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
 		s_fontTexture = new TextureGpu{};
 		s_fontTexture->createWithData(width, height, pixels, MAG_FILTER_LINEAR);
-		io.Fonts->TexID = (ImTextureID)(intptr_t)s_fontTexture->getHandle();
+		io.Fonts->SetTexID(s_fontTexture);
 	}
 
 	void imGuiDraw_destroyFontTexture()
@@ -273,7 +273,13 @@ namespace TFE_RenderShared
 
 						s_vertexBuffer.bind();
 						s_indexBuffer.bind();
-						TFE_RenderBackend::bindNativeTexture(pcmd->TextureId);
+						TextureGpu* texture = (TextureGpu*)pcmd->GetTexID();
+						if ((intptr_t)texture < 1000)
+						{
+							TFE_ERROR("UI", "should be texture pointer not GL texture id");
+						}
+						texture->bind(0);
+						//TFE_RenderBackend::bindNativeTexture(0, pcmd->TextureId);
 
 						TFE_RenderBackend::drawIndexedTriangles(pcmd->ElemCount / 3, sizeof(ImDrawIdx), pcmd->IdxOffset);
 						// TODO: have to unbind the texture here, otherwise font texture (& probably others too) filtering is updated to GL_NEAREST somewhere, but only in VR mode &
@@ -281,7 +287,7 @@ namespace TFE_RenderShared
 						// if (effectInst->forceLinearFilter) { effectInst->inputs[i].tex->setFilter(MAG_FILTER_LINEAR, MIN_FILTER_LINEAR); }
 						// if (effectInst->forceLinearFilter) { effectInst->inputs[i].tex->setFilter(MAG_FILTER_NONE, MIN_FILTER_NONE); }
 						// is it a driver bug or did I miss something?
-						TFE_RenderBackend::bindNativeTexture(0); 
+						//TFE_RenderBackend::bindNativeTexture(0, 0); 
 					}
 				}
 			}

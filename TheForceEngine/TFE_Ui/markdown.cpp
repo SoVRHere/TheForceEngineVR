@@ -111,7 +111,7 @@ namespace TFE_Markdown
 		if (texture)
 		{
 			imageData.isValid = true;
-			imageData.user_texture_id = TFE_RenderBackend::getGpuPtr(texture);
+			imageData.user_texture_id = (void*)texture;// TFE_RenderBackend::getGpuPtr(texture);
 			imageData.size = { (f32)texture->getWidth(), (f32)texture->getHeight() };
 		};
 		return imageData;

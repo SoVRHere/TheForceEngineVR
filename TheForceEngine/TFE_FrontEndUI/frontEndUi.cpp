@@ -333,7 +333,7 @@ namespace TFE_FrontEndUI
 		if (image)
 		{
 			TextureGpu* gpuImage = TFE_RenderBackend::createTexture(image->w, image->h, (u32*)image->pixels, MAG_FILTER_LINEAR);
-			uiImage->image = TFE_RenderBackend::getGpuPtr(gpuImage);
+			uiImage->image = gpuImage;// TFE_RenderBackend::getGpuPtr(gpuImage);
 			uiImage->width = image->w;
 			uiImage->height = image->h;
 			return true;
@@ -2156,7 +2156,7 @@ namespace TFE_FrontEndUI
 				size.y *= 0.8f;
 			}
 
-			ImGui::Image(TFE_RenderBackend::getGpuPtr(s_saveImageView), size,
+			ImGui::Image(s_saveImageView/*TFE_RenderBackend::getGpuPtr(s_saveImageView)*/, size,
 				ImVec2(0, 0), ImVec2(1, 1), ImVec4(1, 1, 1, 1), ImVec4(0.5f, 0.5f, 0.5f, 1.0f));
 
 			// Info
@@ -2503,7 +2503,7 @@ namespace TFE_FrontEndUI
 			size.x *= s_uiScale;
 			size.y *= s_uiScale;
 
-			ImGui::Image(TFE_RenderBackend::getGpuPtr(s_replayImageView), size,
+			ImGui::Image(s_replayImageView/*TFE_RenderBackend::getGpuPtr(s_replayImageView)*/, size,
 				ImVec2(0, 0), ImVec2(1, 1), ImVec4(1, 1, 1, 1), ImVec4(0.5f, 0.5f, 0.5f, 1.0f));
 
 			// Replay Info

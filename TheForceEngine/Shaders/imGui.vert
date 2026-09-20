@@ -33,8 +33,8 @@ out vec2 Frag_ScreenCoord;
 
 void main()
 {
-    Frag_UV = vtx_uv;
-    Frag_Color = vtx_color;
+	Frag_UV = vtx_uv;
+	Frag_Color = vtx_color;
 
 #ifdef OPT_VR
 	Frag_ScreenCoord = vtx_pos;
@@ -53,6 +53,6 @@ void main()
 
 	gl_Position = cc * CameraProj;
 #else
-    gl_Position = vec4(vtx_pos, 0.0, 1.0) * CameraProj;
+	gl_Position = vec4(vtx_pos, 0.0, 1.0) * CameraProj;
 #endif
 }

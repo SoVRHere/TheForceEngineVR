@@ -1287,8 +1287,9 @@ namespace TFE_RenderBackend
 		return (void*)(iptr)texture->getHandle();
 	}
 
-	void bindNativeTexture(void* texture)
+	void bindNativeTexture(int slot, void* texture)
 	{
+		glActiveTexture(GL_TEXTURE0 + slot);
 		glBindTexture(GL_TEXTURE_2D, (GLuint)(intptr_t)texture);
 		TFE_ASSERT_GL;
 	}
