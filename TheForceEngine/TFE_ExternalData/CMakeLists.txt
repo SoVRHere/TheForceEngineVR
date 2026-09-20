@@ -1,5 +1,9 @@
 project(TFE_ExternalData)
 set(SOURCES
+	customEffect.cpp
+	customEffect.h
+	customProjectile.cpp
+	customProjectile.h
 	dfLogics.cpp
 	dfLogics.h
 	logicTables.cpp

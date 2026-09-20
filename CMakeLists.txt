@@ -211,6 +211,19 @@ if(ENABLE_TFE)
 	include_directories("TheForceEngine/TFE_ForceScript/Angelscript/add_on")
 	include_directories(TheForceEngine)
 
+	add_compile_definitions(ENABLE_OGV_CUTSCENES)
+	include_directories("TheForceEngine/ogg_theora_win32/include")
+	if(WIN32)
+		target_link_libraries(tfe PRIVATE 
+			${CMAKE_SOURCE_DIR}/TheForceEngine/ogg_theora_win32/lib/x64/ogg.lib
+			${CMAKE_SOURCE_DIR}/TheForceEngine/ogg_theora_win32/lib/x64/theora.lib
+			${CMAKE_SOURCE_DIR}/TheForceEngine/ogg_theora_win32/lib/x64/theoradec.lib
+			${CMAKE_SOURCE_DIR}/TheForceEngine/ogg_theora_win32/lib/x64/theoraenc.lib
+			${CMAKE_SOURCE_DIR}/TheForceEngine/ogg_theora_win32/lib/x64/vorbis.lib
+			${CMAKE_SOURCE_DIR}/TheForceEngine/ogg_theora_win32/lib/x64/vorbisenc.lib
+			${CMAKE_SOURCE_DIR}/TheForceEngine/ogg_theora_win32/lib/x64/vorbisfile.lib)
+	endif()
+
 	add_subdirectory(TheForceEngine)
 endif()
 

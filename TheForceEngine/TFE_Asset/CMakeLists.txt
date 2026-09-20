@@ -21,12 +21,16 @@ set(SOURCES
 	modelAsset_jedi.cpp
 	modelAsset_jedi.h
 	msf_gif.h
+	ogvPlayer.cpp
+	ogvPlayer.h
 	paletteAsset.cpp
 	paletteAsset.h
 	spriteAsset.cpp
 	spriteAsset.h
 	spriteAsset_Jedi.cpp
 	spriteAsset_Jedi.h
+	srtParser.cpp
+	srtParser.h
 	textureAsset.cpp
 	textureAsset.h
 	vocAsset.cpp

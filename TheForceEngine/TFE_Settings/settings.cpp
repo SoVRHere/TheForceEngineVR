@@ -397,7 +397,10 @@ namespace TFE_Settings
 			writeGraphicsSettings(settings);
 			writeEnhancementsSettings(settings);
 			writeHudSettings(settings);
-			writeVrSettings(settings);
+			if (TFE_Settings::getTempSettings()->vr)
+			{
+				writeVrSettings(settings);
+			}
 			writeSoundSettings(settings);
 			writeSystemSettings(settings);
 			writeA11ySettings(settings);

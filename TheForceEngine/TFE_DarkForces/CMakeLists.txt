@@ -3,6 +3,8 @@ set(SOURCES
 	Actor/
 	Actor/actor.cpp
 	Actor/actor.h
+	Actor/actorEnhanced.cpp
+	Actor/actorEnhanced.h
 	Actor/actorInternal.h
 	Actor/actorModule.h
 	Actor/actorSerialization.cpp
@@ -93,6 +95,10 @@ set(SOURCES
 	Landru/lview.h
 	Landru/textCrawl.cpp
 	Landru/textCrawl.h
+	Remaster/dcssParser.cpp
+	Remaster/dcssParser.h
+	Remaster/remasterCutscenes.cpp
+	Remaster/remasterCutscenes.h
 	Scripting/gameScripts.cpp
 	Scripting/gameScripts.h
 	Scripting/gs_game.cpp
