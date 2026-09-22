@@ -13,6 +13,7 @@
 #include <TFE_RenderBackend/indexBuffer.h>
 #include <TFE_RenderBackend/Win32OpenGL/gl.h>
 #include <TFE_Audio/audioSystem.h>
+#include <TFE_Vr/vr.h>
 
 #include <theora/theoradec.h>
 #include <vorbis/codec.h>
@@ -21,6 +22,18 @@
 #include <cstring>
 #include <cstdio>
 #include <vector>
+
+#if defined(ENABLE_VR)
+namespace TFE_RenderBackend
+{
+	extern Mat4  s_cameraProjVR[2];
+	extern Mat4  s_cameraProjVR_YDown[2];
+	extern Mat3  s_cameraMtxVR[2];
+	extern Mat3  s_cameraMtxVR_YDown[2];
+	extern Vec3f s_cameraPosVR[2];
+	extern Vec3f s_cameraPosVR_YDown[2];
+}
+#endif
 
 namespace TFE_OgvPlayer
 {
@@ -72,6 +85,15 @@ namespace TFE_OgvPlayer
 	static s32 s_scaleOffsetId = -1;
 	static s32 s_uvScaleId     = -1;
 
+#if defined(ENABLE_VR)
+	static s32 s_cameraProjId = -1;
+	static s32 s_HmdViewId = -1;
+	static s32 s_screenSizeId = -1;
+	static s32 s_frustumId = -1;
+	static s32 s_ShiftId = -1;
+	static s32 s_LockToCameraId = -1;
+#endif
+
 	// Audio ring buffer (stereo interleaved f32)
 	static f32* s_audioRingBuffer = nullptr;
 	static volatile u32 s_audioWritePos = 0;
@@ -119,6 +141,15 @@ namespace TFE_OgvPlayer
 		s_yuvShader.bindTextureNameToSlot("TexCr", 2);
 		s_scaleOffsetId = s_yuvShader.getVariableId("ScaleOffset");
 		s_uvScaleId     = s_yuvShader.getVariableId("UVScale");
+
+#if defined(ENABLE_VR)
+		s_cameraProjId = s_yuvShader.getVariableId("CameraProj");
+		s_HmdViewId = s_yuvShader.getVariableId("HmdView");
+		s_screenSizeId = s_yuvShader.getVariableId("ScreenSize");
+		s_frustumId = s_yuvShader.getVariableId("Frustum");
+		s_ShiftId = s_yuvShader.getVariableId("Shift");
+		s_LockToCameraId = s_yuvShader.getVariableId("LockToCamera");
+#endif
 
 		const QuadVertex vertices[] =
 		{
@@ -297,7 +328,8 @@ namespace TFE_OgvPlayer
 
 		if (!s_playing) { return false; }
 
-		if (TFE_Input::keyPressed(KEY_ESCAPE) || TFE_Input::keyPressed(KEY_RETURN) || TFE_Input::keyPressed(KEY_SPACE))
+		if (TFE_Input::keyPressed(KEY_ESCAPE) || TFE_Input::keyPressed(KEY_RETURN) || TFE_Input::keyPressed(KEY_SPACE) || 
+			TFE_Input::buttonPressed(CONTROLLER_BUTTON_A) || TFE_Input::buttonPressed(CONTROLLER_BUTTON_B))
 		{
 			close();
 			return false;
@@ -756,6 +788,31 @@ namespace TFE_OgvPlayer
 		// beyond pic_height/frame_height reads garbage padding rows.
 		const f32 uvScale = (f32)s_theoraInfo.pic_height / (f32)s_theoraInfo.frame_height;
 		s_yuvShader.setVariable(s_uvScaleId, SVT_SCALAR, &uvScale);
+
+#if defined(ENABLE_VR)
+		if (TFE_Settings::getTempSettings()->vr)
+		{
+			if (!TFE_Settings::getTempSettings()->vrMultiview)
+			{
+				TFE_ERROR("VR", "non multiview not handled yet");
+			}
+
+			const Vec2ui& targetSize = vr::GetRenderTargetSize();
+			const TFE_Settings_Vr* vrSettings = TFE_Settings::getVrSettings();
+			const TFE_Settings_Vr::ScreenToVr& screenToVr = vrSettings->pdaToVr;
+
+			const std::array<Vec3f, 8>& frustum = vr::GetUnitedFrustum();
+			const Mat3 hmdMtx = TFE_Math::getMatrix3(vr::GetEyePose(vr::Side::Left).mTransformation);
+
+			s_yuvShader.setVariableArray(s_cameraProjId, SVT_MAT4x4, TFE_RenderBackend::s_cameraProjVR[0].data, 2);
+			s_yuvShader.setVariable(s_HmdViewId, SVT_MAT3x3, hmdMtx.data);
+			s_yuvShader.setVariable(s_screenSizeId, SVT_VEC2, Vec2f{ f32(targetSize.x), f32(targetSize.y) }.m);
+			s_yuvShader.setVariableArray(s_frustumId, SVT_VEC3, frustum.data()->m, (u32)frustum.size());
+			s_yuvShader.setVariable(s_ShiftId, SVT_VEC4, Vec4f{ screenToVr.shift.x, screenToVr.shift.y, screenToVr.shift.z, screenToVr.distance }.m);
+			const s32 lock = screenToVr.lockToCamera ? 1 : 0;
+			s_yuvShader.setVariable(s_LockToCameraId, SVT_ISCALAR, &lock);
+		}
+#endif
 
 		s_texY->bind(0);
 		s_texCb->bind(1);

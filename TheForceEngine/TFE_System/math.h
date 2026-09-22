@@ -13,7 +13,9 @@ constexpr Vec2f operator*(const Vec2f& a, const Vec2f& b) { return { a.x * b.x, 
 constexpr Vec2f operator*(const Vec2ui& a, const Vec2f& b) { return { a.x * b.x, a.y * b.y }; }
 constexpr Vec2f operator*(float a, const Vec2f& b) { return { a * b.x, a * b.y }; }
 constexpr Vec2f operator-(float a, const Vec2f& b) { return { a - b.x, a - b.y }; }
+constexpr Vec2f operator+(float a, const Vec2f& b) { return { a + b.x, a + b.y }; }
 constexpr Vec2f operator-(const Vec2f& a, float b) { return { a.x - b, a.y - b }; }
+constexpr Vec2f operator+(const Vec2f& a, float b) { return { a.x + b, a.y + b }; }
 constexpr Vec2f operator/(const Vec2f& a, float b) { return { a.x / b, a.y / b }; }
 
 constexpr Vec3f operator-(const Vec3f& v) { return { -v.x, -v.y, -v.z }; }

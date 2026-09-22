@@ -177,6 +177,6 @@ auto EnumValue(T e)
 	return std::underlying_type_t<T>();
 }
 
-template<> struct fmt::formatter<Vec2f> : formatter<string_view> { auto format(const Vec2f& v, format_context& ctx) { return fmt::format_to(ctx.out(), "[{: 6.2}, {: 6.2}]", v.x, v.y); } };
-template<> struct fmt::formatter<Vec3f> : formatter<string_view> { auto format(const Vec3f& v, format_context& ctx) { return fmt::format_to(ctx.out(), "[{: 6.2}, {: 6.2}, {: 6.2}]", v.x, v.y, v.z); } };
-template<> struct fmt::formatter<Vec4f> : formatter<string_view> { auto format(const Vec4f& v, format_context& ctx) { return fmt::format_to(ctx.out(), "[{: 6.2}, {: 6.2}, {: 6.2}, {: 6.2}]", v.x, v.y, v.z, v.w); } };
+template<> struct fmt::formatter<Vec2f> : formatter<string_view> { auto format(const Vec2f& v, format_context& ctx) { return fmt::format_to(ctx.out(), "[{: 6.2f}, {: 6.2f}]", v.x, v.y); } };
+template<> struct fmt::formatter<Vec3f> : formatter<string_view> { auto format(const Vec3f& v, format_context& ctx) { return fmt::format_to(ctx.out(), "[{: 6.2f}, {: 6.2f}, {: 6.2f}]", v.x, v.y, v.z); } };
+template<> struct fmt::formatter<Vec4f> : formatter<string_view> { auto format(const Vec4f& v, format_context& ctx) { return fmt::format_to(ctx.out(), "[{: 6.2f}, {: 6.2f}, {: 6.2f}, {: 6.2f}]", v.x, v.y, v.z, v.w); } };

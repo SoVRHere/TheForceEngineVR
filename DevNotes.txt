@@ -1,0 +1,23 @@
+
+		///////////
+		const std::array<QuadVertex, 4> vertices =
+		{
+			{{0.0f, 0.0f, 0.0f, 0.0f},
+			{1.0f, 0.0f, 1.0f, 0.0f},
+			{1.0f, 1.0f, 1.0f, 1.0f},
+			{0.0f, 1.0f, 0.0f, 1.0f}}
+		};
+
+		Vec2f screenSize{ dispW , dispH };
+		Vec2f scale{ scaleOffset[0], scaleOffset[1] };
+		Vec2f offset{ scaleOffset[2], scaleOffset[3] };
+		for (const QuadVertex& vtx4 : vertices)
+		{
+			Vec2f v{ vtx4.x, vtx4.y };
+			Vec2f tv = v * scale + offset;
+			Vec2f tvs = 0.5f * screenSize * (v * scale + offset);
+			Vec2f tvs2 = 0.5f * screenSize * (v * scale + offset + 1.0f);
+			Vec2f tvs3 = { tvs2.x, screenSize.y - tvs2.y };
+			TFE_INFO("GL", "Transformed: {} -> {} -> {} -> {} -> {}", v, tv, tvs, tvs2, tvs3);
+		}
+		///////////
