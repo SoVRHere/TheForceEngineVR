@@ -7,7 +7,6 @@ import android.content.pm.PackageManager;
 import android.content.res.AssetManager;
 import android.net.Uri;
 import android.os.Bundle;
-import android.os.Environment;
 import android.util.Log;
 
 import org.libsdl.app.SDLActivity;
@@ -35,7 +34,7 @@ public class AndroidActivity extends SDLActivity {
 
         if (list.length > 0) {
             for (String item : list) {
-                String tested = dir.isEmpty() ?  dir + item : dir + "/" + item;
+                String tested = dir.isEmpty() ? dir + item : dir + "/" + item;
                 createListAssetFiles(tested);
             }
         }

@@ -1282,17 +1282,17 @@ namespace TFE_RenderBackend
 		*height = texture->getHeight();
 	}
 
-	void* getGpuPtr(const TextureGpu* texture)
-	{
-		return (void*)(iptr)texture->getHandle();
-	}
+	//void* getGpuPtr(const TextureGpu* texture)
+	//{
+	//	return (void*)(iptr)texture->getHandle();
+	//}
 
-	void bindNativeTexture(int slot, void* texture)
-	{
-		glActiveTexture(GL_TEXTURE0 + slot);
-		glBindTexture(GL_TEXTURE_2D, (GLuint)(intptr_t)texture);
-		TFE_ASSERT_GL;
-	}
+	//void bindNativeTexture(int slot, void* texture)
+	//{
+	//	glActiveTexture(GL_TEXTURE0 + slot);
+	//	glBindTexture(GL_TEXTURE_2D, (GLuint)(intptr_t)texture);
+	//	TFE_ASSERT_GL;
+	//}
 
 	void drawIndexedTriangles(u32 triCount, u32 indexStride, u32 indexStart)
 	{

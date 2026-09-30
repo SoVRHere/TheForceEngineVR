@@ -165,8 +165,8 @@ namespace TFE_RenderBackend
 	TextureGpu* createTextureArray(u32 width, u32 height, u32 layers, u32 channels, u32 mipCount = 1);
 	void freeTexture(TextureGpu* texture);
 	void getTextureDim(TextureGpu* texture, u32* width, u32* height);
-	void* getGpuPtr(const TextureGpu* texture);
-	void bindNativeTexture(int slot, void* texture);
+	//void* getGpuPtr(const TextureGpu* texture);
+	//void bindNativeTexture(int slot, void* texture);
 
 	// Toggle bloom - but only the final post process.
 	void bloomPostEnable(bool enable = true);

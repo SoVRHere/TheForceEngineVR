@@ -725,7 +725,7 @@ namespace TFE_DarkForces
 	{
 		if (TFE_Input::keyPressed(KEY_ESCAPE) ||
 			(TFE_Input::keyPressed(KEY_RETURN) && !TFE_Input::keyDown(KEY_LALT) && !TFE_Input::keyDown(KEY_RALT)) ||
-			TFE_Input::keyPressed(KEY_SPACE))
+			TFE_Input::keyPressed(KEY_SPACE) || TFE_Input::mousePressed(MBUTTON_LEFT))
 		{
 			ogvCutscene_teardown();
 			return JFALSE;

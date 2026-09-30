@@ -278,7 +278,7 @@ namespace TFE_FrontEndUI
 
 				if (ImGui::IsItemHovered() || ImGui::IsItemActive())
 				{
-					drawList->AddImageRounded(TFE_RenderBackend::getGpuPtr(s_filteredMods[i]->image.texture), ImVec2((f32(x) * 268 + 16 - 2)*uiScale, yScrolled - 2*uiScale),
+					drawList->AddImageRounded(s_filteredMods[i]->image.texture/*TFE_RenderBackend::getGpuPtr(s_filteredMods[i]->image.texture)*/, ImVec2((f32(x) * 268 + 16 - 2)*uiScale, yScrolled - 2*uiScale),
 						ImVec2((f32(x) * 268 + 16 + 256 + 2)*uiScale, yScrolled + (192 + 2)*uiScale), ImVec2(0.0f, s_filteredMods[i]->invertImage ? 1.0f : 0.0f),
 						ImVec2(1.0f, s_filteredMods[i]->invertImage ? 0.0f : 1.0f), 0xffffffff, 8.0f, ImDrawFlags_RoundCornersAll);
 					drawList->AddImageRounded(getGradientTexture(), ImVec2((f32(x) * 268 + 16 - 2)*uiScale, yScrolled - 2*uiScale),
@@ -287,7 +287,7 @@ namespace TFE_FrontEndUI
 				}
 				else
 				{
-					drawList->AddImageRounded(TFE_RenderBackend::getGpuPtr(s_filteredMods[i]->image.texture), ImVec2((f32(x) * 268 + 16)*uiScale, yScrolled),
+					drawList->AddImageRounded(s_filteredMods[i]->image.texture/*TFE_RenderBackend::getGpuPtr(s_filteredMods[i]->image.texture)*/, ImVec2((f32(x) * 268 + 16)*uiScale, yScrolled),
 						ImVec2((f32(x) * 268 + 16 + 256)*uiScale, yScrolled + 192*uiScale), ImVec2(0.0f, s_filteredMods[i]->invertImage ? 1.0f : 0.0f),
 						ImVec2(1.0f, s_filteredMods[i]->invertImage ? 0.0f : 1.0f), 0xffffffff, 8.0f, ImDrawFlags_RoundCornersAll);
 				}
@@ -558,7 +558,7 @@ namespace TFE_FrontEndUI
 			ImGui::Begin("Mod Info", &open, /*ImVec2(f32(infoWidth), f32(infoHeight)), 1.0f,*/ window_flags);
 			ImDrawList* drawList = ImGui::GetWindowDrawList();
 			ImVec2 cursor = ImGui::GetCursorPos();
-			drawList->AddImageRounded(TFE_RenderBackend::getGpuPtr(s_filteredMods[s_selectedMod]->image.texture), ImVec2(cursor.x + 64, cursor.y + 64), ImVec2(cursor.x + 64 + 320*uiScale, cursor.y + 64 + 200*uiScale),
+			drawList->AddImageRounded(s_filteredMods[s_selectedMod]->image.texture/*TFE_RenderBackend::getGpuPtr(s_filteredMods[s_selectedMod]->image.texture)*/, ImVec2(cursor.x + 64, cursor.y + 64), ImVec2(cursor.x + 64 + 320*uiScale, cursor.y + 64 + 200*uiScale),
 				ImVec2(0.0f, s_filteredMods[s_selectedMod]->invertImage ? 1.0f : 0.0f), ImVec2(1.0f, s_filteredMods[s_selectedMod]->invertImage ? 0.0f : 1.0f), 0xffffffff, 8.0f, ImDrawFlags_RoundCornersAll);
 
 			ImGui::PushFont(getDialogFont());

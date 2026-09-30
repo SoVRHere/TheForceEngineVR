@@ -269,7 +269,11 @@ namespace TFE_Settings
 				if (!pathValid)
 				{
 					char gamePath[TFE_MAX_PATH];
+#if defined(ANDROID)
+					sprintf(gamePath, "%sDark Forces/", TFE_Paths::getPath(PATH_PROGRAM));
+#else
 					sprintf(gamePath, "%sGames/Dark Forces/", TFE_Paths::getPath(PATH_PROGRAM));
+#endif
 					FileUtil::fixupPath(gamePath);
 
 					sprintf(localPath, "%sDARK.GOB", gamePath);

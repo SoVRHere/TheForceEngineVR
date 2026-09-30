@@ -224,7 +224,7 @@ namespace TFE_Paths
 	bool setProgramPath(void)
 	{
 #if defined(ANDROID)
-		s_paths[PATH_PROGRAM] = std::string{ SDL_AndroidGetExternalStoragePath() } + "/Dark Forces/";
+		s_paths[PATH_PROGRAM] = std::string{ SDL_AndroidGetExternalStoragePath() } + "/";
 		TFE_ANDROID("s_paths[PATH_PROGRAM] = {}", getPath(PATH_PROGRAM));
 #else
 		char p[TFE_MAX_PATH];

@@ -145,7 +145,7 @@ android {
                 }
             }
             minSdk 32
-            targetSdk 32
+            targetSdk 34
 
             buildConfigField "boolean", "IS_VR", "true"
             resValue "string", "app_name", "The Force Engine VR"
@@ -155,7 +155,7 @@ android {
         cmake {
             path "../../../CMakeLists.txt"
             buildStagingDirectory "../../../Builds/Android/.cxx"
-            version "3.28.2"
+            //version "3.28.2"
         }
     }
 
@@ -166,7 +166,8 @@ android {
     kotlinOptions {
         jvmTarget = '1.8'
     }
-    ndkVersion '25.2.9519653'
+    //ndkVersion '25.2.9519653'
+    ndkVersion "30.0.16248370"
     aaptOptions {
         ignoreAssetsPattern '*.zip:CMakeLists.txt'
     }

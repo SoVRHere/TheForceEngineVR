@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <filesystem>
 #include <strings.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -16,6 +17,8 @@
 #include <mach-o/dyld.h>	// For macOS-specific executable path
 #endif
 
+namespace fs = std::filesystem;
+
 // implement TFE FileUtil for Linux and compatibles.
 namespace FileUtil
 {
@@ -24,6 +27,11 @@ namespace FileUtil
 
 	void readDirectory(const char *dir, const char *ext, FileList& fileList)
 	{
+		if (!fs::exists(dir) || !fs::is_directory(dir))
+		{
+			return;
+		}
+
 		char buf[PATH_MAX];
 		struct dirent *de;
 		struct stat st;

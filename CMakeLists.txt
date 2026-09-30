@@ -26,9 +26,9 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release")
 	check_cxx_compiler_flag("-ftrivial-auto-var-init=zero" COMPILER_ENABLE_AUTOZERO)
 endif()
 
-# disable Clangs excessive warnings about unhandled switch values
+# disable Clangs excessive warnings
 if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-switch")
+	add_compile_options(-Wno-switch -Wno-invalid-source-encoding -Wno-deprecated-declarations)
 endif()
 
 if(MSVC)
@@ -222,6 +222,16 @@ if(ENABLE_TFE)
 			${CMAKE_SOURCE_DIR}/TheForceEngine/ogg_theora_win32/lib/x64/vorbis.lib
 			${CMAKE_SOURCE_DIR}/TheForceEngine/ogg_theora_win32/lib/x64/vorbisenc.lib
 			${CMAKE_SOURCE_DIR}/TheForceEngine/ogg_theora_win32/lib/x64/vorbisfile.lib)
+	elseif(ANDROID)
+		target_link_libraries(tfe PRIVATE
+			${CMAKE_SOURCE_DIR}/TheForceEngine/ogg_theora_win32/lib/${ANDROID_ABI}/libogg.a
+			${CMAKE_SOURCE_DIR}/TheForceEngine/ogg_theora_win32/lib/${ANDROID_ABI}/libtheora.a
+			${CMAKE_SOURCE_DIR}/TheForceEngine/ogg_theora_win32/lib/${ANDROID_ABI}/libtheoradec.a
+			${CMAKE_SOURCE_DIR}/TheForceEngine/ogg_theora_win32/lib/${ANDROID_ABI}/libtheoraenc.a
+			${CMAKE_SOURCE_DIR}/TheForceEngine/ogg_theora_win32/lib/${ANDROID_ABI}/libvorbis.a
+			${CMAKE_SOURCE_DIR}/TheForceEngine/ogg_theora_win32/lib/${ANDROID_ABI}/libvorbisenc.a
+			${CMAKE_SOURCE_DIR}/TheForceEngine/ogg_theora_win32/lib/${ANDROID_ABI}/libvorbisfile.a
+		)
 	endif()
 
 	add_subdirectory(TheForceEngine)

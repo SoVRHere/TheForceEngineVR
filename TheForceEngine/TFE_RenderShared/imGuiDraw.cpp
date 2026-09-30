@@ -274,12 +274,15 @@ namespace TFE_RenderShared
 						s_vertexBuffer.bind();
 						s_indexBuffer.bind();
 						TextureGpu* texture = (TextureGpu*)pcmd->GetTexID();
-						if ((intptr_t)texture < 1000)
+						if ((uintptr_t)texture < 1000)
 						{
 							TFE_ERROR("UI", "should be texture pointer not GL texture id");
 						}
-						texture->bind(0);
-						//TFE_RenderBackend::bindNativeTexture(0, pcmd->TextureId);
+						if (texture)
+						{
+							texture->bind(0);
+							//TFE_RenderBackend::bindNativeTexture(0, pcmd->TextureId);
+						}
 
 						TFE_RenderBackend::drawIndexedTriangles(pcmd->ElemCount / 3, sizeof(ImDrawIdx), pcmd->IdxOffset);
 						// TODO: have to unbind the texture here, otherwise font texture (& probably others too) filtering is updated to GL_NEAREST somewhere, but only in VR mode &
