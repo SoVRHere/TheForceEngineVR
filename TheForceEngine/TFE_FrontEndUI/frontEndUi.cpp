@@ -4207,6 +4207,20 @@ namespace TFE_FrontEndUI
 		ImGui::SliderFloat("Scale (Experimental)", &vrSettings->playerScale, 0.01f, 100.0f, "%.2f");
 		Tooltip("Scale distance between eyes, so when it's big number the world looks small "
 			"but it introduces some rendering artifacts as engine assumes looking from point between eyes.");
+		if (ImGui::SmallButton("0.01"))
+		{
+			vrSettings->playerScale = 0.01f;
+		}
+		ImGui::SameLine();
+		if (ImGui::SmallButton("1.00"))
+		{
+			vrSettings->playerScale = 1.0f;
+		}
+		ImGui::SameLine();
+		if (ImGui::SmallButton("5.00"))
+		{
+			vrSettings->playerScale = 5.0f;
+		}
 
 		if (TFE_Settings::getTempSettings()->vrViewDebugInfo)
 		{
