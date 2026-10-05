@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.os.Build;
 import android.content.res.AssetManager;
 import android.net.Uri;
 import android.os.Bundle;
@@ -95,20 +96,4 @@ public class AndroidActivity extends SDLActivity {
 
     public static native void onCreateActivity(Activity activity, AssetManager assetManager, List<String> assetList, String externalPublicDir);
     public static native void onDestroyActivity();
-
-    public static int doGetVersionCode() {
-        try {
-            return context.getPackageManager().getPackageInfo(context.getPackageName(), 0).versionCode;
-        } catch (PackageManager.NameNotFoundException e) {
-            return 0;
-        }
-    }
-
-    public static String doGetVersionName() {
-        try {
-            return context.getPackageManager().getPackageInfo(context.getPackageName(), 0).versionName;
-        } catch (PackageManager.NameNotFoundException e) {
-            return null;
-        }
-    }
 }

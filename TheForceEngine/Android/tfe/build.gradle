@@ -1,24 +1,33 @@
 
 plugins {
     id 'com.android.application'
-    id 'kotlin-android'
 }
 
-def getGitVersionName() {
+def getGitVersionName = {
     try {
-        def stdout = new ByteArrayOutputStream()
-        exec {
-            commandLine 'git', 'describe', '--tags'
-            standardOutput = stdout
+        def process = new ProcessBuilder(
+                "git", "describe", "--tags"
+        )
+                .directory(rootDir)
+                .redirectErrorStream(true)
+                .start()
+
+        def version = process.inputStream.text.trim()
+        def exitCode = process.waitFor()
+
+        if (exitCode != 0) {
+            println "git describe failed: ${version}"
+            return "0.0.0"
         }
-        def version = stdout.toString().trim()
         return version
+
     } catch (Exception e) {
-        return "0.0.0" // Fallback version in case of error
+        println "Failed to get git version: ${e.message}"
+        return "0.0.0"
     }
 }
 
-def getPatchVersion() {
+def getPatchVersion = {
     def versionName = getGitVersionName()
     // Extract the patch version from v*.*.*
     def match = (versionName =~ /v\d+\.\d+\.(\d+)/)
@@ -30,35 +39,40 @@ def getPatchVersion() {
 }
 
 android {
-    compileSdk 34
+    compileSdk = 36
     //buildToolsVersion "34.0.0"
 
-    namespace "com.tfe.game"
+    namespace = "com.tfe.game"
+
+    buildFeatures {
+        buildConfig = true
+        resValues = true
+    }
 
     signingConfigs {
         // USE FOR PLAY STORE RELEASES
         release {
-            storeFile file("tfe_release.jks")
-            storePassword "******"
-            keyAlias "******"
-            keyPassword "******"
+            storeFile = file("tfe_release.jks")
+            storePassword = "******"
+            keyAlias = "******"
+            keyPassword = "******"
         }
 
         developer {
             // NEVER EVER USE THIS KEY FOR PLAY STORE RELEASES
-            storeFile file("tfe_developer.jks")
-            storePassword "tfe_developer"
-            keyAlias "tfe_developer"
-            keyPassword "tfe_developer"
+            storeFile = file("tfe_developer.jks")
+            storePassword = "tfe_developer"
+            keyAlias = "tfe_developer"
+            keyPassword = "tfe_developer"
         }
     }
 
     defaultConfig {
-        applicationId "com.tfe.game"
+        applicationId = "com.tfe.game"
 
-        versionName getGitVersionName()
+        versionName = getGitVersionName()
         println "version name: $versionName"
-        versionCode getPatchVersion()
+        versionCode = getPatchVersion()
         println "version code: $versionCode"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
@@ -81,26 +95,26 @@ android {
 
     buildTypes {
         release {
-            minifyEnabled true // crashing
-            debuggable false
-            signingConfig signingConfigs.release
+            minifyEnabled = true // crashing
+            debuggable = false
+            signingConfig = signingConfigs.release
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
 
         developer {
             //minifyEnabled true // crashing
             //shrinkResources false // Temporarily disable resource shrinking
-            debuggable false
-            jniDebuggable false
-            signingConfig signingConfigs.developer
+            debuggable = false
+            jniDebuggable = false
+            signingConfig = signingConfigs.developer
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
 
         debug {
             //minifyEnabled true // crashing
-            debuggable true
-            jniDebuggable true
-            signingConfig signingConfigs.developer
+            debuggable = true
+            jniDebuggable = true
+            signingConfig = signingConfigs.developer
             //signingConfig debug.signingConfig
         }
     }
@@ -108,44 +122,44 @@ android {
     flavorDimensions += "version"
     productFlavors {
         android {
-            dimension "version"
+            dimension = "version"
             //applicationIdSuffix ".android"
             //versionNameSuffix "-android"
-            ndk.abiFilters 'arm64-v8a'//, 'x86_64'
+            ndk.abiFilters = ['arm64-v8a']//, 'x86_64'
             externalNativeBuild {
                 cmake {
                     arguments "-DENABLE_VR=OFF"
                 }
             }
-            minSdk 28
-            targetSdk 34
+            minSdk = 28
+            targetSdk  = 36
         }
         androidLegacy {
-            dimension "version"
+            dimension = "version"
             //applicationIdSuffix ".android"
             //versionNameSuffix "-android"
-            ndk.abiFilters 'armeabi-v7a'
+            ndk.abiFilters = ['armeabi-v7a']
             externalNativeBuild {
                 cmake {
                     arguments "-DENABLE_VR=OFF"
                 }
             }
             minSdk 24 // Android 7
-            targetSdk 28 // Android 9
+            targetSdk 28 // Android 9 (legacy variant)
         }
         quest {
             dimension "version"
             //applicationIdSuffix ".quest"
             //versionNameSuffix "-quest"
-            ndk.abiFilters 'arm64-v8a'
+            ndk.abiFilters = ['arm64-v8a']
             externalNativeBuild {
                 cmake {
                     arguments "-DENABLE_VR=ON", "-DSTART_VR=ON"
                     //, "-DVRW_BUILD_IN_VR_WRAPPER=ON"//, "-DDEVICE_QUEST=ON"
                 }
             }
-            minSdk 32
-            targetSdk 34
+            minSdk = 29
+            targetSdk = 32
 
             buildConfigField "boolean", "IS_VR", "true"
             resValue "string", "app_name", "The Force Engine VR"
@@ -160,16 +174,13 @@ android {
     }
 
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_1_8
-        targetCompatibility JavaVersion.VERSION_1_8
-    }
-    kotlinOptions {
-        jvmTarget = '1.8'
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
     }
     //ndkVersion '25.2.9519653'
-    ndkVersion "30.0.16248370"
-    aaptOptions {
-        ignoreAssetsPattern '*.zip:CMakeLists.txt'
+    ndkVersion = "30.0.16248370"
+    androidResources {
+        ignoreAssetsPattern = "*.zip:CMakeLists.txt"
     }
     sourceSets {
         main {
@@ -260,12 +271,11 @@ tasks.named('preBuild').configure {
 }
 
 dependencies {
-    implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
-    implementation 'androidx.core:core-ktx:1.5.0'
-    implementation 'androidx.appcompat:appcompat:1.2.0'
-    implementation 'com.google.android.material:material:1.2.1'
-    implementation 'androidx.constraintlayout:constraintlayout:2.0.4'
-    testImplementation 'junit:junit:4.+'
+    implementation 'androidx.core:core-ktx:1.17.0'
+    implementation 'androidx.appcompat:appcompat:1.7.1'
+    implementation 'com.google.android.material:material:1.13.0'
+    implementation 'androidx.constraintlayout:constraintlayout:2.2.1'
+    testImplementation 'junit:junit:4.13.2'
     androidTestImplementation 'androidx.test.ext:junit:1.1.5'
-    androidTestImplementation 'androidx.test.espresso:espresso-core:3.3.0'
+    androidTestImplementation 'androidx.test.espresso:espresso-core:3.7.0'
 }
