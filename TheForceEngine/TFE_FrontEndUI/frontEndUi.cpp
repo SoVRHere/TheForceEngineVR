@@ -370,7 +370,10 @@ namespace TFE_FrontEndUI
 
 		// TODO: should be screen size/dpi dependent?
 #if defined(ENABLE_VR)
-		ImGui::GetStyle().ScrollbarSize = 20.0f;
+		if (TFE_Settings::getTempSettings()->vr)
+		{
+			ImGui::GetStyle().ScrollbarSize = 20.0f;
+		}
 #elif defined(ANDROID)
 		ImGui::GetStyle().ScrollbarSize = 45.0f;
 #endif
@@ -1060,6 +1063,7 @@ namespace TFE_FrontEndUI
 					graphicsSettings->reticleEnable = false;
 					TFE_Settings_Game* gameSettings = TFE_Settings::getGameSettings();
 					gameSettings->df_enableAutoaim = false;
+					gameSettings->df_smoothVUEs = true;
 					s_appState = APP_STATE_MENU;
 				}
 				else
@@ -1068,6 +1072,8 @@ namespace TFE_FrontEndUI
 					setSettingsTemplate(TEMPLATE_MODERN);
 					TFE_Settings_Graphics* graphicsSettings = TFE_Settings::getGraphicsSettings();
 					graphicsSettings->reticleScale = 1.0f;
+					TFE_Settings_Game* gameSettings = TFE_Settings::getGameSettings();
+					gameSettings->df_smoothVUEs = true;
 					s_appState = APP_STATE_MENU;
 				}
 #endif
@@ -2945,7 +2951,8 @@ namespace TFE_FrontEndUI
 		ImGui::SetNextWindowPos(ImVec2(165.0f*s_uiScale, yNext - scroll));
 		ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 5.0f);
 		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, { 0.0f, 0.0f });
-		if (ImGui::BeginChild("Controller Options", ImVec2(390.0f*s_uiScale, (s_controllerWinOpen ? 480.0f : 29.0f)*s_uiScale), true, window_flags))
+		const float winHeight = (TFE_Input::getNumTouchDevices() > 0) ? 500.0f : 480.0f;
+		if (ImGui::BeginChild("Controller Options", ImVec2(390.0f*s_uiScale, (s_controllerWinOpen ? winHeight : 29.0f)*s_uiScale), true, window_flags))
 		{
 			if (ImGui::Button("Controller Options", ImVec2(370.0f*s_uiScale, 0.0f)))
 			{
@@ -3054,7 +3061,7 @@ namespace TFE_FrontEndUI
 				if (invertRightVert) { s_inputConfig->controllerFlags |=  CFLAG_INVERT_RIGHT_VERT; }
 				                else { s_inputConfig->controllerFlags &= ~CFLAG_INVERT_RIGHT_VERT; }
 
-				yNext += 480.0f*s_uiScale;
+				yNext += winHeight*s_uiScale;
 			}
 			else
 			{
@@ -3063,7 +3070,7 @@ namespace TFE_FrontEndUI
 		}
 		else
 		{
-			yNext += (s_controllerWinOpen ? 480.0f : 29.0f)*s_uiScale;
+			yNext += (s_controllerWinOpen ? winHeight : 29.0f)*s_uiScale;
 			ImGui::PopStyleVar();
 		}
 		ImGui::EndChild();
