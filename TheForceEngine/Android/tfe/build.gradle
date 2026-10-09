@@ -266,7 +266,7 @@ tasks.named('preBuild').configure {
         if (!darkDir.exists()) {
             darkDir.mkdirs()
         }
-        new File("$darkDir/readme.txt").text = "copy Dark Forces game data here, optionally including enhanced.gob from remastered version"
+        new File("$darkDir/readme.txt").text = "copy Dark Forces (Remastered) game data here, Remastered is recommended"
     }
 }
 
