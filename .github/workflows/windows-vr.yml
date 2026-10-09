@@ -44,26 +44,6 @@ jobs:
         run: |
           cmake --install ./BuildArtifacts/Build --config ${{env.BUILD_TYPE}} --prefix ${{env.ARTIFACTS_PATH}}
 
-      #- name: Build binaries
-      #  run: MSBuild.exe /p:Configuration=${{env.BUILD_TYPE}} /p:OutDir=${{github.workspace}}/Build/ TheForceEngineVR.sln
-        
-      #- name: Build artifacts
-      #  run: |
-      #    mkdir ${{env.ARTIFACTS_PATH}}
-      #    robocopy ${{github.workspace}}/Build/ ${{env.ARTIFACTS_PATH}}/ "TheForceEngineVR.exe"
-      #    robocopy ${{github.workspace}}/TheForceEngine/ ${{env.ARTIFACTS_PATH}}/ "SDL2.dll"
-      #    robocopy ${{github.workspace}}/TheForceEngine/ ${{env.ARTIFACTS_PATH}}/ "SDL2_image.dll"
-      #    robocopy ${{github.workspace}}/TheForceEngine/ ${{env.ARTIFACTS_PATH}}/ "VrWrapper.dll"
-      #    robocopy ${{github.workspace}}/TheForceEngine/Captions/ ${{env.ARTIFACTS_PATH}}/Captions/ /E
-      #    robocopy ${{github.workspace}}/TheForceEngine/Documentation/ ${{env.ARTIFACTS_PATH}}/Documentation/ /E
-      #    robocopy ${{github.workspace}}/TheForceEngine/Fonts/ ${{env.ARTIFACTS_PATH}}/Fonts/ /E
-      #    robocopy ${{github.workspace}}/TheForceEngine/Mods/ ${{env.ARTIFACTS_PATH}}/Mods/ /E
-      #    robocopy ${{github.workspace}}/TheForceEngine/Shaders/ ${{env.ARTIFACTS_PATH}}/Shaders/ /E
-      #    robocopy ${{github.workspace}}/TheForceEngine/SoundFonts/ ${{env.ARTIFACTS_PATH}}/SoundFonts/ /E
-      #    robocopy ${{github.workspace}}/TheForceEngine/UI_Images/ ${{env.ARTIFACTS_PATH}}/UI_Images/ /E
-      #    robocopy ${{github.workspace}}/TheForceEngine/UI_Text/ ${{env.ARTIFACTS_PATH}}/UI_Text/ /E
-      #    exit 0 # robocopy returns non zero on success
-          
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
@@ -88,14 +68,14 @@ jobs:
         run: curl -L -o vc_redist.x64.exe https://aka.ms/vs/17/release/vc_redist.x64.exe
           
       - name: Download Inno Setup
-        run: curl -o innosetup.exe https://jrsoftware.org/download.php/is.exe
+        run: curl -o innosetup.exe https://github.com/jrsoftware/issrc/releases/download/is-7_1_0/innosetup-7.1.0-x64.exe
         
       - name: Install Inno Setup
         run: start innosetup.exe /silent
         
       - name: Build Installer
         run: |
-          & "c:/Program Files (x86)/Inno Setup 6/ISCC.exe" /Qp /DAppVersionNumber="${{github.ref_name}}" /DMSVCPath="${{github.workspace}}" /DProgramPath="${{env.ARTIFACTS_PATH}}" "${{github.workspace}}/TheForceEngine/Installer/Installer.iss"
+          & "c:/Program Files/Inno Setup 7/ISCC.exe" /Qp /DAppVersionNumber="${{github.ref_name}}" /DMSVCPath="${{github.workspace}}" /DProgramPath="${{env.ARTIFACTS_PATH}}" "${{github.workspace}}/TheForceEngine/Installer/Installer.iss"
               
       - name: Compress artifact directory
         run: Compress-Archive -Path ${{env.ARTIFACTS_PATH}}/ -Destination TheForceEngineVR.zip
