@@ -30,9 +30,12 @@ jobs:
             throw "Inno Setup download failed"
           }
           Write-Host "Inno Setup downloaded"
-          start innosetup.exe /silent
+          
+          $iscc = "C:\Program Files\Inno Setup 7\ISCC.exe"
+          if (!(Test-Path $iscc)) {
+            throw "ISCC.exe not found: $iscc"
+          }
           Write-Host "Inno Setup installed successfully"
-    
       - name: Checkout code        
         uses: actions/checkout@v4
 
