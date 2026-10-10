@@ -85,8 +85,22 @@ jobs:
           Get-Item "innosetup.exe" | Select-Object Name, Length
 
       - name: Install Inno Setup
-        run: Start-Process -FilePath "innosetup.exe" -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /ALLUSERS" -Wait -PassThru
-        
+        run: |
+          Start-Process -FilePath "innosetup.exe" -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /ALLUSERS" -PassThru
+          Write-Host "Installer PID: $($process.Id)"
+          $finished = $process.WaitForExit(180000)
+          if (-not $finished) {
+            Write-Host "ERROR: Installation timed out"
+            Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+            throw "Inno Setup installer timed out"
+          }
+
+          $iscc = "C:\Program Files\Inno Setup 7\ISCC.exe"
+          if (!(Test-Path $iscc)) {
+            throw "ISCC.exe not found"
+          }
+
+          Write-Host "Inno Setup installed successfully"
       - name: Build Installer
         run: |
           & "c:/Program Files/Inno Setup 7/ISCC.exe" /Qp /DAppVersionNumber="${{github.ref_name}}" /DMSVCPath="${{github.workspace}}" /DProgramPath="${{env.ARTIFACTS_PATH}}" "${{github.workspace}}/TheForceEngine/Installer/Installer.iss"
