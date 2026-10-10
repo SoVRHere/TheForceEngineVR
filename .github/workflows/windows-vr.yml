@@ -65,11 +65,24 @@ jobs:
           path: ${{env.ARTIFACTS_PATH}}
           
       - name: Download VC++ redistributables
-        run: curl -L -o vc_redist.x64.exe https://aka.ms/vs/17/release/vc_redist.x64.exe
-          
+        run: |
+          if (!(Test-Path "vc_redist.x64.exe")) {
+            throw "VC++ redistributable download failed"
+          }
+
+          Write-Host "VC++ redistributable downloaded"
+          Get-Item "vc_redist.x64.exe" | Select-Object Name, Length
+
       - name: Download Inno Setup
-        run: curl -o innosetup.exe https://github.com/jrsoftware/issrc/releases/download/is-7_1_0/innosetup-7.1.0-x64.exe
-        
+        run: |
+          curl -o innosetup.exe https://github.com/jrsoftware/issrc/releases/download/is-7_1_0/innosetup-7.1.0-x64.exe
+          if (!(Test-Path "innosetup.exe")) {
+            throw "Inno Setup download failed"
+          }
+
+          Write-Host "Inno Setup downloaded"
+          Get-Item "innosetup.exe" | Select-Object Name, Length
+
       - name: Install Inno Setup
         run: Start-Process -FilePath "innosetup.exe" -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /ALLUSERS" -Wait -PassThru
         
