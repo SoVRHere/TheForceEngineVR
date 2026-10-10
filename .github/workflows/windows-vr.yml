@@ -84,7 +84,7 @@ jobs:
           Write-Host "Inno Setup downloaded"
           Get-Item "innosetup.exe" | Select-Object Name, Length
 
-          $finished = Start-Process -FilePath "innosetup.exe" -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /ALLUSERS" -PassThru
+          $process = Start-Process -FilePath "innosetup.exe" -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /ALLUSERS" -PassThru
           Write-Host "Installer PID: $($process.Id)"
           $finished = $process.WaitForExit(180000)
           if (-not $finished) {
