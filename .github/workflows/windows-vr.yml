@@ -88,7 +88,7 @@ jobs:
           if (!(Test-Path $iscc)) {
             throw "ISCC.exe not found: $iscc"
           }
-          Write-Host "Inno Setup installed successfully
+          Write-Host "Inno Setup installed successfully"
 
       - name: Build Installer
         run: |
