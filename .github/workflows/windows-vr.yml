@@ -23,21 +23,6 @@ jobs:
     runs-on: windows-2022 # windows-latest for VS2026
 
     steps:
-      - name: Download & Install Inno Setup
-        run: |
-          curl -fSL --retry 3 -o innosetup.exe https://github.com/jrsoftware/issrc/releases/download/is-6_7_3/innosetup-6.7.3.exe
-          if (!(Test-Path "innosetup.exe")) {
-            throw "Inno Setup download failed"
-          }
-          Write-Host "Inno Setup downloaded"
-
-          start innosetup.exe /silent
-          #$iscc = "C:\Program Files\Inno Setup 7\ISCC.exe"
-          $iscc = "c:/Program Files (x86)/Inno Setup 6/ISCC.exe"
-          if (!(Test-Path $iscc)) {
-            throw "ISCC.exe not found: $iscc"
-          }
-          Write-Host "Inno Setup installed successfully"
       - name: Checkout code
         uses: actions/checkout@v4
 
@@ -91,45 +76,23 @@ jobs:
 
       - name: Download & Install Inno Setup
         run: |
-          curl -fSL --retry 3 -o innosetup.exe https://github.com/jrsoftware/issrc/releases/download/is-7_1_0/innosetup-7.1.0-x64.exe
+          curl -fSL --retry 3 -o innosetup.exe https://github.com/jrsoftware/issrc/releases/download/is-6_7_3/innosetup-6.7.3.exe
           if (!(Test-Path "innosetup.exe")) {
             throw "Inno Setup download failed"
           }
-
           Write-Host "Inno Setup downloaded"
-          Get-Item "innosetup.exe" | Select-Object Name, Length
 
-          $process = Start-Process -FilePath "innosetup.exe" -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /ALLUSERS" -PassThru
-          Write-Host "Installer PID: $($process.Id)"
-          if (-not $process.WaitForExit(120000)) {
-            Write-Host "=== Process state ==="
-      
-            Get-CimInstance Win32_Process |
-              Where-Object {
-                $_.Name -match "setup|inno|innosetup"
-              } |
-              Format-List ProcessId, ParentProcessId, Name, CommandLine
-      
-            Write-Host "=== Installer log ==="
-      
-            if (Test-Path $logFile) {
-              Get-Content $logFile -Tail 100
-            }
-      
-            Stop-Process -Id $process.Id -Force `
-              -ErrorAction SilentlyContinue
-      
-            throw "Installer did not finish"
+          start innosetup.exe /silent
+          #$iscc = "C:\Program Files\Inno Setup 7\ISCC.exe"
+          $iscc = "c:/Program Files (x86)/Inno Setup 6/ISCC.exe"
+          if (!(Test-Path $iscc)) {
+            throw "ISCC.exe not found: $iscc"
           }
-      
-          if ($process.ExitCode -ne 0) {
-            throw "Installer exited with code $($process.ExitCode)"
-          }
+          Write-Host "Inno Setup installed successfully
 
-          Write-Host "Inno Setup installed successfully"
       - name: Build Installer
         run: |
-          & "c:/Program Files/Inno Setup 7/ISCC.exe" /Qp /DAppVersionNumber="${{github.ref_name}}" /DMSVCPath="${{github.workspace}}" /DProgramPath="${{env.ARTIFACTS_PATH}}" "${{github.workspace}}/TheForceEngine/Installer/Installer.iss"
+          & "c:/Program Files (x86)/Inno Setup 6/ISCC.exe" /Qp /DAppVersionNumber="${{github.ref_name}}" /DMSVCPath="${{github.workspace}}" /DProgramPath="${{env.ARTIFACTS_PATH}}" "${{github.workspace}}/TheForceEngine/Installer/Installer.iss"
               
       - name: Compress artifact directory
         run: Compress-Archive -Path ${{env.ARTIFACTS_PATH}}/ -Destination TheForceEngineVR.zip
