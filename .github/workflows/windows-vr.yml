@@ -74,7 +74,7 @@ jobs:
           Write-Host "VC++ redistributable downloaded"
           Get-Item "vc_redist.x64.exe" | Select-Object Name, Length
 
-      - name: Download Inno Setup
+      - name: Download & Install Inno Setup
         run: |
           curl -fSL --retry 3 -o innosetup.exe https://github.com/jrsoftware/issrc/releases/download/is-7_1_0/innosetup-7.1.0-x64.exe
           if (!(Test-Path "innosetup.exe")) {
@@ -84,8 +84,6 @@ jobs:
           Write-Host "Inno Setup downloaded"
           Get-Item "innosetup.exe" | Select-Object Name, Length
 
-      - name: Install Inno Setup
-        run: |
           Start-Process -FilePath "innosetup.exe" -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /ALLUSERS" -PassThru
           Write-Host "Installer PID: $($process.Id)"
           $finished = $process.WaitForExit(180000)
