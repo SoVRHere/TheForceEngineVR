@@ -35,7 +35,7 @@ jobs:
           
           $logFile = Join-Path $PWD "inno-install.log"
 
-          $process = Start-Process -FilePath "innosetup.exe" -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /ALLUSERS /LOG=`"$logFile`"" -PassThru
+          $process = Start-Process -FilePath "innosetup.exe" -ArgumentList "/VERYSILENT /LOG=`"$logFile`"" -PassThru
           Write-Host "Installer PID: $($process.Id)"
           if (-not $process.WaitForExit(120000)) {
             Write-Host "=== Process state ==="
