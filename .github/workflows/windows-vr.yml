@@ -86,16 +86,29 @@ jobs:
 
           $process = Start-Process -FilePath "innosetup.exe" -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /ALLUSERS" -PassThru
           Write-Host "Installer PID: $($process.Id)"
-          $finished = $process.WaitForExit(180000)
-          if (-not $finished) {
-            Write-Host "ERROR: Installation timed out"
-            Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
-            throw "Inno Setup installer timed out"
+          if (-not $process.WaitForExit(120000)) {
+            Write-Host "=== Process state ==="
+      
+            Get-CimInstance Win32_Process |
+              Where-Object {
+                $_.Name -match "setup|inno|innosetup"
+              } |
+              Format-List ProcessId, ParentProcessId, Name, CommandLine
+      
+            Write-Host "=== Installer log ==="
+      
+            if (Test-Path $logFile) {
+              Get-Content $logFile -Tail 100
+            }
+      
+            Stop-Process -Id $process.Id -Force `
+              -ErrorAction SilentlyContinue
+      
+            throw "Installer did not finish"
           }
-
-          $iscc = "C:\Program Files\Inno Setup 7\ISCC.exe"
-          if (!(Test-Path $iscc)) {
-            throw "ISCC.exe not found"
+      
+          if ($process.ExitCode -ne 0) {
+            throw "Installer exited with code $($process.ExitCode)"
           }
 
           Write-Host "Inno Setup installed successfully"
