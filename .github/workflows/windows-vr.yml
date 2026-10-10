@@ -66,6 +66,7 @@ jobs:
           
       - name: Download VC++ redistributables
         run: |
+          curl -L -o vc_redist.x64.exe https://aka.ms/vs/17/release/vc_redist.x64.exe
           if (!(Test-Path "vc_redist.x64.exe")) {
             throw "VC++ redistributable download failed"
           }
