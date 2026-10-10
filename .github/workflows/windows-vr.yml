@@ -25,14 +25,15 @@ jobs:
     steps:
       - name: Download & Install Inno Setup
         run: |
-          curl -fSL --retry 3 -o innosetup.exe https://github.com/jrsoftware/issrc/releases/download/is-7_1_0/innosetup-7.1.0-x64.exe
+          curl -fSL --retry 3 -o innosetup.exe https://github.com/jrsoftware/issrc/releases/download/is-6_7_3/innosetup-6.7.3.exe
           if (!(Test-Path "innosetup.exe")) {
             throw "Inno Setup download failed"
           }
           Write-Host "Inno Setup downloaded"
 
           start innosetup.exe /silent
-          $iscc = "C:\Program Files\Inno Setup 7\ISCC.exe"
+          #$iscc = "C:\Program Files\Inno Setup 7\ISCC.exe"
+          $iscc = "c:/Program Files (x86)/Inno Setup 6/ISCC.exe"
           if (!(Test-Path $iscc)) {
             throw "ISCC.exe not found: $iscc"
           }
