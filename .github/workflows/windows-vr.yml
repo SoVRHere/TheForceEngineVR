@@ -25,42 +25,17 @@ jobs:
     steps:
       - name: Download & Install Inno Setup
         run: |
+          #https://github.com/jrsoftware/issrc/releases/download/is-7_1_0/innosetup-7.1.0-x64.exe
+          #https://github.com/jrsoftware/issrc/releases/download/is-6_7_3/innosetup-6.7.3.exe
           curl -fSL --retry 3 -o innosetup.exe https://github.com/jrsoftware/issrc/releases/download/is-7_1_0/innosetup-7.1.0-x64.exe
           if (!(Test-Path "innosetup.exe")) {
             throw "Inno Setup download failed"
           }
-
-          Write-Host "Inno Setup downloaded"
-          Get-Item "innosetup.exe" | Select-Object Name, Length
           
-          $logFile = Join-Path $PWD "inno-install.log"
-
-          $process = Start-Process -FilePath "innosetup.exe" -ArgumentList "/VERYSILENT /LOG=`"$logFile`"" -PassThru
-          Write-Host "Installer PID: $($process.Id)"
-          if (-not $process.WaitForExit(120000)) {
-            Write-Host "=== Process state ==="
-      
-            Get-CimInstance Win32_Process |
-              Where-Object {
-                $_.Name -match "setup|inno|innosetup"
-              } |
-              Format-List ProcessId, ParentProcessId, Name, CommandLine
-      
-            Write-Host "=== Installer log ==="
-      
-            if (Test-Path $logFile) {
-              Get-Content $logFile -Tail 100
-            }
-      
-            Stop-Process -Id $process.Id -Force `
-              -ErrorAction SilentlyContinue
-      
-            throw "Installer did not finish"
-          }
-      
-          if ($process.ExitCode -ne 0) {
-            throw "Installer exited with code $($process.ExitCode)"
-          }
+          Write-Host "Inno Setup downloaded"
+         # Get-Item "innosetup.exe" | Select-Object Name, Length
+          
+          start innosetup.exe /silent
 
           Write-Host "Inno Setup installed successfully"
     
