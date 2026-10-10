@@ -71,7 +71,7 @@ jobs:
         run: curl -o innosetup.exe https://github.com/jrsoftware/issrc/releases/download/is-7_1_0/innosetup-7.1.0-x64.exe
         
       - name: Install Inno Setup
-        run: start innosetup.exe /silent
+        run: Start-Process -FilePath "innosetup.exe" -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /ALLUSERS" -Wait -PassThru
         
       - name: Build Installer
         run: |
