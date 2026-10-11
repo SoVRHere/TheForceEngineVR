@@ -322,6 +322,13 @@ if(ENABLE_TFE)
 			DESTINATION .
 			CONFIGURATIONS Release RelWithDebInfo
 		)
+		install(
+			FILES 
+				"${CMAKE_SOURCE_DIR}/TheForceEngine/ogg.dll"
+				"${CMAKE_SOURCE_DIR}/TheForceEngine/theora.dll"
+				"${CMAKE_SOURCE_DIR}/TheForceEngine/vorbis.dll"
+			DESTINATION .
+		)
 	endif()
 endif()
 
